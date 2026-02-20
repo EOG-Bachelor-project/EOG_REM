@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import mne
 
-file_path = "L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_1_a"
+file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
 
 def load_files(
         folder_path: str | Path,
@@ -40,7 +40,9 @@ def load_files(
         The keys will be the file names (without extensions) and the values will be the corresponding data,
         e.g., MNE Raw object for EDF files, pandas DataFrame for CSV files, and string content for txt files).
     """
-    folder = Path(folder_path)
+    folder = Path(folder_path).resolve()
+    print(f"\nLoading from: {folder}")
+
     if not folder.exists():
         raise FileNotFoundError(f"Folder not found: {folder}")
     
@@ -53,13 +55,17 @@ def load_files(
     ### NOTE: 
     #   'next()' is used to get the first file found, or None if no files are found.
 
+    print(f"edf file: {edf_file}")
+    print(f"csv file: {csv_file}")
+    print(f"txt file: {txt_file}")
+
     if edf_file is None:
         raise FileNotFoundError(f"No EDF files found in folder: {folder}")
     if csv_file is None:
         raise FileNotFoundError(f"No CSV files found in folder: {folder}")
     if txt_file is None:
         raise FileNotFoundError(f"No TXT files found in folder: {folder}")
-    
+
     # =====================================================
     # Load EDF file (no preloading)
     # =====================================================
@@ -68,6 +74,10 @@ def load_files(
     #   'mne.io.read_raw_edf()' is used to read the EDF file, and the resulting Raw object is stored in the variable 'raw'.
     #   'preload=False' means that the data will not be loaded into memory immediately.
     #   'verbose=verbose' control the logging level of messages during the loading process.
+
+    print(f"Channels: {raw.ch_names}")
+    print(f"Sampling frequency: {raw.info['sfreq']} Hz")
+    print(f"Duration: {raw.times[-1]/60:.2f} min")
 
     if rename_channels:
         raw.rename_channels(rename_channels)
@@ -85,6 +95,8 @@ def load_files(
     # =====================================================
     df = pd.read_csv(csv_file) if csv_file else None
 
+    print(f"CSV loaded with shape: {df.shape}")
+
     # =====================================================
     # Load TXT file
     # =====================================================
@@ -94,22 +106,9 @@ def load_files(
     ### NOTE:
     #   If a TXT file is found, its content will be read as text and split into lines, which are stored in the variable 'text_lines'.
 
-    # =====================================================
-    # Collect results in a dictionary
-    # =====================================================
+    print("Done.\n")
 
-    # The paths to the loaded files
-    paths = {
-        "edf": edf_file,
-        "csv": csv_file,
-        "txt": txt_file,
-    }
+    return raw, df.head(), txt_lines
 
-    results = {
-        "edf": raw,
-        "csv": df,
-        "txt": text_lines,
-        "paths": paths,
-    }
-
-    return results
+r, data, tex = load_files(file_path)
+print(r, data, tex)
