@@ -17,10 +17,15 @@ from gssc.infer import EEGInfer
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 
 file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
+channels = ["EOGH-A1", "EOGV-A2"]
 
 # ------------------------------------------------------------------------------------------
+# FUNCTIONS 
+# ------------------------------------------------------------------------------------------
 
+# Channel selection function
 def channels_to_pick(path: str | Path) -> list[str]:
+
     """
     Get the list of channel names to pick from the EDF file based on the folder name.
 
@@ -34,6 +39,7 @@ def channels_to_pick(path: str | Path) -> list[str]:
     list[str]
         A list of channel names to pick from the EDF file.
     """
+
     folder = Path(path).resolve()
 
     edf_file = next(folder.glob("*.edf"), None)
@@ -43,10 +49,9 @@ def channels_to_pick(path: str | Path) -> list[str]:
     raw = mne.io.read_raw_edf(edf_file, preload=False, verbose="ERROR")
     return raw.ch_names
 
-def test_GSSC(
-        folder_path: str | Path,
-        channelse: str | list[str] | None = None,
-        )-> pd.DataFrame:
+
+# GSSC test function
+def test_GSSC(folder_path: str | Path, channelse: str | list[str] | None = None,) -> pd.DataFrame:
     """
     Load EDF file from the specified folder path, run the GSSC inference, and return the results as a DataFrame.
 
@@ -56,7 +61,14 @@ def test_GSSC(
         The path to the folder containing the EDF file to be loaded.
     channels : str | list[str] | None, optional
         The channel(s) to use for inference. Can be a single channel name, a list of channel names, or None to use all channels. Default is None.
+        E.g., "EOGH-A1 EOGV-A2" or ["EOGH-A1", "EOGV-A2"].
+    
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the results of the GSSC inference, with columns for the predicted classes and their corresponding probabilities.
     """
+
     folder = Path(folder_path).resolve()
     print(f"\nTesting GSSC on: {folder}")
 
@@ -66,20 +78,22 @@ def test_GSSC(
     
     raw = mne.io.read_raw_edf(edf_file, preload=True, verbose="ERROR")
 
+    # If channels are specified, pick them from the raw object
     if channelse is not None:
         if isinstance(channelse, str):
             channelse = [channelse]
         raw.pick(channelse)
+
+    # Cant find given channels in the EDF file
+    if len(raw.ch_names) == 0:
+        raise ValueError(f"No channels found in EDF file: {edf_file} after picking channels: {channelse}")
+    
     infer = EEGInfer()
     results = infer.run_inference(raw)
     return results
-# ------------------------------------------------------------------------------------------
 
+# ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
+# Run the test
+# ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 print(f"Channels to pick: {channels_to_pick(file_path)}")
-print(test_GSSC(file_path, channelse="EOGH-A1 EOGV-A2"))
-
-
-
-
-
-
+print(test_GSSC(file_path, channelse=channels))
