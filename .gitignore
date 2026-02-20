@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# macOS
+.DS_Store
+
 # C extensions
 *.so
 
@@ -143,6 +146,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+BPML/
 
 # Spyder project settings
 .spyderproject
