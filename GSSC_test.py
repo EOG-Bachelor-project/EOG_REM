@@ -17,7 +17,7 @@ from gssc.infer import EEGInfer
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 
 file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
-channels = ["EOGH-A1", "EOGV-A2"]
+channels = ['EOGH-A1', 'EOGV-A2']
 
 # ------------------------------------------------------------------------------------------
 # FUNCTIONS 
@@ -95,5 +95,5 @@ def test_GSSC(folder_path: str | Path, channelse: str | list[str] | None = None,
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 # Run the test
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
-print(f"Channels to pick: {channels_to_pick(file_path)}")
+#print(f"Channels to pick: {channels_to_pick(file_path)}")
 print(test_GSSC(file_path, channelse=channels))
