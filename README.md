@@ -1,15 +1,18 @@
 # EOG_REM
-Develop and validate EOG-only markers of abnormal REM physiology and build machine-learning models to detect RBD and PD in a mixed clinical cohort.
-
 
 ---
 
-# Installation Guide
+## Description
+Develop and validate EOG-only markers of abnormal REM physiology and build machine-learning models to detect RBD and PD in a mixed clinical cohort.
+
+---
+
+## Installation
 
 Clone the repository:
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/EOG-Bachelor-project/EOG_REM.git
 cd EOG_REM
 ```
 
@@ -56,6 +59,21 @@ When finished working:
 deactivate
 ```
 
-```PowerShell
-deactivate
-```
+---
+## Usage
+
+
+---
+## Features
+
+
+---
+## License
+
+---
+
+## Credits / Acknowledgements
+- Thanks to our supervisor and co-supervisor for their guidance and support:
+    - A. Brink-Kjaer
+    - P. Jenum
+    - U. Hanif
