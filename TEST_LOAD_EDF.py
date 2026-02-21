@@ -71,16 +71,6 @@ def load_files(
     #   'preload=False' means that the data will not be loaded into memory immediately.
     #   'verbose=verbose' control the logging level of messages during the loading process.
 
-    chan = raw.ch_names         # Get the name of all channels in the EDF file
-    fs_used = raw.info['sfreq'] # Get the sampling frequency used in the EDF file
-    dur = raw.times[-1]         # Get the duration of the recording in seconds
-
-    ant_edf = mne.read_annotations(edf_file)   # Get the annotations from the EDF file
-    raw.set_annotations(ant_edf)               # Set the annotations in the Raw object
-    ### NOTE:
-    #   Annotations are typically used to mark events or segments of interest in the data, such as sleep stages, artifacts, or other relevant occurrences.
-    #   'mne.read_annotations()' is used to read the annotations from the EDF file, and 'raw.set_annotations()' is used to associate those annotations with the Raw object.
-
     if rename_channels:
         raw.rename_channels(rename_channels)
     if set_channel_types:
@@ -92,7 +82,20 @@ def load_files(
     #   If 'set_channel_types' is provided, the channel types will be set according to the provided mapping.
     #   If 'picks' is provided, only the specified channels will be retained in the Raw object.
 
+    # --- Metadata ---
+    chan_types = raw.get_channel_types() # Get the types of channels in the EDF file
+    chan = raw.ch_names                  # Get the name of all channels in the EDF file
+    fs_used = raw.info['sfreq']          # Get the sampling frequency used in the EDF file
+    dur = raw.times[-1]                  # Get the duration of the recording in seconds
+
+    # Extract annotations from the EDF file
+    ant_edf = raw.annotations 
+    ### NOTE:
+    #   Annotations are typically used to mark events or segments of interest in the data, such as sleep stages, artifacts, or other relevant occurrences.
+
+
     EDF_results = {
+        "channel_types": chan_types,
         "channels": chan,
         "sampling_frequency": fs_used,
         "duration_seconds": dur,
@@ -103,18 +106,25 @@ def load_files(
     # Plot EDF
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if plot_edf:
-        raw_eeg_eog = raw.copy().pick(eeg=True, eog=True)
-        raw_eeg_eog.plot(
-            duration=30,
-            n_channels=min(12, len(raw_eeg_eog.ch_names)),
-            scalings="auto",
-            title="EEG + EOG",
-            color=dict(
-                eeg="blue",
-                eog="red"
-            ),
-            block=True
-        )
+        raw_eeg_eog = raw.copy().pick(['eeg', 'eog'])
+
+        if len(raw_eeg_eog.ch_names) == 0:
+            print("No EEG/EOG channels found. Plotting all channels.")
+            raw.plot(
+                duration=30,
+                n_channels=min(12, len(raw.ch_names)),
+                scalings="auto",
+                block=True
+            )
+        else:
+            raw_eeg_eog.plot(
+                duration=30,
+                n_channels=min(12, len(raw_eeg_eog.ch_names)),
+                scalings="auto",
+                color=dict(eeg="blue", eog="red"),
+                title="EEG (blue) + EOG (red)",
+                block=True
+            )
 
     # =====================================================
     # Load CSV file
@@ -142,5 +152,5 @@ def load_files(
 
 r, data, tex = load_files(file_path)
 print("EDF file results:\n", r)
-print("CSV file results:\n", data)
-print("TXT file lines:\n", tex)
+#print("CSV file results:\n", data)
+#print("TXT file lines:\n", tex)
