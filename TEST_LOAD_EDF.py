@@ -6,6 +6,7 @@ from typing import Optional, Iterable
 import pandas as pd
 import numpy as np
 import mne
+from pprint import pprint
 
 file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
 
@@ -63,7 +64,7 @@ def load_files(
         raise FileNotFoundError(f"No TXT files found in folder: {folder}")
 
     # =====================================================
-    # Load EDF file (no preloading)
+    # 1. Load EDF file (no preloading)
     # =====================================================
     raw = mne.io.read_raw_edf(edf_file, preload=False, verbose=verbose)
     ### NOTE: 
@@ -102,6 +103,28 @@ def load_files(
         "annotations": ant_edf
     }
 
+    # =====================================================
+    # 2. Load CSV file
+    # =====================================================
+    df = pd.read_csv(csv_file) if csv_file else None
+
+    CSV_results = {
+        "dataframe": df.head(),
+        "shape": df.shape,
+        "info": df.info()
+    }
+
+    # =====================================================
+    # 3. Load TXT file
+    # =====================================================
+    txt_lines = None
+    if txt_file:
+        text_lines = txt_file.read_text().splitlines()
+    ### NOTE:
+    #   If a TXT file is found, its content will be read as text and split into lines, which are stored in the variable 'text_lines'.
+
+    print("Done loading.\n")
+
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Plot EDF
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -126,31 +149,10 @@ def load_files(
                 block=True
             )
 
-    # =====================================================
-    # Load CSV file
-    # =====================================================
-    df = pd.read_csv(csv_file) if csv_file else None
-
-    CSV_results = {
-        "dataframe": df.head(),
-        "shape": df.shape,
-        "info": df.info()
-    }
-
-    # =====================================================
-    # Load TXT file
-    # =====================================================
-    txt_lines = None
-    if txt_file:
-        text_lines = txt_file.read_text().splitlines()
-    ### NOTE:
-    #   If a TXT file is found, its content will be read as text and split into lines, which are stored in the variable 'text_lines'.
-
-    print("Done.\n")
-
     return EDF_results, CSV_results, text_lines
 
+# --- Test func ---
 r, data, tex = load_files(file_path)
-print("EDF file results:\n", r)
-#print("CSV file results:\n", data)
-#print("TXT file lines:\n", tex)
+pprint(r)
+pprint(data)
+pprint(tex)
