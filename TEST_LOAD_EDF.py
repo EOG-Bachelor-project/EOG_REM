@@ -10,6 +10,7 @@ from pprint import pprint
 
 file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
 
+
 def load_files(
         folder_path: str | Path,
         *,
@@ -73,34 +74,29 @@ def load_files(
     #   'verbose=verbose' control the logging level of messages during the loading process.
 
     if rename_channels:
-        raw.rename_channels(rename_channels)
+        raw.rename_channels(rename_channels)                        # Rename channels according to the provided mapping.
     if set_channel_types:
-        raw.set_channel_types(set_channel_types)
+        raw.set_channel_types({"EOGH-A1": "eog","EOGV-A2": "eog"})  # Set channel types according to the provided mapping.
     if picks:
-        raw.pick(picks)
-    ### NOTE:
-    #   If 'rename_channels' is provided, the channel names in the Raw object will be renamed according to the provided mapping.
-    #   If 'set_channel_types' is provided, the channel types will be set according to the provided mapping.
-    #   If 'picks' is provided, only the specified channels will be retained in the Raw object.
+        raw.pick(picks)                                             # Retain only the specified channels in the Raw object.
 
     # --- Metadata ---
     chan_types = raw.get_channel_types() # Get the types of channels in the EDF file
     chan = raw.ch_names                  # Get the name of all channels in the EDF file
     fs_used = raw.info['sfreq']          # Get the sampling frequency used in the EDF file
     dur = raw.times[-1]                  # Get the duration of the recording in seconds
-
-    # Extract annotations from the EDF file
-    ant_edf = raw.annotations 
+    ant_edf = raw.annotations            # EDF+ annotations, if present, are stored in the 'annotations' attribute of the Raw object.
     ### NOTE:
     #   Annotations are typically used to mark events or segments of interest in the data, such as sleep stages, artifacts, or other relevant occurrences.
 
-
     EDF_results = {
-        "channel_types": chan_types,
         "channels": chan,
-        "sampling_frequency": fs_used,
+        "channel_types": chan_types,
+        "sampling_frequency_hz": fs_used,
         "duration_seconds": dur,
-        "annotations": ant_edf
+        "n_annotations": len(ant_edf),
+        "annotations": ant_edf,  # keep the object if you want
+        "edf_path": str(edf_file),
     }
 
     # =====================================================
@@ -109,9 +105,11 @@ def load_files(
     df = pd.read_csv(csv_file) if csv_file else None
 
     CSV_results = {
-        "dataframe": df.head(),
         "shape": df.shape,
-        "info": df.info()
+        "columns": df.columns.tolist(),
+        "head": df.head(),  # small preview
+        "csv_path": str(csv_file),
+        "dataframe": df,    # full df (optional; remove if you don't want big returns)
     }
 
     # =====================================================
@@ -123,7 +121,64 @@ def load_files(
     ### NOTE:
     #   If a TXT file is found, its content will be read as text and split into lines, which are stored in the variable 'text_lines'.
 
-    print("Done loading.\n")
+    TXT_results = {
+        "n_lines": len(txt_lines),
+        "first_10": txt_lines[:10],
+        "txt_path": str(txt_file),
+        "lines": txt_lines,  # full list
+    }
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Collect results to return
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    # --- EDF results ---
+    print("\nEDF SUMMARY")
+    print("=" * 50)
+
+    print(f"{'Number of Channels':<28} : {len(raw.ch_names)}")
+    print(f"{'Sampling Frequency (Hz)':<28} : {raw.info['sfreq']}")
+    print(f"{'Duration (min)':<28} : {round(raw.times[-1] / 60, 2)}")
+    print(f"{'Number of Annotations':<28} : {len(raw.annotations)}")
+
+    print("\nCHANNEL LIST")
+    print("-" * 50)
+
+    for i, (ch, ch_type) in enumerate(
+        zip(raw.ch_names, raw.get_channel_types()), start=1
+    ):
+        print(f"{i:>3}. {ch:<25} ({ch_type})")
+
+    print("=" * 50)
+
+    # --- CSV results ---
+    print("\nCSV SUMMARY")
+    print("=" * 50)
+
+    print(f"{'Rows':<20} : {df.shape[0]}")
+    print(f"{'Columns':<20} : {df.shape[1]}")
+
+    print("\nCOLUMN NAMES")
+    print("-" * 50)
+
+    for i, col in enumerate(df.columns, start=1):
+        print(f"{i:>3}. {col}")
+
+    print("=" * 50)
+
+    # --- TXT results ---
+    print("\nTXT SUMMARY")
+    print("=" * 50)
+
+    print(f"{'Number of Lines':<20} : {len(txt_lines)}")
+
+    print("\nFirst 10 Lines")
+    print("-" * 50)
+
+    for i, line in enumerate(txt_lines[:10], start=1):
+        print(f"{i:>3}. {line}")
+
+    print("=" * 50)
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Plot EDF
@@ -151,8 +206,10 @@ def load_files(
 
     return EDF_results, CSV_results, text_lines
 
-# --- Test func ---
-r, data, tex = load_files(file_path)
-pprint(r)
-pprint(data)
-pprint(tex)
+# --- Test ---
+if __name__ == "__main__":
+    edf_res, csv_res, txt_res = load_files(file_path)
+
+    pprint(edf_res)
+    pprint({k: v for k, v in csv_res.items() if k != "dataframe"})  # avoid printing huge df
+    pprint(txt_res)
