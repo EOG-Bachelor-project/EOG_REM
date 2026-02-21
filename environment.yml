@@ -9,3 +9,5 @@ dependencies:
   - scipy
   - matplotlib
   - pip
+  - pip:
+      - gssc
