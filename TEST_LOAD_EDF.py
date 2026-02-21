@@ -16,6 +16,7 @@ def load_files(
         rename_channels: Optional[dict[str, str]] = None,
         set_channel_types: Optional[dict[str, str]] = None,
         verbose: str | bool | None = "ERROR",
+        plot_edf: bool = True,
 ):
     """
     Load EDF, CSV, and txt files from the specified folder path, and return the contents of set files.
@@ -32,6 +33,8 @@ def load_files(
         An optional dictionary mapping channel names to their types (e.g., 'eeg', 'eog', 'emg'). If None, no channel type setting will be performed. Default is None.
     verbose : str | bool | None, optional
         The verbosity level for logging messages. Can be a string (e.g., "ERROR", "WARNING", "INFO", "DEBUG"), a boolean (True for INFO, False for ERROR), or None (no logging). Default is "ERROR".
+    plot_edf: bool
+        Plot the EOG and EEG 
     
     Returns
     -------
@@ -89,6 +92,19 @@ def load_files(
     #   If 'rename_channels' is provided, the channel names in the Raw object will be renamed according to the provided mapping.
     #   If 'set_channel_types' is provided, the channel types will be set according to the provided mapping.
     #   If 'picks' is provided, only the specified channels will be retained in the Raw object.
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Plot EDF
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if plot_edf:
+        raw_eeg_eog = raw.copy().pick_types(eeg=True, eog=True)
+        raw_eeg_eog.plot(
+            duration=30,
+            n_channels=min(12, len(raw_eeg_eog.ch_names)),
+            scalings="auto",
+            title="EEG + EOG",
+            block=True
+        )
 
     # =====================================================
     # Load CSV file
