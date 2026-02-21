@@ -34,14 +34,7 @@ def load_files(
     verbose : str | bool | None, optional
         The verbosity level for logging messages. Can be a string (e.g., "ERROR", "WARNING", "INFO", "DEBUG"), a boolean (True for INFO, False for ERROR), or None (no logging). Default is "ERROR".
     plot_edf: bool
-        Plot the EOG and EEG 
-    
-    Returns
-    -------
-    dict[str, Any]
-        A dictionary containing the loaded data from the EDF, CSV, and txt files. 
-        The keys will be the file names (without extensions) and the values will be the corresponding data,
-        e.g., MNE Raw object for EDF files, pandas DataFrame for CSV files, and string content for txt files).
+        Whether to plot the EDF data after loading. Default is True.
     """
     folder = Path(folder_path).resolve()
     print(f"\nLoading from: {folder}")
@@ -78,9 +71,15 @@ def load_files(
     #   'preload=False' means that the data will not be loaded into memory immediately.
     #   'verbose=verbose' control the logging level of messages during the loading process.
 
-    print(f"Channels: {raw.ch_names}")
-    print(f"Sampling frequency: {raw.info['sfreq']} Hz")
-    print(f"Duration: {raw.times[-1]/60:.2f} min")
+    chan = raw.ch_names         # Get the name of all channels in the EDF file
+    fs_used = raw.info['sfreq'] # Get the sampling frequency used in the EDF file
+    dur = raw.times[-1]         # Get the duration of the recording in seconds
+
+    ant_edf = mne.read_annotations(edf_file)   # Get the annotations from the EDF file
+    raw.set_annotations(ant_edf)               # Set the annotations in the Raw object
+    ### NOTE:
+    #   Annotations are typically used to mark events or segments of interest in the data, such as sleep stages, artifacts, or other relevant occurrences.
+    #   'mne.read_annotations()' is used to read the annotations from the EDF file, and 'raw.set_annotations()' is used to associate those annotations with the Raw object.
 
     if rename_channels:
         raw.rename_channels(rename_channels)
@@ -93,16 +92,27 @@ def load_files(
     #   If 'set_channel_types' is provided, the channel types will be set according to the provided mapping.
     #   If 'picks' is provided, only the specified channels will be retained in the Raw object.
 
+    EDF_results = {
+        "channels": chan,
+        "sampling_frequency": fs_used,
+        "duration_seconds": dur,
+        "annotations": ant_edf
+    }
+
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Plot EDF
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if plot_edf:
-        raw_eeg_eog = raw.copy().pick_types(eeg=True, eog=True)
+        raw_eeg_eog = raw.copy().pick(eeg=True, eog=True)
         raw_eeg_eog.plot(
             duration=30,
             n_channels=min(12, len(raw_eeg_eog.ch_names)),
             scalings="auto",
             title="EEG + EOG",
+            color=dict(
+                eeg="blue",
+                eog="red"
+            ),
             block=True
         )
 
@@ -111,7 +121,11 @@ def load_files(
     # =====================================================
     df = pd.read_csv(csv_file) if csv_file else None
 
-    print(f"CSV loaded with shape: {df.shape}")
+    CSV_results = {
+        "dataframe": df.head(),
+        "shape": df.shape,
+        "info": df.info()
+    }
 
     # =====================================================
     # Load TXT file
@@ -124,7 +138,9 @@ def load_files(
 
     print("Done.\n")
 
-    return raw, df.head(), txt_lines
+    return EDF_results, CSV_results, text_lines
 
 r, data, tex = load_files(file_path)
-print(r, data, tex)
+print("EDF file results:\n", r)
+print("CSV file results:\n", data)
+print("TXT file lines:\n", tex)
