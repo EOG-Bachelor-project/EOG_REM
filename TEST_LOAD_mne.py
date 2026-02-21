@@ -1,5 +1,8 @@
 # TEST_LOAD_EDF.py
 
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# Imports
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional, Iterable
@@ -8,9 +11,15 @@ import numpy as np
 import mne
 from pprint import pprint
 
+# ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
+# Predefined variables
+# ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
 
 
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# Function
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 def load_files(
         folder_path: str | Path,
         *,
@@ -42,7 +51,7 @@ def load_files(
         raise FileNotFoundError(f"Folder not found: {folder}")
     
     # =====================================================
-    # Find files in the folder
+    # 1. Find files in the folder
     # =====================================================
     edf_file = next(folder.glob("*.edf"), None)
     csv_file = next(folder.glob("*.csv"), None)
@@ -62,7 +71,7 @@ def load_files(
         raise FileNotFoundError(f"No TXT files found in folder: {folder}")
 
     # =====================================================
-    # 1. Load EDF file (no preloading)
+    # 2. Load EDF file (no preloading)
     # =====================================================
     raw = mne.io.read_raw_edf(edf_file, preload=False, verbose=verbose)
     ### NOTE: 
@@ -110,7 +119,7 @@ def load_files(
     }
 
     # =====================================================
-    # 2. Load CSV file
+    # 3. Load CSV file
     # =====================================================
     df = pd.read_csv(csv_file) if csv_file else None
 
@@ -122,7 +131,7 @@ def load_files(
     }
 
     # =====================================================
-    # 3. Load TXT file
+    # 4. Load TXT file
     # =====================================================
     txt_lines = None
     if txt_file:
@@ -198,7 +207,9 @@ def load_files(
 
     return EDF_results, CSV_results, TXT_results
 
-# --- Test ---
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# Test
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 edf_res, csv_res, txt_res = load_files(file_path)
 
 pprint(edf_res)
