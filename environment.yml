@@ -1,0 +1,11 @@
+name: BPML
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - mne
+  - pyedflib
+  - numpy
+  - scipy
+  - matplotlib
+  - pip
