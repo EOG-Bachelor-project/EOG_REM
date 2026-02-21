@@ -37,29 +37,28 @@ def load_edf_w_pyedflib(edf_path: Path):
     with pyedflib.EdfReader(str(edf_path)) as f:
         n_channels = f.signals_in_file                                        # Get number of channels in the EDF file     
         channel_names = f.getSignalLabels()                                   # Get channel names/labels
-        sample_rates = [f.getSampleFrequencies(i) for i in range(n_channels)] # Get sample rates for each channel
-        n_samples = f.getNSamples()                                           # Get number of samples in the EDF file
+        sample_rates = f.getSampleFrequencies()                               # Get sample rates 
+        n_samples = [f.getNSamples()[i] for i in range(n_channels)]           # Get number of samples in the EDF file
 
         # ---------------------------------------------------------------------
         # Summarize EDF file information
         # ---------------------------------------------------------------------
-        print("\nEDF SUMMARY (pyEDFlib)")
-        print("=" * 50)
-        print(f"{'Number of Channels':<28} : {n_channels}")
-        print(f"{'Samples per channel':<28} : {n_samples[0]}")
-        print(f"{'Unique sampling rates':<28} : {sorted(set(sample_rates))}")
-        print("=" * 50)
+        print("\nEDF SUMMARY")
+        print("=" * 60)
+        print(f"{'Number of Channels':<30} : {n_channels}")
+        print(f"{'Unique sampling rates':<30} : {sorted(set(sample_rates))}")
+        print("=" * 60)
 
         print("\nCHANNEL LIST")
-        print("-" * 50)
-        for i, (lab, fs) in enumerate(zip(channel_names, sample_rates), start=1):
-            print(f"{i:>3}. {lab:<25} ({fs} Hz)")
-        print("=" * 50)
+        print("-" * 60)
+        for i, (lab, fs, n) in enumerate(zip(channel_names, sample_rates, n_samples), start=1):
+            print(f"{i:>3}. {lab:<20} {fs:>8} Hz {n:>10} samples")
+        print("=" * 60)
 
         # ---------------------------------------------------------------------
-        # Load signals into a NumPy array
+        # Load signals
         # ---------------------------------------------------------------------
-        signal_data = np.vstack([f.readSignal(i) for i in range(n_channels)]).T  # Shape: (n_samples, n_channels)
+        signal_data = {channel_names[i]: f.readSignal(i) for i in range(n_channels)}
     
     return signal_data, channel_names, sample_rates
 
@@ -67,4 +66,4 @@ def load_edf_w_pyedflib(edf_path: Path):
 # Test
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 signals, channels, fs = load_edf_w_pyedflib(edf_file)
-print("\nArray shape (samples, channels):", signals.shape)
+print(signals)
