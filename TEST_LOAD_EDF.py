@@ -16,7 +16,6 @@ def load_files(
         *,
         picks: Optional[Iterable[str]] = None,
         rename_channels: Optional[dict[str, str]] = None,
-        set_channel_types: Optional[dict[str, str]] = None,
         verbose: str | bool | None = "ERROR",
         plot_edf: bool = True,
 ):
@@ -31,8 +30,6 @@ def load_files(
         An optional list of channel names to load from the EDF file. If None, all channels will be loaded. Default is None.
     rename_channels : Optional[dict[str, str]], optional
         An optional dictionary mapping old channel names to new channel names. If None, no renaming will be performed. Default is None.
-    set_channel_types : Optional[dict[str, str]], optional
-        An optional dictionary mapping channel names to their types (e.g., 'eeg', 'eog', 'emg'). If None, no channel type setting will be performed. Default is None.
     verbose : str | bool | None, optional
         The verbosity level for logging messages. Can be a string (e.g., "ERROR", "WARNING", "INFO", "DEBUG"), a boolean (True for INFO, False for ERROR), or None (no logging). Default is "ERROR".
     plot_edf: bool
@@ -74,11 +71,24 @@ def load_files(
     #   'verbose=verbose' control the logging level of messages during the loading process.
 
     if rename_channels:
-        raw.rename_channels(rename_channels)                        # Rename channels according to the provided mapping.
-    if set_channel_types:
-        raw.set_channel_types({"EOGH-A1": "eog","EOGV-A2": "eog"})  # Set channel types according to the provided mapping.
+        raw.rename_channels(rename_channels)  # Rename channels according to the provided mapping
     if picks:
-        raw.pick(picks)                                             # Retain only the specified channels in the Raw object.
+        raw.pick(picks)                       # Retain only the specified channels in the Raw object
+    raw.set_channel_types({
+        "EOGH-A1": "eog",
+        "EOGV-A2": "eog",
+        "EKG": "ecg",
+        "CHIN": "emg",
+        "Nasal": "resp",
+        "Thorax": "resp",
+        "Abdomen": "resp",
+        "SNORE": "misc",
+        "SpO2": "misc",
+        "Pulse": "misc",
+        "IBI": "misc",
+        "TIBH": "emg",
+        "TIBV": "emg",
+        })
 
     # --- Metadata ---
     chan_types = raw.get_channel_types() # Get the types of channels in the EDF file
@@ -109,7 +119,6 @@ def load_files(
         "columns": df.columns.tolist(),
         "head": df.head(),  # small preview
         "csv_path": str(csv_file),
-        "dataframe": df,    # full df (optional; remove if you don't want big returns)
     }
 
     # =====================================================
@@ -122,8 +131,6 @@ def load_files(
     #   If a TXT file is found, its content will be read as text and split into lines, which are stored in the variable 'text_lines'.
 
     TXT_results = {
-        "n_lines": len(txt_lines),
-        "first_10": txt_lines[:10],
         "txt_path": str(txt_file),
         "lines": txt_lines,  # full list
     }
@@ -166,50 +173,34 @@ def load_files(
 
     print("=" * 50)
 
-    # --- TXT results ---
-    print("\nTXT SUMMARY")
-    print("=" * 50)
-
-    print(f"{'Number of Lines':<20} : {len(txt_lines)}")
-
-    print("\nFirst 10 Lines")
-    print("-" * 50)
-
-    for i, line in enumerate(txt_lines[:10], start=1):
-        print(f"{i:>3}. {line}")
-
-    print("=" * 50)
-
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Plot EDF
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if plot_edf:
-        raw_eeg_eog = raw.copy().pick(['eeg', 'eog'])
+        raw_plot = raw.copy().pick(["eeg", "eog", "ecg", "emg", "resp", "misc"])
 
-        if len(raw_eeg_eog.ch_names) == 0:
-            print("No EEG/EOG channels found. Plotting all channels.")
-            raw.plot(
-                duration=30,
-                n_channels=min(12, len(raw.ch_names)),
-                scalings="auto",
-                block=True
-            )
-        else:
-            raw_eeg_eog.plot(
-                duration=30,
-                n_channels=min(12, len(raw_eeg_eog.ch_names)),
-                scalings="auto",
-                color=dict(eeg="blue", eog="red"),
-                title="EEG (blue) + EOG (red)",
-                block=True
+        raw_plot.plot(
+            duration=30,
+            n_channels=min(20, len(raw_plot.ch_names)),
+            scalings="auto",
+            color=dict(
+                eeg="blue",
+                eog="red",
+                ecg="purple",
+                emg="green",
+                resp="orange",
+                misc="black",
+            ),
+            title="PSG (colored by channel type)",
+            block=True,
             )
 
-    return EDF_results, CSV_results, text_lines
+
+    return EDF_results, CSV_results, TXT_results
 
 # --- Test ---
-if __name__ == "__main__":
-    edf_res, csv_res, txt_res = load_files(file_path)
+edf_res, csv_res, txt_res = load_files(file_path)
 
-    pprint(edf_res)
-    pprint({k: v for k, v in csv_res.items() if k != "dataframe"})  # avoid printing huge df
-    pprint(txt_res)
+pprint(edf_res)
+pprint(csv_res)
+pprint(txt_res)
