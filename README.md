@@ -16,47 +16,23 @@ git clone https://github.com/EOG-Bachelor-project/EOG_REM.git
 cd EOG_REM
 ```
 
-### MacOS/Linux Setup
+### Setup environment
 
 #### 1. Create virtual environment
 ```bash
-python3 -m venv BPML
+conda env create -f environment.yml
+conda activate BPML
 ```
-#### 2. Activate environment
+#### 2. Update existing environment
 ```bash
-source BPML/bin/activate
-```
-
-#### 3. Install dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### Microsoft Windows Setup
-
-#### 1. Create virtual environment
-```PowerShell
-python -m venv BPML
-```
-#### 2. Activate environment
-```PowerShell
-BPML\Scripts\Activate
-```
-If you get an execution policy error:
-```PowerShell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-Then activate again.
-
-#### 3. Install dependencies
-```PowerShell
-pip install -r requirements.txt
+conda activate BPML
+conda env update -f environment.yml --prune
 ```
 
 ### Deactivate Environment
 When finished working:
 ```bash
-deactivate
+conda deactivate
 ```
 
 ---
