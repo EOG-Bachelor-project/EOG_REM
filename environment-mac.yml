@@ -1,0 +1,28 @@
+name: BPML
+channels:
+  - pytorch
+  - conda-forge
+channel_priority: strict
+
+dependencies:
+  - python=3.11
+
+  # Core scientific stack
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - scikit-learn
+
+  # Sleep/EDF tooling
+  - mne
+  - pyedflib
+
+  # PyTorch pinned for GSSC compatibility
+  - pytorch=2.5.*
+  - torchvision
+  - torchaudio
+
+  - pip
+  - pip:
+      - gssc

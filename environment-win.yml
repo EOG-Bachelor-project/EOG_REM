@@ -1,0 +1,23 @@
+name: BPML
+channels:
+  - pytorch
+  - conda-forge
+channel_priority: strict
+
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - scikit-learn
+  - mne
+  - pyedflib
+
+  - pytorch=2.5.*
+  - torchvision
+  - torchaudio
+
+  - pip
+  - pip:
+      - gssc

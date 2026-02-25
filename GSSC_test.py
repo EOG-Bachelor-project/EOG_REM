@@ -57,30 +57,6 @@ def test_GSSC(folder_path: str):
 
 test_GSSC(Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_1_a\contiguous.edf"))
 
-# OUTPUT
-(BPML) PS C:\Users\AKLO0022\EOG_REM> python -c "import numpy; print('numpy ok')"
-(BPML) PS C:\Users\AKLO0022\EOG_REM> python -X faulthandler -c "import numpy; print('numpy ok')" 2>&1 | % { $_ }
-python : Windows fatal exception: code 0xc06d007e
-At line:1 char:1
-+ python -X faulthandler -c "import numpy; print('numpy ok')" 2>&1 | %  ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
-    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
-
-    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
-    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
-    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
-
-Current thread 0x00002314 (most recent call first):
-  File "C:\Users\AKLO0022\AppData\Local\anaconda3\envs\BPML\Lib\site-packages\numpy\__init__.py", line 881 in blas_fpe_check
-  File "C:\Users\AKLO0022\AppData\Local\anaconda3\envs\BPML\Lib\site-packages\numpy\__init__.py", line 890 in <module>
-  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
-  File "<frozen importlib._bootstrap_external>", line 940 in exec_module
-  File "<frozen importlib._bootstrap>", line 690 in _load_unlocked
-  File "<frozen importlib._bootstrap>", line 1147 in _find_and_load_unlocked
-  File "<frozen importlib._bootstrap>", line 1176 in _find_and_load
-  File "<string>", line 1 in <module>
+# Run this on windows:
+# conda env create -f environment-win.yml
+# conda activate BPML

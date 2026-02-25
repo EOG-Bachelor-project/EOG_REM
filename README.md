@@ -19,14 +19,16 @@ cd EOG_REM
 ### Setup environment
 
 #### 1. Create virtual environment
-```bash
-conda env create -f environment.yml
+### Windows
+```powershell
+conda env create -f environment-win.yml
 conda activate BPML
 ```
-#### 2. Update existing environment
+
+### macOS/Linux
 ```bash
+conda env create -f environment-mac.yml
 conda activate BPML
-conda env update -f environment.yml --prune
 ```
 
 ### Deactivate Environment
