@@ -5,31 +5,28 @@
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 from __future__ import annotations
 
-import torch
-import gssc.networks
-
-torch.serialization.add_safe_globals([gssc.networks.ResSleep])
-
-from gssc.infer import EEGInfer
 from pathlib import Path
 import mne
+import torch
+import gssc.networks
+from gssc.infer import EEGInfer
 
+torch.serialization.add_safe_globals([gssc.networks.ResSleep])
 
 
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 # Predefined variables
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
-
-file_path = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_1_a")
-edf_file = next(file_path.glob("*.edf"))
-channels = ['EOGH-A1', 'EOGV-A2']
+edf = Path("l:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_1_a/contiguous.edf")
+print("EDF Path:", edf)
+print("Exists:", edf.exists())
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Function
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 
 # GSSC test function
-def test_GSSC(folder_path: str):
+def test_GSSC(edf_path: str | Path):
     """
     Load EDF file from the specified folder path, run the GSSC inference, and return the results as a DataFrame.
 
@@ -40,7 +37,7 @@ def test_GSSC(folder_path: str):
     """
 
     # Load EDF signal via MNE
-    raw = mne.io.read_raw_edf(folder_path, preload=False)
+    raw = mne.io.read_raw_edf(edf_path, preload=False)
 
     # Make inferencer
     infer = EEGInfer()
@@ -55,8 +52,4 @@ def test_GSSC(folder_path: str):
 # Test
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 
-test_GSSC(Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_1_a\contiguous.edf"))
-
-# Run this on windows:
-# conda env create -f environment-win.yml
-# conda activate BPML
+test_GSSC(Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_1_a/contiguous.edf"))
