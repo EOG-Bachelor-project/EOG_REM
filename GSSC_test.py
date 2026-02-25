@@ -58,6 +58,29 @@ def test_GSSC(folder_path: str):
 test_GSSC(Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_1_a\contiguous.edf"))
 
 # OUTPUT
-# (BPML) PS C:\Users\AKLO0022\EOG_REM> & C:/Users/AKLO0022/AppData/Local/anaconda3/envs/BPML/python.exe c:/Users/AKLO0022/EOG_REM/GSSC_test.py
-#OMP: Error #15: Initializing libomp.dll, but found libiomp5md.dll already initialized.
-#OMP: Hint This means that multiple copies of the OpenMP runtime have been linked into the program. That is dangerous, since it can degrade performance or cause incorrect results. The best thing to do is to ensure that only a single OpenMP runtime is linked into the process, e.g. by avoiding static linking of the OpenMP runtime in any library. As an unsafe, unsupported, undocumented workaround you can set the environment variable KMP_DUPLICATE_LIB_OK=TRUE to allow the program to continue to execute, but that may cause crashes or silently produce incorrect results. For more information, please see http://openmp.llvm.org/
+(BPML) PS C:\Users\AKLO0022\EOG_REM> python -c "import numpy; print('numpy ok')"
+(BPML) PS C:\Users\AKLO0022\EOG_REM> python -X faulthandler -c "import numpy; print('numpy ok')" 2>&1 | % { $_ }
+python : Windows fatal exception: code 0xc06d007e
+At line:1 char:1
++ python -X faulthandler -c "import numpy; print('numpy ok')" 2>&1 | %  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
+    + CategoryInfo          : NotSpecified: (Windows fatal exception: code 0xc06d007e:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+Current thread 0x00002314 (most recent call first):
+  File "C:\Users\AKLO0022\AppData\Local\anaconda3\envs\BPML\Lib\site-packages\numpy\__init__.py", line 881 in blas_fpe_check
+  File "C:\Users\AKLO0022\AppData\Local\anaconda3\envs\BPML\Lib\site-packages\numpy\__init__.py", line 890 in <module>
+  File "<frozen importlib._bootstrap>", line 241 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 940 in exec_module
+  File "<frozen importlib._bootstrap>", line 690 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1147 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1176 in _find_and_load
+  File "<string>", line 1 in <module>
