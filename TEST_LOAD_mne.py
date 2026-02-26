@@ -12,12 +12,11 @@ import mne
 import threading
 import time
 import sys
-from pprint import pprint
 
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 # Predefined variables
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
-file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
+file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_3_a"
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Helper function
@@ -26,19 +25,6 @@ file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
 # Simple ANSI color codes for terminal output
 BOLD = "\033[1m"
 RESET = "\033[0m"
-
-# Function to print elapsed time
-'''
-def time_elapsed(start_time: float, end_time: float, label: str = "Total") -> None:
-    """Print elapsed time."""
-    elapsed = end_time - start_time
-    if elapsed < 60:
-        print(f"{label} time: {elapsed:.2f} seconds")
-    elif elapsed < 3600:
-        print(f"{label} time: {elapsed / 60:.2f} minutes")
-    else:
-        print(f"{label} time: {elapsed / 3600:.2f} hours")
-'''
 
 # Live timer class to show progress during loading
 class LiveTimer:
@@ -65,9 +51,7 @@ class LiveTimer:
         self._running = False
         self._thread.join()
         elapsed = time.perf_counter() - self.start_time
-        print(f"\r{BOLD}{self.label}{RESET} finished in {elapsed:.2f} sec")
-
-
+        print(f"\r{self.label} finished in {elapsed:.2f} sec")
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Function
@@ -268,6 +252,6 @@ def load_files(
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 edf_res, csv_res, txt_res = load_files(file_path)
 
-pprint(edf_res)
-pprint(csv_res)
-pprint(txt_res)
+print(edf_res)
+print(csv_res)
+print(txt_res)
