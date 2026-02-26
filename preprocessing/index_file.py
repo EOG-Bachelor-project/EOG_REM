@@ -12,6 +12,7 @@ from typing import Optional
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Helpers
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+
 @dataclass(frozen=True)
 class PatientRecord:
     patient_id: str                 # Unique identifier for the patient: DCSM_x_a
@@ -20,8 +21,10 @@ class PatientRecord:
     csv_path: Optional[Path] = None # Path to the CSV file (if available)
     txt_path: Optional[Path] = None # Path to the TXT file (if available)
 
+
 # Pattern
 SESSION_RE = re.compile(r"^DCSM_(\d+)_a$")
+
 
 # Expected file names within each patient folder
 EDF_NAME = "contiguous.edf"
@@ -31,7 +34,13 @@ TXT_NAME = "lights.txt"
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Function
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
-def index_sessions(root_dir: str | Path, edf: bool = True, csv: bool = True,txt: bool = True) -> list[PatientRecord]:
+def index_sessions(root_dir: str | Path, 
+                   edf: bool = True, 
+                   csv: bool = True,
+                   txt: bool = True,
+                   recursive: bool = False,
+                   strict: bool = False,
+                ) -> list[PatientRecord]:
     """
     Go through folders named DCSM_x_a and find contiguous.edf, hypnogram.csv, lights.txt for each
 
@@ -45,12 +54,27 @@ def index_sessions(root_dir: str | Path, edf: bool = True, csv: bool = True,txt:
             Whether to include the CSV file path in the PatientRecord. Default is True.
         txt : bool 
             Whether to include the TXT file path in the PatientRecord. Default is True.
+        recursive : bool
+            - True  -> search inside subfolders (rglob)
+            - False -> only look directly inside patient folder
+        strict : bool
+            - True -> raise error if any *requested* file is missing in a matching folder.
+            - False -> skip folders missing any *requested* file.
     """
+    root_dir = Path(root_dir)  # convert str -> Path if needed
 
     if not root_dir.exists():
         raise FileNotFoundError(f"Root directory not found: {root_dir}")
     
+    # Helper function to find a file in a folder (optionally recursively)
+    def find_file(folder: Path, filename: str) -> Optional[Path]:
+        if recursive:
+            return next(folder.rglob(filename), None)
+        path = folder / filename
+        return path if path.exists() else None
+    
     records: list[PatientRecord] = []
+    skipped = 0
 
     for folder in sorted(p for p in root_dir.iterdir() if p.is_dir()):
         print("Found folder: ", folder.name)
@@ -69,17 +93,19 @@ def index_sessions(root_dir: str | Path, edf: bool = True, csv: bool = True,txt:
 
         # Validate that the required files exist
         missing = []
-        if edf and not edf_path.exists():
-            missing.append(EDF_NAME)
-        if csv and not csv_path.exists():
-            missing.append(CSV_NAME)
-        if txt and not txt_path.exists():
-            missing.append(TXT_NAME)
+        if edf and not edf_path.exists(): missing.append(EDF_NAME)
+        if csv and not csv_path.exists(): missing.append(CSV_NAME)
+        if txt and not txt_path.exists(): missing.append(TXT_NAME)
         
         if missing:
-            print(f"Skipping {folder.name} — missing {missing}")
-            continue
-
+            skipped += 1
+            msg = f"{folder.name} missing {missing} (recursive={recursive})"
+            if strict:
+                raise FileNotFoundError(msg)
+            else:
+                print("Skipping:", msg)
+                continue
+            
         records.append(
             PatientRecord(
                 patient_id=folder.name,
@@ -90,12 +116,14 @@ def index_sessions(root_dir: str | Path, edf: bool = True, csv: bool = True,txt:
             )   
         )
 
-        if not records:
-            raise RuntimeError(f"No valid patient records found in {root_dir}")
+    if not records:
+        raise RuntimeError(
+            "No valid patient records found. "
+            "Check root path or enable recursive=True."
+        )
         
-        print(f"Indexed {len(records)} patient folders.")
-
-        return records
+    print(f"Indexed {len(records)} session. Skipped {skipped}.")
+    return records
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Test
@@ -105,5 +133,5 @@ def index_sessions(root_dir: str | Path, edf: bool = True, csv: bool = True,txt:
 p = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok")
 
 # Only index EDF files
-records = index_sessions(root_dir=p, edf=True, csv=False, txt=False)
+records = index_sessions(root_dir=p, edf=True, csv=False, txt=False, recursive=False)
 
