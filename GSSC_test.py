@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import mne
+import pandas as pd
 import torch
 import gssc.networks
 torch.serialization.add_safe_globals([gssc.networks.ResSleep])
@@ -41,22 +42,37 @@ def test_GSSC(folder: str | Path):
     edf_path = edfs[0]
     print("Using EDF:", edf_path)
 
-    # Load EDF signal via MNE
+    # 1) Read header only
     raw = mne.io.read_raw_edf(edf_path, preload=False)
     
     print("Loaded raw:", raw)
     print("Channels:", raw.ch_names[:20], "..." if len(raw.ch_names) > 20 else "")
     print("sfreq:", raw.info["sfreq"])
-    raw.set_channel_types({"EOGH-A1": "eog", "EOGV-A2": "eog",})
 
-    # Make inferencer
+    # 2) Pick channels
+    picks = ["C3", "EOGH", "EOGV"]
+    missing = [ch for ch in picks if ch not in raw.ch_names]
+    if missing:
+        raise ValueError(f"Missing expected channels: {missing}. Available: {raw.ch_names}")
+    raw.pick(picks)
+
+    # 3) Load data (Required for GSSC)
+    raw.load_data()
+
+    # 4) Set channel types (Helps GSSC choose)
+    raw.set_channel_types({"C3": "eeg", "EOGH": "eog", "EOGV": "eog"})
+
+    # 5) Run inference
     infer = EEGInfer()
+    stages, times = infer.mne_infer(inst=raw)
 
-    # Run inferencer
-    hypnogram = infer.mne_infer(inst=raw)
-    print(hypnogram)
+    df = pd.DataFrame({
+        "time_sec": times,
+        "stage_numeric": stages
+    })
 
-    return hypnogram
+    print(df.head())
+    return stages, times
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Test
