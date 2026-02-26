@@ -9,6 +9,7 @@ from typing import Optional, Iterable
 import pandas as pd
 import numpy as np
 import mne
+from time import perf_counter
 from pprint import pprint
 
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
@@ -16,6 +17,19 @@ from pprint import pprint
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
 
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# Helper function
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+def time_elapsed(start_time: float, end_time: float, label: str = "Total") -> None:
+    """Print elapsed time in a human-readable format."""
+    elapsed = end_time - start_time
+    if elapsed < 60:
+        print(f"{label} time: {elapsed:.2f} seconds")
+    elif elapsed < 3600:
+        print(f"{label} time: {elapsed / 60:.2f} minutes")
+    else:
+        print(f"{label} time: {elapsed / 3600:.2f} hours")
+    
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Function
@@ -44,7 +58,10 @@ def load_files(
     plot_edf: bool
         Whether to plot the EDF data after loading. Default is True.
     """
-    folder = Path(folder_path).resolve()
+   
+    t0 = perf_counter()
+
+    folder = Path(folder_path).expanduser()
     print(f"\nLoading from: {folder}")
 
     if not folder.exists():
@@ -204,6 +221,8 @@ def load_files(
             block=True,
             )
 
+    t1 = perf_counter()
+    time_elapsed(t0, t1, label="Load_files")
 
     return EDF_results, CSV_results, TXT_results
 
