@@ -9,7 +9,9 @@ from typing import Optional, Iterable
 import pandas as pd
 import numpy as np
 import mne
-from time import perf_counter
+import threading
+import time
+import sys
 from pprint import pprint
 
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
@@ -20,8 +22,15 @@ file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_2_a"
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Helper function
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+
+# Simple ANSI color codes for terminal output
+BOLD = "\033[1m"
+RESET = "\033[0m"
+
+# Function to print elapsed time
+'''
 def time_elapsed(start_time: float, end_time: float, label: str = "Total") -> None:
-    """Print elapsed time in a human-readable format."""
+    """Print elapsed time."""
     elapsed = end_time - start_time
     if elapsed < 60:
         print(f"{label} time: {elapsed:.2f} seconds")
@@ -29,7 +38,36 @@ def time_elapsed(start_time: float, end_time: float, label: str = "Total") -> No
         print(f"{label} time: {elapsed / 60:.2f} minutes")
     else:
         print(f"{label} time: {elapsed / 3600:.2f} hours")
-    
+'''
+
+# Live timer class to show progress during loading
+class LiveTimer:
+    def __init__(self, label="Loading"):
+        self.label = label
+        self._running = False
+        self._thread = None
+        self.start_time = None
+
+    def _run(self):
+        while self._running:
+            elapsed = time.perf_counter() - self.start_time
+            sys.stdout.write(f"\r{self.label}... {elapsed:6.1f} sec")
+            sys.stdout.flush()
+            time.sleep(1)
+
+    def start(self):
+        self.start_time = time.perf_counter()
+        self._running = True
+        self._thread = threading.Thread(target=self._run)
+        self._thread.start()
+
+    def stop(self):
+        self._running = False
+        self._thread.join()
+        elapsed = time.perf_counter() - self.start_time
+        print(f"\r{BOLD}{self.label}{RESET} finished in {elapsed:.2f} sec")
+
+
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Function
@@ -59,7 +97,8 @@ def load_files(
         Whether to plot the EDF data after loading. Default is True.
     """
    
-    t0 = perf_counter()
+    timer = LiveTimer("Loading files")
+    timer.start()
 
     folder = Path(folder_path).expanduser()
     print(f"\nLoading from: {folder}")
@@ -76,9 +115,9 @@ def load_files(
     ### NOTE: 
     #   'next()' is used to get the first file found, or None if no files are found.
 
-    print(f"edf file: {edf_file}")
-    print(f"csv file: {csv_file}")
-    print(f"txt file: {txt_file}")
+    print(f"{BOLD}edf file:{RESET} {edf_file}")
+    print(f"{BOLD}csv file:{RESET} {csv_file}")
+    print(f"{BOLD}txt file:{RESET} {txt_file}")
 
     if edf_file is None:
         raise FileNotFoundError(f"No EDF files found in folder: {folder}")
@@ -221,9 +260,7 @@ def load_files(
             block=True,
             )
 
-    t1 = perf_counter()
-    time_elapsed(t0, t1, label="Load_files")
-
+    timer.stop()
     return EDF_results, CSV_results, TXT_results
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
