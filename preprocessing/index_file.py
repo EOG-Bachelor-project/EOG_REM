@@ -262,12 +262,29 @@ def records_to_df(records: Iterable[SessionRecord],
 # Test
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 
-# Path
-p = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok")
+if __name__ == "__main__":
 
-# Only index EDF files
-records = index_sessions(root_dir=p, edf=True, csv=False, txt=False, recursive=False)
-df = records_to_df(records, out_root=p, save_csv=True)
+    # Raw data root (READ ONLY)
+    raw_root = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok")
 
-print("\nPreview of DataFrame:")
-print(df.head())
+    # Project output directory (WRITE HERE INSTEAD)
+    project_root = Path("C:/Users/AKLO0022/EOG_REM")
+    index_out_dir = project_root / "data_processed" / "indices"
+
+    records = index_sessions(
+        root_dir=raw_root,
+        edf=True,
+        csv=False,
+        txt=False,
+        recursive=False
+    )
+
+    df = records_to_df(
+        records,
+        out_root=index_out_dir,
+        save_csv=True,
+        csv_name="session_index.csv"
+    )
+
+    print("\nPreview of DataFrame:")
+    print(df.head())
