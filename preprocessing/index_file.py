@@ -14,24 +14,30 @@ from typing import Optional
 # Data container 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 @dataclass(frozen=True)
-class PatientRecord:
+class SessionRecord:
     """
-    Structured container for one patient/session.
+    Structured container for one session.
 
     Attributes
     ----------
     patient_id : str
-        Folder name (e.g., DCSM_123_a)
+        Full folder name (e.g., DCSM_123_a).
+    patient_number : int
+        Numeric patient identifier extracted from folder name (e.g., 123).
+    session_type : str
+        Session lable extracted from folder name (e.g., "a", "b", "c").
     folder : Path
-        Path to the patient directory
+        Path to the patient directory.
     edf_path : Optional[Path]
-        Path to contiguous.edf (if requested and found)
+        Path to contiguous.edf (if requested and found).
     csv_path : Optional[Path]
-        Path to hypnogram.csv (if requested and found)
+        Path to hypnogram.csv (if requested and found).
     txt_path : Optional[Path]
-        Path to lights.txt (if requested and found)
+        Path to lights.txt (if requested and found).
     """
-    patient_id: str                 
+    patient_id: str
+    patient_number: int
+    session_type: str                 
     folder: Path                    
     edf_path: Optional[Path] = None 
     csv_path: Optional[Path] = None 
@@ -41,8 +47,12 @@ class PatientRecord:
 # Constants
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# Simple ANSI color codes for terminal output
+BOLD = "\033[1m"
+RESET = "\033[0m"
+
 # Match folder names
-SESSION_RE = re.compile(r"^DCSM_(\d+)_a$")
+SESSION_RE = re.compile(r"^DCSM_(\d+)_([abc])$")
 
 
 # Expected file names within each patient folder
@@ -59,7 +69,7 @@ def index_sessions(root_dir: str | Path,
                    txt: bool = True,
                    recursive: bool = False,
                    strict: bool = False,
-                ) -> list[PatientRecord]:
+                ) -> list[SessionRecord]:
     """
     Go through folders named DCSM_x_a and find contiguous.edf, hypnogram.csv, lights.txt for each
 
@@ -100,29 +110,33 @@ def index_sessions(root_dir: str | Path,
         path = folder / filename
         return path if path.exists() else None
     
-    records: list[PatientRecord] = []
+    records: list[SessionRecord] = []
     skipped = 0
 
     # =====================================================================
     # Iterate through patient folders
     # =====================================================================
     for folder in sorted(p for p in root_dir.iterdir() if p.is_dir()):
-        print("Found folder: ", folder.name)
+        print("\nFound folder: ", folder.name)
 
-        if not SESSION_RE.match(folder.name):
+        match = SESSION_RE.match(folder.name)
+        if not match:
             print(" -> skipped (name does not match the pattern)")
             continue
+
+        patient_nr = int(match.group(1))
+        session_tp = match.group(2) # "a", "b", "c", ...
 
         edf_path = find_file(folder, EDF_NAME) if edf else None
         csv_path = find_file(folder, CSV_NAME) if csv else None
         txt_path = find_file(folder, TXT_NAME) if txt else None
 
         if edf:
-            print(" EDF exists:", edf_path is not None)
+            print("  - EDF exists:", edf_path is not None)
         if csv:
-            print(" CSV exists:", csv_path is not None)
+            print("  - CSV exists:", csv_path is not None)
         if txt:
-            print(" TXT exists:", txt_path is not None)
+            print("  - TXT exists:", txt_path is not None)
 
         # =====================================================================
         # Check for missing requested files
@@ -138,21 +152,24 @@ def index_sessions(root_dir: str | Path,
             if strict:
                 raise FileNotFoundError(msg)
             else:
-                print("Skipping:", msg)
+                print(f" {BOLD}Skipping:{RESET}", msg)
                 continue
         
         # =====================================================================
         # Store the record
         # =====================================================================
-        records.append(
-            PatientRecord(
-                patient_id=folder.name,
-                folder=folder,
-                edf_path=edf_path,
-                csv_path=csv_path,
-                txt_path=txt_path
-            )   
-        )
+        record_n = SessionRecord(
+            patient_id=folder.name,
+            patient_number=patient_nr,
+            session_type=session_tp,
+            folder=folder,
+            edf_path=edf_path,
+            csv_path=csv_path,
+            txt_path=txt_path
+        )  
+        records.append(record_n)
+        
+        print(f" {BOLD}Added:{RESET} {record_n.patient_id}  (patient={record_n.patient_number}, session={record_n.session_type})")
 
     # Final safety check
     if not records:
@@ -160,8 +177,11 @@ def index_sessions(root_dir: str | Path,
             "No valid patient records found. "
             "Check root path or enable recursive=True."
         )
-        
+    
+    print("\n")
+    print("="*50)
     print(f"Indexed {len(records)} session. Skipped {skipped}.")
+    print("="*50)
     return records
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
