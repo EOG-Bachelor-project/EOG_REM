@@ -5,10 +5,11 @@
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 from __future__ import annotations
 import csv
+import re
+import pandas as pd
 from dataclasses import dataclass
 from pathlib import Path
-import re
-from typing import Optional
+from typing import Optional, Iterable
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Data container 
@@ -61,8 +62,12 @@ CSV_NAME = "hypnogram.csv"
 TXT_NAME = "lights.txt"
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
-# Function
+# Functions
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+
+# —————————————————————————————————————————————————————————————————————
+# Main function to index patient sessions
+# —————————————————————————————————————————————————————————————————————
 def index_sessions(root_dir: str | Path, 
                    edf: bool = True, 
                    csv: bool = True,
@@ -113,9 +118,7 @@ def index_sessions(root_dir: str | Path,
     records: list[SessionRecord] = []
     skipped = 0
 
-    # =====================================================================
-    # Iterate through patient folders
-    # =====================================================================
+    # --- 1) Iterate through patient folders ---
     for folder in sorted(p for p in root_dir.iterdir() if p.is_dir()):
         print("\nFound folder: ", folder.name)
 
@@ -138,9 +141,7 @@ def index_sessions(root_dir: str | Path,
         if txt:
             print("  - TXT exists:", txt_path is not None)
 
-        # =====================================================================
-        # Check for missing requested files
-        # =====================================================================
+        # --- 2) Check for missing requested files ---
         missing = []
         if edf and edf_path is None: missing.append(EDF_NAME)
         if csv and csv_path is None: missing.append(CSV_NAME)
@@ -155,9 +156,8 @@ def index_sessions(root_dir: str | Path,
                 print(f" {BOLD}Skipping:{RESET}", msg)
                 continue
         
-        # =====================================================================
-        # Store the record
-        # =====================================================================
+
+        # --- 3) Store the record ---
         record_n = SessionRecord(
             patient_id=folder.name,
             patient_number=patient_nr,
@@ -171,18 +171,77 @@ def index_sessions(root_dir: str | Path,
         
         print(f" {BOLD}Added:{RESET} {record_n.patient_id}  (patient={record_n.patient_number}, session={record_n.session_type})")
 
-    # Final safety check
+    # --- 4) Final safety check ---
     if not records:
         raise RuntimeError(
             "No valid patient records found. "
             "Check root path or enable recursive=True."
         )
     
+    # --- 5) Summary ---
     print("\n")
     print("="*50)
     print(f"Indexed {len(records)} session. Skipped {skipped}.")
     print("="*50)
     return records
+
+# —————————————————————————————————————————————————————————————————————
+# Function to convert the list of SessionRecords to a DataFrame
+# —————————————————————————————————————————————————————————————————————
+
+def records_to_df(records: Iterable[SessionRecord], out_root: str | Path | None = None, sort_alg: str = "stable") -> pd.DataFrame:
+    """
+    Converts SessionRecord objects into a pandas DataFrame, and optionally saves it as a CSV file.
+
+    Parameters
+    ----------
+    records : Iterable[SessionRecord]
+        An iterable of SessionRecord objects to be converted into a DataFrame.
+    out_root : str | Path | None
+        Optional path to save the DataFrame as a CSV file. If None, the DataFrame will not be saved. Default is None.
+    sort_alg : str
+        Sorting algorithm to use when sorting the DataFrame. Options include "stable", "quicksort", "mergesort", "heapsort". Default is "stable". \\
+        See pandas documentation for more details: https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.sort_values.html#pandas.DataFrame.sort_values
+
+    Returns
+    -------
+    df : pd.DataFrame
+        A DataFrame containing the session records with columns corresponding to the attributes of SessionRecord.
+    """
+    # Ensure Path object for output root
+    out_root = Path(out_root) if out_root is not None else None
+
+    # Validate sorting algorithm
+    if sort_alg not in ["stable", "quicksort", "mergesort", "heapsort"]:
+        raise ValueError(f"Invalid sort_alg: {sort_alg}. Must be one of 'stable', 'quicksort', 'mergesort', 'heapsort'.")
+
+    # Creat empy list to hold rows for DataFrame
+    rows = []
+
+    # --- 1) Convert each dataclass record into a dictionary row ---
+    for r in records:
+        # Define output directory per patient if out_root is provided
+        out_dir = (out_root / r.patient_id) if out_root is not None else None
+
+        row = {
+            "patient_id": r.patient_id,
+            "patient_number": r.patient_number,
+            "session_type": r.session_type,
+            "folder": str(r.folder),
+            "edf_path": str(r.edf_path) if r.edf_path else None,
+            "csv_path": str(r.csv_path) if r.csv_path else None,
+            "txt_path": str(r.txt_path) if r.txt_path else None,
+            "out_dir": str(out_dir) if out_dir else None,
+        }
+        rows.append(row)
+    
+    # --- 2) Create DataFrame ---
+    df = pd.DataFrame(rows)
+
+    # --- 3) Sort sessions ---
+    df = df.sort_values(by=["patient_number", "session_type"], kind=sort_alg).reset_index(drop=True)
+
+    return df
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Test
@@ -193,3 +252,7 @@ p = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok")
 
 # Only index EDF files
 records = index_sessions(root_dir=p, edf=True, csv=False, txt=False, recursive=False)
+df = records_to_df(records)
+
+print("\nPreview of DataFrame:")
+print(df.head())
