@@ -189,7 +189,11 @@ def index_sessions(root_dir: str | Path,
 # Function to convert the list of SessionRecords to a DataFrame
 # —————————————————————————————————————————————————————————————————————
 
-def records_to_df(records: Iterable[SessionRecord], out_root: str | Path | None = None, sort_alg: str = "stable") -> pd.DataFrame:
+def records_to_df(records: Iterable[SessionRecord], 
+                  out_root: str | Path | None = None, 
+                  sort_alg: str = "stable",
+                  save_csv: bool = False,
+                  csv_name: str = "session_index.csv") -> pd.DataFrame:
     """
     Converts SessionRecord objects into a pandas DataFrame, and optionally saves it as a CSV file.
 
@@ -202,6 +206,10 @@ def records_to_df(records: Iterable[SessionRecord], out_root: str | Path | None 
     sort_alg : str
         Sorting algorithm to use when sorting the DataFrame. Options include "stable", "quicksort", "mergesort", "heapsort". Default is "stable". \\
         See pandas documentation for more details: https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.sort_values.html#pandas.DataFrame.sort_values
+    save_csv : bool
+        Whether to save the resulting DataFrame as a CSV file in the specified out_root directory. Default is False.
+    csv_name : str
+        The name of the CSV file to save if save_csv is True. Default is "session_index.csv".
 
     Returns
     -------
@@ -241,6 +249,13 @@ def records_to_df(records: Iterable[SessionRecord], out_root: str | Path | None 
     # --- 3) Sort sessions ---
     df = df.sort_values(by=["patient_number", "session_type"], kind=sort_alg).reset_index(drop=True)
 
+    # --- 4) Optionally save to CSV ---
+    if save_csv and out_root is not None:
+        out_root.mkdir(parents=True, exist_ok=True)
+        csv_path = out_root / csv_name
+        df.to_csv(csv_path, index=False)
+        print(f"\nDataFrame saved to: {csv_path}")
+
     return df
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
@@ -252,7 +267,7 @@ p = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok")
 
 # Only index EDF files
 records = index_sessions(root_dir=p, edf=True, csv=False, txt=False, recursive=False)
-df = records_to_df(records)
+df = records_to_df(records, out_root=p, save_csv=True)
 
 print("\nPreview of DataFrame:")
 print(df.head())
