@@ -1,8 +1,8 @@
 # TEST_LOAD_EDF.py
 
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 # Imports
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional, Iterable
@@ -13,9 +13,9 @@ import threading
 import time
 import sys
 
-# ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Predefined variables
-# ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_3_a"
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
@@ -53,9 +53,9 @@ class LiveTimer:
         elapsed = time.perf_counter() - self.start_time
         print(f"\r{self.label} finished in {elapsed:.2f} sec")
 
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 # Function
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 def load_files(
         folder_path: str | Path,
         *,
@@ -90,9 +90,7 @@ def load_files(
     if not folder.exists():
         raise FileNotFoundError(f"Folder not found: {folder}")
     
-    # =====================================================
-    # 1. Find files in the folder
-    # =====================================================
+    # --- 1. Find files in the folder ---
     edf_file = next(folder.glob("*.edf"), None)
     csv_file = next(folder.glob("*.csv"), None)
     txt_file = next(folder.glob("*.txt"), None)
@@ -110,9 +108,8 @@ def load_files(
     if txt_file is None:
         raise FileNotFoundError(f"No TXT files found in folder: {folder}")
 
-    # =====================================================
-    # 2. Load EDF file (no preloading)
-    # =====================================================
+
+    # --- 2. Load EDF file (no preloading) ---
     raw = mne.io.read_raw_edf(edf_file, preload=False, verbose=verbose)
     ### NOTE: 
     #   'mne.io.read_raw_edf()' is used to read the EDF file, and the resulting Raw object is stored in the variable 'raw'.
@@ -158,9 +155,7 @@ def load_files(
         "edf_path": str(edf_file),
     }
 
-    # =====================================================
-    # 3. Load CSV file
-    # =====================================================
+    # --- 3. Load CSV file ---
     df = pd.read_csv(csv_file) if csv_file else None
 
     CSV_results = {
@@ -170,9 +165,7 @@ def load_files(
         "csv_path": str(csv_file),
     }
 
-    # =====================================================
-    # 4. Load TXT file
-    # =====================================================
+    # --- 4. Load TXT file ---
     txt_lines = None
     if txt_file:
         text_lines = txt_file.read_text().splitlines()
@@ -184,11 +177,9 @@ def load_files(
         "lines": txt_lines,  # full list
     }
 
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Collect results to return
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # --- 5. Collect results to return ---
 
-    # --- EDF results ---
+    # EDF results
     print("\nEDF SUMMARY")
     print("=" * 50)
 
@@ -207,7 +198,7 @@ def load_files(
 
     print("=" * 50)
 
-    # --- CSV results ---
+    # CSV results 
     print("\nCSV SUMMARY")
     print("=" * 50)
 
@@ -222,9 +213,7 @@ def load_files(
 
     print("=" * 50)
 
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Plot EDF
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # --- 6. Plot EDF ---
     if plot_edf:
         raw_plot = raw.copy().pick(["eeg", "eog", "ecg", "emg", "resp", "misc"])
 
@@ -247,9 +236,9 @@ def load_files(
     timer.stop()
     return EDF_results, CSV_results, TXT_results
 
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 # Test
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 edf_res, csv_res, txt_res = load_files(file_path)
 
 print(edf_res)

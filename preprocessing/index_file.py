@@ -1,8 +1,8 @@
 # index_file.py
 
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 # Imports
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 from __future__ import annotations
 import csv
 import re
@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Iterable
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Data container 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 @dataclass(frozen=True)
 class SessionRecord:
     """
@@ -44,9 +44,9 @@ class SessionRecord:
     csv_path: Optional[Path] = None 
     txt_path: Optional[Path] = None 
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Constants
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 
 # Simple ANSI color codes for terminal output
 BOLD = "\033[1m"
@@ -61,9 +61,9 @@ EDF_NAME = "contiguous.edf"
 CSV_NAME = "hypnogram.csv"
 TXT_NAME = "lights.txt"
 
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 # Functions
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 
 # —————————————————————————————————————————————————————————————————————
 # Main function to index patient sessions
@@ -228,6 +228,7 @@ def records_to_df(records: Iterable[SessionRecord],
 
     # --- 1) Convert each dataclass record into a dictionary row ---
     for r in records:
+        
         # Define output directory per patient if out_root is provided
         out_dir = (out_root / r.patient_id) if out_root is not None else None
 
@@ -258,9 +259,9 @@ def records_to_df(records: Iterable[SessionRecord],
 
     return df
 
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 # Test
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 
 if __name__ == "__main__":
 
@@ -274,17 +275,13 @@ if __name__ == "__main__":
     records = index_sessions(
         root_dir=raw_root,
         edf=True,
-        csv=False,
-        txt=False,
+        csv=True,
+        txt=True,
         recursive=False
     )
 
-    df = records_to_df(
-        records,
-        out_root=index_out_dir,
-        save_csv=True,
-        csv_name="session_index.csv"
-    )
+    df = records_to_df(records)
 
     print("\nPreview of DataFrame:")
     print(df.head())
+    print(df.info())
