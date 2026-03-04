@@ -16,7 +16,7 @@ import sys
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Predefined variables
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
-file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_3_a"
+file_path = "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_1_a"
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Helper function

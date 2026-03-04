@@ -64,7 +64,7 @@ def test_GSSC(folder: str | Path):
 
     # 5) Run inference
     infer = EEGInfer()
-    stages, times = infer.mne_infer(inst=raw)
+    stages, probs, times = infer.mne_infer(inst=raw)
 
     df = pd.DataFrame({
         "time_sec": times,
