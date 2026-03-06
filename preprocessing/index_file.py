@@ -76,7 +76,7 @@ def index_sessions(root_dir: str | Path,
                    strict: bool = False,
                 ) -> list[SessionRecord]:
     """
-    Go through folders named DCSM_x_a and find contiguous.edf, hypnogram.csv, lights.txt for each
+    Go through folders named DCSM_x_y and find contiguous.edf, hypnogram.csv, lights.txt for each
 
     Parameters
     ----------
