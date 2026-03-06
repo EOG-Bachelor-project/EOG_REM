@@ -13,9 +13,11 @@ edf_path = "C:\\Users\\rasmu\\Desktop\\6. Semester\\Bachelor Projekt\\Test edf f
 # Read edf file
 raw = mne.io.read_raw_edf(edf_path,preload = True)
 
+#Print channel names to ensure correct channels are being used
 print(raw.ch_names)
 print("ny ting ")
 print(raw.annotations)
+
 # Auto-stage using YASA (update eeg_name to match a channel in your EDF)
 sls = yasa.SleepStaging(raw, eeg_name="C3M2")  
 hypno = sls.predict()
@@ -36,12 +38,9 @@ loc = loc[:trim]
 roc = roc[:trim]
 hypno_up = hypno_up[:trim]
 
-# Sanity check
-print(f"Signal length after trim: {len(loc)}")  # should be > 0
-
-
 # Extract code and test it
 
 from extract_rems import detect_rem_jaec
 result = detect_rem_jaec(loc,roc,hypno_up,method = 'ssc_threshold')
-print(result)
+print('summary')
+print(result.summary())
