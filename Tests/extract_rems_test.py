@@ -3,6 +3,7 @@ import yasa
 import numpy as np
 import sys
 import os
+import pandas as pd
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
@@ -42,5 +43,9 @@ hypno_up = hypno_up[:trim]
 
 from extract_rems import detect_rem_jaec
 result = detect_rem_jaec(loc,roc,hypno_up,method = 'ssc_threshold')
-print('summary')
-print(result.summary())
+#print('summary')
+#print(result.summary())
+
+df = result.summary()
+df['Stage'] = yasa.hypno_int_to_str(df['Stage']).to_numpy()
+df.to_csv('rem_results.csv', index=False)
