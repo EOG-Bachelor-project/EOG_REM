@@ -26,13 +26,22 @@ sf = raw.info["sfreq"]
 hypno_up = yasa.hypno_upsample_to_data(hypno_int, sf_hypno=1/30, data=raw.get_data()[0], sf_data=sf)
 
 # Extract loc and roc 
-loc = raw.get_data(picks =["E1M2"])
-roc = raw.get_data(picks =["E2M2"])
+loc = raw.get_data(picks =["E1M2"])[0]
+roc = raw.get_data(picks =["E2M2"])[0]
 
+# Trim to multiple of 2^14
+factor = 2**14
+trim = (len(loc) // factor) * factor
+loc = loc[:trim]
+roc = roc[:trim]
+hypno_up = hypno_up[:trim]
+
+# Sanity check
+print(f"Signal length after trim: {len(loc)}")  # should be > 0
 
 
 # Extract code and test it
 
 from extract_rems import detect_rem_jaec
-result = detect_rem_jaec(loc,roc,hypno_up)
+result = detect_rem_jaec(loc,roc,hypno_up,method = 'ssc_threshold')
 print(result)
