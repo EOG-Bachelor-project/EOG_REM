@@ -26,15 +26,14 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 # —————————————————————————————————————————————————————————————————————
 # Function to convert a single EDF file to CSV
 # —————————————————————————————————————————————————————————————————————
-def edf_to_csv(edf_path: Path = RAW_ROOT, out_dir: Path = OUT_DIR) -> None:
+def edf_to_csv(edf_path: Path, out_dir: Path = OUT_DIR) -> None:
     """
     Load one EDF file, rename EOG channels to canonical names, and save the full signal matrix as a CSV file locally.
 
     Parameters
     ----------
     edf_path : Path
-        The path to the input EDF file. \\
-        By default, it is set to RAW_ROOT, which is the directory containing the EDF files.
+        The path to the input EDF file.
     out_dir : Path
         The directory where the output CSV file will be saved. \\
         By default, it is set to OUT_DIR, which is a directory named "local_csv_eog" in the current working directory.
