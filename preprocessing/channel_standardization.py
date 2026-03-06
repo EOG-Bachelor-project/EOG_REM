@@ -10,16 +10,17 @@ from __future__ import annotations
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 CHANNEL_ALIASES = {
     # left eye
-    "EOGH": "LOC",
-    "LOC-A2": "LOC",
-    "LEFT EOG": "LOC",
-    "E1": "LOC",
+    "EOGV": "LOC",   
+    "EOGV-Ref": "LOC",
+    "EOGV-A2": "LOC",
+    "eogl-a2": "LOC",
 
     # right eye
-    "EOGV": "ROC",
-    "ROC-A1": "ROC",
-    "RIGHT EOG": "ROC",
-    "E2": "ROC",
+    "EOGH": "ROC",   
+    "EOGH-Ref": "ROC",
+    "EOGH-A1": "ROC",
+    "eogr-a1": "ROC",
+
 }
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
