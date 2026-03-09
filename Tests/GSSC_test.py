@@ -64,15 +64,18 @@ def test_GSSC(folder: str | Path):
 
     # 5) Run inference
     infer = EEGInfer()
-    stages, probs, times = infer.mne_infer(inst=raw)
+    stages, times, probs = infer.mne_infer(inst=raw)
+    
+    df = pd.DataFrame(data={
+        "Stages": stages, 
+         "Times": times
+         })
+    
+    df[["P_W", "P_N1", "P_N2", "P_N3", "P_REM"]] = probs
+    
+    print(df)
 
-    df = pd.DataFrame({
-        "time_sec": times,
-        "stage_numeric": stages
-    })
-
-    print(df.head())
-    return stages, times
+    return stages, times, probs
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Test
