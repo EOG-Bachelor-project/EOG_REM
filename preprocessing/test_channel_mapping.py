@@ -1,8 +1,8 @@
 import mne
 from pathlib import Path
 
-from preprocessing.index_file import index_sessions
-from preprocessing.edf_to_csv import edf_to_csv
+from index_file import index_sessions
+from edf_to_csv import edf_to_csv
 
 
 ROOT = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok")

@@ -9,14 +9,14 @@ from pathlib import Path
 import pandas as pd
 import mne
 
-from preprocessing.index_file import index_sessions
-from preprocessing.channel_standardization import build_rename_map
+from index_file import index_sessions
+from channel_standardization import build_rename_map
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Constants
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 RAW_ROOT = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok")
-OUT_DIR = Path("/Users/adamklovborg/Documents/GitHub/EOG_REM/csv_edf/local_csv_eog")
+OUT_DIR = Path("local_csv_eog")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # =====================================================================

@@ -9,6 +9,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Generated data
+local_csv_eog/
+
 # Distribution / packaging
 .Python
 build/
