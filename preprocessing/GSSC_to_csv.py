@@ -11,8 +11,6 @@ torch.serialization.add_safe_globals([gssc.networks.ResSleep])
 from channel_standardization import build_rename_map
 from gssc.infer import EEGInfer
 
-
-
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 # Predefined variables
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
@@ -69,11 +67,11 @@ def test_GSSC(folder: str | Path):
         "Stages": stages, 
          "Times": times
          })
-    
+    # Add probalities to dataframe and rename stages to string
     df[["P_W", "P_N1", "P_N2", "P_N3", "P_REM"]] = probs
-    
-    print(df)
+    df['stages'] = df['stages'].map({0: 'W', 1: 'N1', 2: 'N2', 3: 'N3', 4: 'REM'})
 
+    print(df)
     # 6) Convert datframe to csv and save it 
     df.to_csv('gssc_results.csv', index=False)
     print("Saved: gssc_results.csv")
