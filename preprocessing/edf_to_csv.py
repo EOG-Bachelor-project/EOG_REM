@@ -9,8 +9,8 @@ from pathlib import Path
 import pandas as pd
 import mne
 
-from index_file import index_sessions
-from channel_standardization import build_rename_map
+from preprocessing.index_file import index_sessions
+from preprocessing.channel_standardization import build_rename_map
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 # Constants

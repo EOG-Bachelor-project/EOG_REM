@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 import gssc.networks
 torch.serialization.add_safe_globals([gssc.networks.ResSleep])
-from channel_standardization import build_rename_map
+from preprocessing.channel_standardization import build_rename_map
 from gssc.infer import EEGInfer
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –

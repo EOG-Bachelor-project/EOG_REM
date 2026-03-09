@@ -15,7 +15,7 @@ from preprocessing.csv_merge import merge_csv_files
 # Paths
 # --------------------------------------------------
 file_path = Path(
-    "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_1_a/contiguous.edf"
+    "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_1_a"
 )
 
 GSSC_DIR = Path("gssc_csv")
