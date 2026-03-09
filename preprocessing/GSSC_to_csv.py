@@ -1,6 +1,8 @@
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# GSSC_to_csv.py
+
+# =====================================================================
 # Imports
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 from __future__ import annotations
 from pathlib import Path
 import mne
@@ -11,19 +13,20 @@ torch.serialization.add_safe_globals([gssc.networks.ResSleep])
 from channel_standardization import build_rename_map
 from gssc.infer import EEGInfer
 
-# ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
-# Predefined variables
-# ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# Constants
+# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 edf = Path("l:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_1_a/contiguous.edf")
 channels = ['LOC', 'ROC']
 print("Exists:", edf.exists())
 
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+
+# =====================================================================
 # Function
-# – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
+# =====================================================================
 
 # GSSC test function
-def test_GSSC(folder: str | Path):
+def GSSC_to_csv(folder: str | Path):
     """
     Load EDF file from the specified folder path, run the GSSC inference, and return the results as a DataFrame.
 
