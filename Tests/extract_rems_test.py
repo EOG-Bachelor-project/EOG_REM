@@ -19,7 +19,7 @@ print(raw.ch_names)
 print("ny ting ")
 print(raw.annotations)
 
-# Auto-stage using YASA (update eeg_name to match a channel in your EDF)
+# Auto-stage using YASA
 sls = yasa.SleepStaging(raw, eeg_name="C3M2")  
 hypno = sls.predict()
 hypno_int = yasa.hypno_str_to_int(hypno)
@@ -43,8 +43,8 @@ hypno_up = hypno_up[:trim]
 
 from extract_rems import detect_rem_jaec
 result = detect_rem_jaec(loc,roc,hypno_up,method = 'ssc_threshold')
-#print('summary')
-#print(result.summary())
+print('summary')
+print(result.summary())
 
 df = result.summary()
 df['Stage'] = yasa.hypno_int_to_str(df['Stage']).to_numpy()
