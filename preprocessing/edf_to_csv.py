@@ -66,6 +66,7 @@ def edf_to_csv(edf_path: Path, out_dir: Path = OUT_DIR) -> None:
 
     # Create a DataFrame with time and EOG channels
     df = pd.DataFrame({
+        "id": edf_path.stem,
         "time_sec": raw.times,
         "LOC": loc,
         "ROC": roc,
