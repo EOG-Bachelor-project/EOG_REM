@@ -4,16 +4,16 @@ import sys
 import os
 import pandas as pd
 from pathlib import Path
-from preprocessing.channel_standardization import build_rename_map
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from channel_standardization import build_rename_map
 from extract_rems import detect_rem_jaec
 from gssc.infer import EEGInfer
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 Extract_REMs_DIR = Path('extracted_rems') 
 Extract_REMs_DIR.mkdir (parents=True, exist_ok=True)
 
-def extract_rems(edf_path: str, out_dir: Path = Extract_REMs_DIR):
+def extract_REMs(edf_path: str, out_dir: Path = Extract_REMs_DIR):
 
     """
     Load one EDF file, rename channels, run GSSC inference, detect REMs, and save the result as CSV.
@@ -91,4 +91,4 @@ def extract_rems(edf_path: str, out_dir: Path = Extract_REMs_DIR):
     df.to_csv(out_path, index=False)
     return df
 
-extract_rems("C:\\Users\\rasmu\\Desktop\\6. Semester\\Bachelor Projekt\\Test edf filer\\BOGN00022.edf")
+extract_REMs("C:\\Users\\rasmu\\Desktop\\6. Semester\\Bachelor Projekt\\Test edf filer\\BOGN00022.edf")
