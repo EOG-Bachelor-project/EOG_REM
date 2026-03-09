@@ -14,11 +14,10 @@ from preprocessing.channel_standardization import build_rename_map
 from gssc.infer import EEGInfer
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
-# Constants
+# Paths
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
-edf = Path("l:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok/DCSM_1_a/contiguous.edf")
-channels = ['LOC', 'ROC']
-print("Exists:", edf.exists())
+GSSC_DIR = Path("gssc_csv")
+GSSC_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =====================================================================
@@ -26,25 +25,29 @@ print("Exists:", edf.exists())
 # =====================================================================
 
 # GSSC test function
-def GSSC_to_csv(folder: str | Path):
+def GSSC_to_csv(edf_path: str | Path, out_dir: Path = GSSC_DIR) -> None:
     """
-    Load EDF file from the specified folder path, run the GSSC inference, and return the results as a DataFrame.
+    Load one EDF file, run GSSC inference, and save the result as CSV.
 
     Parameters
     ----------
-    folder_path : str | Path
-        The path to the folder containing the EDF file to be loaded.
+    edf_path : str | Path
+        The path to the EDF file to be loaded.
+    out_dir : Path
+        The directory where the output CSV file will be saved.
     """
-    folder = Path(folder)
-    edfs = list(folder.glob("*.edf"))
-    if not edfs:
-        raise FileNotFoundError(f"No EDF files found in: {folder}")
-    edf_path = edfs[0]
+    edf_path = Path(edf_path)
+
+    if not edf_path.exists():
+        raise FileNotFoundError(f"EDF file not found: {edf_path}")
+
+    session_id = edf_path.parent.name
+
     print("Using EDF:", edf_path)
 
-    # 1) Read header only
-    raw = mne.io.read_raw_edf(edf_path, preload=False)
-    
+    # 1) Read EDF
+    raw = mne.io.read_raw_edf(edf_path, preload=False, verbose=False)
+
     print("Loaded raw:", raw)
     print("Channels:", raw.ch_names[:20], "..." if len(raw.ch_names) > 20 else "")
     print("sfreq:", raw.info["sfreq"])
@@ -56,17 +59,12 @@ def GSSC_to_csv(folder: str | Path):
     if rename_map:
         raw.rename_channels(rename_map)
 
-    # Check if both LOC and ROC channels are present after renaming
-    missing = [ch for ch in ["LOC", "ROC"] if ch not in raw.ch_names]
-    if missing:
-        print(f"Skipping {edf_path.name} - missing channels: {missing}")
-        return
-
-    # 3) Pick channels
+    # 3) Require LOC and ROC
     picks = ["LOC", "ROC"]
     missing = [ch for ch in picks if ch not in raw.ch_names]
     if missing:
         raise ValueError(f"Missing expected channels: {missing}. Available: {raw.ch_names}")
+
     raw.pick(picks)
 
     # 4) Load data (Required for GSSC)
@@ -80,18 +78,25 @@ def GSSC_to_csv(folder: str | Path):
     stages, times, probs = infer.mne_infer(inst=raw)
     
     df = pd.DataFrame(data={
-        "Stages": stages, 
-         "Times": times
-         })
+        "epoch_start": times, 
+        "stage": stages,
+        })
+    
     # Add probalities to dataframe and rename stages to string
-    df[["P_W", "P_N1", "P_N2", "P_N3", "P_REM"]] = probs
-    df['Stages'] = df['Stages'].map({0: 'W', 1: 'N1', 2: 'N2', 3: 'N3', 4: 'REM'})
+    df[["prob_w", "prob_n1", "prob_n2", "prob_n3", "prob_rem"]] = probs
+
+    df["stage"] = df["stage"].map({
+        0: "W",
+        1: "N1",
+        2: "N2",
+        3: "N3",
+        4: "REM",
+    })
+
     
 
-    print(df)
-    # 7) Convert datframe to csv and save it 
-    df.to_csv('gssc_results.csv', index=False)
-    print("Saved: gssc_results.csv")
+    out_path = out_dir / f"{session_id}_gssc.csv"
+    df.to_csv(out_path, index=False)
 
-    return stages, times, probs
+    print(f"Saved: {out_path}")
 
