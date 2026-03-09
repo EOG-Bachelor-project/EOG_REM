@@ -10,9 +10,10 @@ from gssc.infer import EEGInfer
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
+Extract_REMs_DIR = Path('extracted_rems') 
+Extract_REMs_DIR.mkdir (parents=True, exist_ok=True)
 
-
-def extract_rems(edf_path: str, out_dir: Path):
+def extract_rems(edf_path: str, out_dir: Path = Extract_REMs_DIR):
 
     """
     Load one EDF file, rename channels, run GSSC inference, detect REMs, and save the result as CSV.
@@ -89,3 +90,5 @@ def extract_rems(edf_path: str, out_dir: Path):
     out_path = out_dir / f"{session_id}_extracted_rems.csv"
     df.to_csv(out_path, index=False)
     return df
+
+extract_rems("C:\\Users\\rasmu\\Desktop\\6. Semester\\Bachelor Projekt\\Test edf filer\\BOGN00022.edf")
