@@ -3,13 +3,40 @@ import numpy as np
 import sys
 import os
 import pandas as pd
+from pathlib import Path
 from preprocessing.channel_standardization import build_rename_map
 from extract_rems import detect_rem_jaec
 from gssc.infer import EEGInfer
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-def extract_rems(raw):
+
+
+def extract_rems(edf_path: str, out_dir: Path):
+
+    """
+    Load one EDF file, rename channels, run GSSC inference, detect REMs, and save the result as CSV.
+
+    Parameters
+    ----------
+    edf_path : str | Path
+        The path to the EDF file to be loaded.
+    out_dir : Path
+        The directory where the output CSV file will be saved.
+    """
+
+    edf_path = Path(edf_path)
+
+    if not edf_path.exists():
+        raise FileNotFoundError(f"EDF file not found: {edf_path}")
+
+    session_id = edf_path.parent.name
+
+    print("Using EDF:", edf_path)
+
+    raw = mne.io.read_raw_edf(edf_path,preload = False )
+
+
 # Rename channels for standardization
     rename_map = build_rename_map(raw.ch_names)
     print("Rename map:", rename_map)
@@ -53,6 +80,12 @@ def extract_rems(raw):
 
 # Create dataframe to retrun results
     df = result.summary()
-    df['Stage'] = df['Stage'].map({0:'W', 1:'N1', 2:'N2', 3:'N3', 4:'REM'})
-    print(df)
+    df['Stage'] = df['Stage'].map({
+        0:'W', 
+        1:'N1', 
+        2:'N2', 
+        3:'N3', 
+        4:'REM'})
+    out_path = out_dir / f"{session_id}_extracted_rems.csv"
+    df.to_csv(out_path, index=False)
     return df
