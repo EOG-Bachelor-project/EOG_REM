@@ -3,7 +3,7 @@ import numpy as np
 import sys
 import os
 import pandas as pd
-from channel_standardization import build_rename_map
+from preprocessing.channel_standardization import build_rename_map
 from extract_rems import detect_rem_jaec
 from gssc.infer import EEGInfer
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -54,5 +54,5 @@ def extract_rems(raw):
 # Create dataframe to retrun results
     df = result.summary()
     df['Stage'] = df['Stage'].map({0:'W', 1:'N1', 2:'N2', 3:'N3', 4:'REM'})
-
+    print(df)
     return df
