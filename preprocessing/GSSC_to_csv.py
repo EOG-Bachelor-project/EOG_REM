@@ -73,6 +73,9 @@ def GSSC_to_csv(edf_path: str | Path, out_dir: Path = GSSC_DIR) -> None:
 
     # 5) Load data (Required for GSSC)
     raw.load_data()
+    # 6) Filter signal manually 
+
+    raw.filter(0.3,30, picks = picks) 
 
     # 6) Run inference
     infer = EEGInfer(use_cuda = False)

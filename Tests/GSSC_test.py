@@ -18,7 +18,7 @@ from gssc.infer import EEGInfer
 # Predefined variables
 # ≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠
 edf = Path(r"C:\Users\rasmu\Desktop\6. Semester\Bachelor Projekt\Test edf filer\cfs-visit5-800331.edf") #--- Change Path back to correct edf
-channels = ['ROC', 'LOC']
+channels = ['EOG-H', 'EOG-V']
 print("Exists:", edf.exists())
 
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
@@ -50,7 +50,7 @@ def test_GSSC(folder: str | Path):
     print("sfreq:", raw.info["sfreq"])
 
     # 2) Pick channels
-    picks = ["ROC", "LOC"]
+    picks = ["EOG-H", "EOG-V"]
     missing = [ch for ch in picks if ch not in raw.ch_names]
     if missing:
         raise ValueError(f"Missing expected channels: {missing}. Available: {raw.ch_names}")
@@ -60,14 +60,14 @@ def test_GSSC(folder: str | Path):
     raw.load_data()
 
     # 4) Set channel types (Helps GSSC choose)
-    raw.set_channel_types({"ROC": "eog", "LOC": "eog"})
+    raw.set_channel_types({"EOG-H": "eog", "EOG-V": "eog"})
     
     # 5) Filter manually 
-    raw.filter(0.3, 30., picks=['ROC', 'LOC'])
+    raw.filter(0.3, 30., picks=['EOG-H', 'EOG-V'])
 
     # 6) Run inference
     infer = EEGInfer(use_cuda=False)
-    stages, times, probs = infer.mne_infer(inst=raw, eeg = [], eog = ['ROC','LOC'], eog_drop=False, filter=False)
+    stages, times, probs = infer.mne_infer(inst=raw, eeg = [], eog = ['EOG-H','EOG-V'], eog_drop=False, filter=False)
     
     df = pd.DataFrame(data={
         "Stages": stages, 
