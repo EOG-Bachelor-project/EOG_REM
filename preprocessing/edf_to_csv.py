@@ -72,7 +72,8 @@ def edf_to_csv(edf_path: Path, out_dir: Path = OUT_DIR) -> None:
     })
 
     # Save to CSV
-    out_path = out_dir / f"{edf_path.stem}_eog.csv"
+    patient_id = edf_path.parent.name
+    out_path = out_dir / f"{patient_id}_{edf_path.stem}_eog.csv"
 
     df.to_csv(out_path, index=False)
 
