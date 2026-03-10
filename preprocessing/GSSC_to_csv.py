@@ -43,7 +43,7 @@ def GSSC_to_csv(edf_path: str | Path, out_dir: Path = GSSC_DIR) -> None:
 
     session_id = edf_path.parent.name
 
-    print("Using EDF:", edf_path)
+    print(f"\nProcessing: {edf_path}")
 
     # 1) Read EDF
     raw = mne.io.read_raw_edf(edf_path, preload=False, verbose=False)
@@ -58,8 +58,12 @@ def GSSC_to_csv(edf_path: str | Path, out_dir: Path = GSSC_DIR) -> None:
 
     if rename_map:
         raw.rename_channels(rename_map)
+    print("Channels after rename:", raw.ch_names[:20], "..." if len(raw.ch_names) > 20 else "")
 
-    # 3) Require LOC and ROC
+    # 3) Set channel types (Helps GSSC choose)
+    raw.set_channel_types({"ROC": "eog", "LOC": "eog"})
+
+    # 4) Require LOC and ROC
     picks = ["LOC", "ROC"]
     missing = [ch for ch in picks if ch not in raw.ch_names]
     if missing:
@@ -67,15 +71,12 @@ def GSSC_to_csv(edf_path: str | Path, out_dir: Path = GSSC_DIR) -> None:
 
     raw.pick(picks)
 
-    # 4) Load data (Required for GSSC)
+    # 5) Load data (Required for GSSC)
     raw.load_data()
 
-    # 5) Set channel types (Helps GSSC choose)
-    raw.set_channel_types({"ROC": "eog", "LOC": "eog"})
-
     # 6) Run inference
-    infer = EEGInfer()
-    stages, times, probs = infer.mne_infer(inst=raw)
+    infer = EEGInfer(use_cuda = False)
+    stages, times, probs = infer.mne_infer(inst=raw, eeg=[], eog=["LOC", "ROC"], eog_drop=False)
     
     df = pd.DataFrame(data={
         "epoch_start": times, 

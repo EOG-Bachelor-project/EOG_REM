@@ -91,7 +91,7 @@ def detect_rem_jaec(loc, roc, hypno_up, method='original'):
         for start, end in zip(starts, ends):
             peak_index = start + np.argmax(A_diff[start:end])
             pks.append(peak_index)
-        pks = np.array(pks)
+        pks = np.array(pks, dtype=int) # **Changed** Original:  pks = np.array(pks)
 
         # Initialize params
         pks_params = {}
@@ -121,8 +121,8 @@ def detect_rem_jaec(loc, roc, hypno_up, method='original'):
                 closest_after_minimum = np.min([peak + 1, len(A_diff) - 1])
             pks_params['right_bases'].append(closest_after_minimum)
 
-        pks_params['left_bases']  = np.array(pks_params['left_bases'])
-        pks_params['right_bases']  = np.array(pks_params['right_bases'])
+        pks_params['left_bases']  = np.array(pks_params['left_bases'], dtype=int)   # **Changed** Original:  pks_params['left_bases']  = np.array(pks_params['left_bases'])
+        pks_params['right_bases']  = np.array(pks_params['right_bases'], dtype=int) # **Changed** Original:  pks_params['right_bases']  = np.array(pks_params['right_bases'])
 
         # Stage
         if not np.isscalar(hypno_up):

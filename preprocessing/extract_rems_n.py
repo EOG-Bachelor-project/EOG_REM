@@ -95,7 +95,7 @@ def extract_rems_from_edf(edf_path: Path, out_dir: Path = EXTRACT_REMS_DIR) -> p
     hypno_up = 0
 
     # Rem detection
-    result = detect_rem_jaec(loc,roc,hypno_up,method = 'ssc_threshold')
+    result = detect_rem_jaec(loc, roc, hypno_up, method = 'ssc_threshold')
 
     # Create dataframe to retrun results
     df = result.summary()

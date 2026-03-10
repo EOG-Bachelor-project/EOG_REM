@@ -50,7 +50,7 @@ def test_GSSC(folder: str | Path):
     print("sfreq:", raw.info["sfreq"])
 
     # 2) Pick channels
-    picks = ["C3", "EOGH", "EOGV"]
+    picks = ["EOGH", "EOGV"]
     missing = [ch for ch in picks if ch not in raw.ch_names]
     if missing:
         raise ValueError(f"Missing expected channels: {missing}. Available: {raw.ch_names}")
@@ -60,11 +60,11 @@ def test_GSSC(folder: str | Path):
     raw.load_data()
 
     # 4) Set channel types (Helps GSSC choose)
-    raw.set_channel_types({"C3": "eeg", "EOGH": "eog", "EOGV": "eog"})
+    raw.set_channel_types({"EOGH": "eog", "EOGV": "eog"})
 
     # 5) Run inference
-    infer = EEGInfer()
-    stages, times, probs = infer.mne_infer(inst=raw)
+    infer = EEGInfer(use_cuda=False)
+    stages, times, probs = infer.mne_infer(inst=raw, eeg = [], eog = ['EOGH','EOGV'], eog_drop=False, filter = False)
     
     df = pd.DataFrame(data={
         "Stages": stages, 
