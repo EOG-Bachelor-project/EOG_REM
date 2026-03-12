@@ -74,8 +74,9 @@ def extract_rems_from_edf(edf_path: Path, out_dir: Path = EXTRACT_REMS_DIR) -> p
     #GSCC staging EOG only 
     raw.filter(0.3,30, picks = ['LOC','ROC'])
     infer = EEGInfer(use_cuda = False)
-    hypno_int, timestamps = infer.mne_infer(inst=raw, eeg=[], eog=['LOC', 'ROC'], eog_drop = False, filter = False)
-
+    staging = infer.mne_infer(inst=raw, eeg=[], eog=['LOC', 'ROC'], eog_drop = False, filter = False)
+    hypno_int = staging[0]
+    
     # Resample EDF if edf isnt sampled at 128 Hz
     sf = raw.info["sfreq"]
     if sf != 128:
@@ -116,7 +117,3 @@ def extract_rems_from_edf(edf_path: Path, out_dir: Path = EXTRACT_REMS_DIR) -> p
 
     print(f"Saved: {out_path}")
     return df
-
-edf = Path(r"C:\Users\rasmu\Desktop\6. Semester\Bachelor Projekt\Test edf filer\cfs-visit5-800331.edf")
-
-extract_rems_from_edf(edf_path=edf)
