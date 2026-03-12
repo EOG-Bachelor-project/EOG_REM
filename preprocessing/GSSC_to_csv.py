@@ -1,5 +1,6 @@
 # Filename: GSSC_to_csv.py 
 # Authors: Adam Klovborg & Rasmus Kleffel
+# Description: Runs GSSC sleep staging on EOG channels from EDF files and sev per-epoch stage predictions as CSV.
 
 # =====================================================================
 # Imports

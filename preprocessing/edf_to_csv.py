@@ -1,4 +1,6 @@
-# edf_to_csv.py
+# Filename: edf_to_csv.py 
+# Authors: Adam Klovborg & Rasmus Kleffel
+# Description: Convert EDF recordings to CSV files by extracting and standardizing LOC and ROC channels for all indexed sessions.
 
 # =====================================================================
 # Imports
@@ -37,41 +39,37 @@ def edf_to_csv(edf_path: Path, out_dir: Path = OUT_DIR) -> None:
     out_dir : Path
         The directory where the output CSV file will be saved. \\
         By default, it is set to OUT_DIR, which is a directory named "local_csv_eog" in the current working directory.
-    
-    Returns
-    -------
-    None
     """
     print(f"\nProcessing: {edf_path}")
 
-    # Load EDF
+    # 1) Load EDF
     raw = mne.io.read_raw_edf(edf_path, preload=True, verbose=False)
 
-    # Rename EOG channels
+    # 2) Rename EOG channels
     rename_map = build_rename_map(raw.ch_names)
     print("Rename map:", rename_map)
 
     if rename_map:
         raw.rename_channels(rename_map)
 
-    # Check if both LOC and ROC channels are present after renaming
+    # 3) Check if both LOC and ROC channels are present after renaming
     missing = [ch for ch in ["LOC", "ROC"] if ch not in raw.ch_names]
     if missing:
         print(f"Skipping {edf_path.name} - missing channels: {missing}")
         return
 
-    # Extract data for LOC and ROC channels
+    # 4) Extract data for LOC and ROC channels
     loc = raw.get_data(picks=["LOC"])[0]
     roc = raw.get_data(picks=["ROC"])[0]
 
-    # Create a DataFrame with time and EOG channels
+    # 5) Create a DataFrame with time and EOG channels
     df = pd.DataFrame({
         "time_sec": raw.times,
         "LOC": loc,
         "ROC": roc,
     })
 
-    # Save to CSV
+    # 6) Save to CSV
     patient_id = edf_path.parent.name
     out_path = out_dir / f"{patient_id}_{edf_path.stem}_eog.csv"
 

@@ -1,4 +1,6 @@
-# channel_standardization.py
+# Filename: channel_standardization.py
+# Authors: Adam Klovborg & Rasmus Kleffel
+# Description: Standardizes EOG channel names py mapping Danish convention variants (EOGV, EOGH) to canonical LOC/ROC lables.
 
 # =====================================================================
 # Imports
@@ -19,7 +21,7 @@ def build_rename_map(ch_names: list[str]) -> dict[str, str]:
     """
     Builds a mapping from original channel names to standardized names based on common patterns. \\
     If a channel name contains "EOGV", it is renamed to "LOC", since the V in EOGV stands for "venstre" (left in Danish). \\
-    If it contains "EOGH", it is renamed to "ROC", since the H in EOGH stands for "højre" (right in Danish). \\
+    If it contains "EOGH", it is renamed to "ROC", since the H in EOGH stands for "højre" (right in Danish). 
 
     Parameters
     ----------

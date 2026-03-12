@@ -1,4 +1,6 @@
-# upsample.py
+# Filename: upsample.py
+# Authors: Adam Klovborg & Rasmus Kleffel
+# Description: Upsample GSSC epoch-level staging to the EOG sample timeline. 
 
 # =====================================================================
 # Imports
@@ -11,7 +13,7 @@ import pandas as pd
 # =====================================================================
 def upsample_gssc_to_eog(eog_file: str | Path, gssc_file: str | Path) -> pd.DataFrame:
     """
-    Upsample GSSC epoch-level staging to the EOG sample timeline.
+    Upsamples GSSC epoch-level sleep staging to align with higher-frequency EOG sample timeline using backward merge.
 
     Parameters
     ----------
@@ -23,16 +25,17 @@ def upsample_gssc_to_eog(eog_file: str | Path, gssc_file: str | Path) -> pd.Data
     
     Returns
     -------
-    pd.DataFrame
+    upsampled_df : pd.DataFrame
         A DataFrame with one row per EOG sample, containing the original EOG columns plus the upsampled GSSC staging and probabilities.
     """
+    # 1) Read CSV files and save as dataframes
     eog_df = pd.read_csv(eog_file)
     gssc_df = pd.read_csv(gssc_file)
 
     if "time_sec" not in eog_df.columns:
         raise ValueError("EOG CSV must contain 'time_sec'.")
     
-    # normalize GSSC column names
+    # 2) Normalize GSSC column names
     gssc_df = gssc_df.rename(columns={
         "Times": "epoch_start",
         "times": "epoch_start",
@@ -46,9 +49,11 @@ def upsample_gssc_to_eog(eog_file: str | Path, gssc_file: str | Path) -> pd.Data
     if "stage" not in gssc_df.columns:
         raise ValueError("GSSC CSV must contain 'stage'.")
 
+    # 3) Sort dataframes and reset index
     eog_df = eog_df.sort_values("time_sec").reset_index(drop=True)
     gssc_df = gssc_df.sort_values("epoch_start").reset_index(drop=True)
 
+    # 4) Save as new dataframe
     upsampled_df = pd.merge_asof(
         eog_df[["time_sec"]],
         gssc_df,

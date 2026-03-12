@@ -1,4 +1,6 @@
-# index_file.py
+# Filename: index_file.py
+# Authors: Adam Klovborg & Rasmus Kleffel
+# Description: Indexes patient session folders matching the DCSM_x_y naming pattern, locating, EDF, CSV, and TXT files for each session.
 
 # =====================================================================
 # Imports
@@ -55,7 +57,6 @@ RESET = "\033[0m"
 # Match folder names
 SESSION_RE = re.compile(r"^DCSM_(\d+)_([abc])$")
 
-
 # Expected file names within each patient folder
 EDF_NAME = "contiguous.edf"
 CSV_NAME = "hypnogram.csv"
@@ -74,9 +75,10 @@ def index_sessions(root_dir: str | Path,
                    txt: bool = True,
                    recursive: bool = False,
                    strict: bool = False,
+                   file_print: bool = False,
                 ) -> list[SessionRecord]:
     """
-    Go through folders named DCSM_x_y and find contiguous.edf, hypnogram.csv, lights.txt for each
+    Go through folders named DCSM_x_y and find "contiguous.edf", "hypnogram.csv", "lights.txt" for each folder.
 
     Parameters
     ----------
@@ -90,10 +92,13 @@ def index_sessions(root_dir: str | Path,
     strict : bool
         - True -> raise error if any *requested* file is missing in a matching folder.
         - False -> skip folders missing any *requested* file.
-
+    file_print : bool
+        Print every filed found. Default is False.
+    
+    
     Returns
     -------
-    list[PatientRecord]
+    records : list[PatientRecord]
         One record per valid patient folder.
     """
     # Ensure Path object
@@ -118,13 +123,14 @@ def index_sessions(root_dir: str | Path,
     records: list[SessionRecord] = []
     skipped = 0
 
-    # --- 1) Iterate through patient folders ---
+    # 1) Iterate through patient folders 
     for folder in sorted(p for p in root_dir.iterdir() if p.is_dir()):
-        print("\nFound folder: ", folder.name)
+        if file_print:
+            print("\nFound folder: ", folder.name)
 
         match = SESSION_RE.match(folder.name)
         if not match:
-            print(" -> skipped (name does not match the pattern)")
+            print(f"{folder.name} skipped - name does not match the pattern")
             continue
 
         patient_nr = int(match.group(1))
@@ -134,14 +140,14 @@ def index_sessions(root_dir: str | Path,
         csv_path = find_file(folder, CSV_NAME) if csv else None
         txt_path = find_file(folder, TXT_NAME) if txt else None
 
-        if edf:
+        if edf and file_print:
             print("  - EDF exists:", edf_path is not None)
-        if csv:
+        if csv and file_print:
             print("  - CSV exists:", csv_path is not None)
-        if txt:
+        if txt and file_print:
             print("  - TXT exists:", txt_path is not None)
 
-        # --- 2) Check for missing requested files ---
+        # 2) Check for missing requested files 
         missing = []
         if edf and edf_path is None: missing.append(EDF_NAME)
         if csv and csv_path is None: missing.append(CSV_NAME)
@@ -153,11 +159,10 @@ def index_sessions(root_dir: str | Path,
             if strict:
                 raise FileNotFoundError(msg)
             else:
-                print(f" {BOLD}Skipping:{RESET}", msg)
+                print(f"{BOLD}Skipping:{RESET}", msg)
                 continue
-        
 
-        # --- 3) Store the record ---
+        # 3) Store the record 
         record_n = SessionRecord(
             patient_id=folder.name,
             patient_number=patient_nr,
@@ -169,16 +174,17 @@ def index_sessions(root_dir: str | Path,
         )  
         records.append(record_n)
         
-        print(f" {BOLD}Added:{RESET} {record_n.patient_id}  (patient={record_n.patient_number}, session={record_n.session_type})")
+        if file_print:
+            print(f" {BOLD}Added:{RESET} {record_n.patient_id}  (patient={record_n.patient_number}, session={record_n.session_type})")
 
-    # --- 4) Final safety check ---
+    # 4) Final safety check
     if not records:
         raise RuntimeError(
             "No valid patient records found. "
             "Check root path or enable recursive=True."
         )
     
-    # --- 5) Summary ---
+    # 5) Summary
     print("\n")
     print("="*50)
     print(f"Indexed {len(records)} session. Skipped {skipped}.")
@@ -226,7 +232,7 @@ def records_to_df(records: Iterable[SessionRecord],
     # Creat empy list to hold rows for DataFrame
     rows = []
 
-    # --- 1) Convert each dataclass record into a dictionary row ---
+    # 1) Convert each dataclass record into a dictionary row
     for r in records:
         
         # Define output directory per patient if out_root is provided
@@ -244,13 +250,13 @@ def records_to_df(records: Iterable[SessionRecord],
         }
         rows.append(row)
     
-    # --- 2) Create DataFrame ---
+    # 2) Create DataFrame 
     df = pd.DataFrame(rows)
 
-    # --- 3) Sort sessions ---
+    # 3) Sort sessions
     df = df.sort_values(by=["patient_number", "session_type"], kind=sort_alg).reset_index(drop=True)
 
-    # --- 4) Optionally save to CSV ---
+    # 4) Optionally save to CSV
     if save_csv and out_root is not None:
         out_root.mkdir(parents=True, exist_ok=True)
         csv_path = out_root / csv_name
@@ -281,7 +287,5 @@ if __name__ == "__main__":
     )
 
     df = records_to_df(records)
-
-    print("\nPreview of DataFrame:")
     print(df.head())
     print(df.info())

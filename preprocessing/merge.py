@@ -1,4 +1,6 @@
-# csv_merge.py
+# Filename: merge.py
+# Authors: Adam Klovborg & Rasmus Kleffel
+# Description: Utilities for merging EOG signals. GSSC sleep staging, and REM event annotations into a unifies CSV for downstream analysis.
 
 # =====================================================================
 # Imports
@@ -10,7 +12,6 @@ from preprocessing.upsample import upsample_gssc_to_eog
 # =====================================================================
 # Functions
 # =====================================================================
-
 
 # —————————————————————————————————————————————————————————————————————
 # Function to merge EOG and GSSC CSV files
@@ -93,21 +94,21 @@ def merge_edf_rem_events(eog_path: str,
         A DataFrame containing the merged EOG data and REM event annotations.
     """
 
-    # Load CSV
+    # 1) Load CSV
     eog_df = pd.read_csv(eog_path)
     events_df = pd.read_csv(events_path)
 
-    # Check required columns in EOG CSV
+    # 2) Check required columns
+    # Check EOG CSV
     for col in [time_col, loc_col, roc_col]:
         if col not in eog_df.columns:
             raise ValueError(f"EOG CSV must contain '{col}' column.")
-
-    # Check required columns in events CSV
+    # Check events CSV
     for col in [start_col, end_col]:
         if col not in events_df.columns:
             raise ValueError(f"Events CSV must contain '{col}' column.")
 
-    # Keep only needed EOG columns and rename to standard names
+    # 3) Keep only needed EOG columns and rename to standard names
     signal_df = eog_df[[time_col, loc_col, roc_col]].copy()
     signal_df = signal_df.rename(columns={
         time_col: "time",
@@ -115,12 +116,12 @@ def merge_edf_rem_events(eog_path: str,
         roc_col: "ROC"
     })
 
-    # Add annotation columns
+    # 4) Add annotation columns
     signal_df["is_rem_event"] = False
     signal_df["event_id"] = pd.NA
     signal_df["is_rem_peak"] = False
 
-    # Mark samples belonging to each REM event
+    # 5) Mark samples belonging to each REM event
     for i, row in events_df.iterrows():
         start = row[start_col]
         end = row[end_col]
@@ -129,7 +130,7 @@ def merge_edf_rem_events(eog_path: str,
         signal_df.loc[mask, "is_rem_event"] = True
         signal_df.loc[mask, "event_id"] = i
 
-        # Mark peak if the column exists
+        # 5.a) Mark peak if the column exists
         if peak_col in events_df.columns and pd.notna(row[peak_col]):
             peak = row[peak_col]
             peak_idx = (signal_df["time"] - peak).abs().idxmin()
