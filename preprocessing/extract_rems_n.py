@@ -1,4 +1,6 @@
-# extract_rems_from_edf.py
+# Filename: extract_rems_n.py 
+# Authors: Adam Klovborg & Rasmus Kleffel
+# Description: extract REM from EDF recordings and save it in a CSV file.
 
 # =====================================================================
 # Imports
@@ -9,10 +11,10 @@ import sys
 import os
 import pandas as pd
 from pathlib import Path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from preprocessing.channel_standardization import build_rename_map
 from extract_rems import detect_rem_jaec
 from gssc.infer import EEGInfer
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # =====================================================================
 # Constants
@@ -63,51 +65,58 @@ def extract_rems_from_edf(edf_path: Path, out_dir: Path = EXTRACT_REMS_DIR) -> p
     missing = [ch for ch in ["LOC", "ROC"] if ch not in raw.ch_names]
     if missing:
         print(f"Skipping {edf_path.parent.name} {edf_path.name} - missing channels: {missing}")
+        return None
 
     # Set channel types 
     raw.set_channel_types({'LOC':'eog','ROC':'eog'})
 
 
-    #GSCC staging EOG only - Skipping this
-    #infer = EEGInfer()
-    #annotations = infer.mne_infer(raw, eog=['LOC', 'ROC'])
-
-    #sleepstage_map = {'W': 0, 'N1': 1, 'N2': 2, 'N3': 3, 'REM': 4}
-    #hypno_int = np.array([sleepstage_map[a['description']]for a in annotations])
+    #GSCC staging EOG only 
+    raw.filter(0.3,30, picks = ['LOC','ROC'])
+    infer = EEGInfer(use_cuda = False)
+    hypno_int, timestamps = infer.mne_infer(inst=raw, eeg=[], eog=['LOC', 'ROC'], eog_drop = False, filter = False)
 
     # Resample EDF if edf isnt sampled at 128 Hz
     sf = raw.info["sfreq"]
     if sf != 128:
         print(f"Resampling from {sf} Hz to 128 Hz")
         raw = raw.copy().resample(128)
-        loc = raw.get_data(picks=["LOC"])[0]
-        roc = raw.get_data(picks=["LOC"])[0]
+    loc = raw.get_data(picks=["LOC"])[0]
+    roc = raw.get_data(picks=["ROC"])[0]
+    
+    # Upsampling hypnogram to match signal length
+    samples_per_epoch = sf * 30
+    hypno_up = np.repeat(hypno_int, samples_per_epoch)
     
     # Trim to multiple of 2^14 for dctwt( used in detect_rem_jaec)
     factor = 2**14
-    trim = (len(loc) // factor) * factor
+    trim = (min(len(loc), len(hypno_up)) // factor) * factor
     if trim == 0:
         print(f"Skipping {edf_path.name} - signal too short for dtcwt")
+        return None
 
     loc = loc[:trim]
     roc = roc[:trim]
-
-    hypno_up = 0
+    hypno_up = hypno_up[:trim]
 
     # Rem detection
     result = detect_rem_jaec(loc, roc, hypno_up, method = 'ssc_threshold')
 
     # Create dataframe to retrun results
     df = result.summary()
-    ## df['Stage'] = df['Stage'].map({
-    #  0:'W', 
-    #  1:'N1', 
-    #  2:'N2', 
-    #  3:'N3', 
-    #  4:'REM'})
-    ##
+    df['Stage'] = df['Stage'].map({
+      0:'W', 
+      1:'N1', 
+      2:'N2', 
+      3:'N3', 
+      4:'REM'})
+    
     out_path = out_dir / f"{session_id}_extracted_rems.csv"
     df.to_csv(out_path, index=False)
 
     print(f"Saved: {out_path}")
     return df
+
+edf = Path(r"C:\Users\rasmu\Desktop\6. Semester\Bachelor Projekt\Test edf filer\cfs-visit5-800331.edf")
+
+extract_rems_from_edf(edf_path=edf)
