@@ -6,14 +6,20 @@ channel_priority: strict
 
 dependencies:
   - python=3.11
+
+  # Core scientific stack
   - numpy<2
   - scipy
   - pandas
   - matplotlib
   - scikit-learn
+
+  # Sleep/EDF tooling
   - mne
   - pyedflib
   - yasa
+
+  # PyTorch pinned for GSSC compatibility
   - pytorch=2.5.*
   - torchvision
   - torchaudio
@@ -23,3 +29,4 @@ dependencies:
   - pip:
       - gssc
       - dtcwt
+      - art

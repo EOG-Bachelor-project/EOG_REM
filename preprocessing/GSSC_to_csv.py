@@ -1,4 +1,5 @@
-# GSSC_to_csv.py
+# Filename: GSSC_to_csv.py 
+# Authors: Adam Klovborg & Rasmus Kleffel
 
 # =====================================================================
 # Imports
@@ -60,10 +61,7 @@ def GSSC_to_csv(edf_path: str | Path, out_dir: Path = GSSC_DIR) -> None:
         raw.rename_channels(rename_map)
     print("Channels after rename:", raw.ch_names[:20], "..." if len(raw.ch_names) > 20 else "")
 
-    # 3) Set channel types (Helps GSSC choose)
-    raw.set_channel_types({"ROC": "eog", "LOC": "eog"})
-
-    # 4) Require LOC and ROC
+    # 3) Pick channels
     picks = ["LOC", "ROC"]
     missing = [ch for ch in picks if ch not in raw.ch_names]
     if missing:
@@ -71,15 +69,18 @@ def GSSC_to_csv(edf_path: str | Path, out_dir: Path = GSSC_DIR) -> None:
 
     raw.pick(picks)
 
+    # 4) Set channel types (Helps GSSC choose)
+    raw.set_channel_types({"ROC": "eog", "LOC": "eog"})
+
     # 5) Load data (Required for GSSC)
     raw.load_data()
-    # 6) Filter signal manually 
 
+    # 6) Filter signal manually 
     raw.filter(0.3,30, picks = picks) 
 
     # 6) Run inference
     infer = EEGInfer(use_cuda = False)
-    stages, times, probs = infer.mne_infer(inst=raw, eeg=[], eog=["LOC", "ROC"], eog_drop=False)
+    stages, times, probs = infer.mne_infer(inst=raw, eeg=[], eog=["LOC", "ROC"], eog_drop=False, filter=False)
     
     df = pd.DataFrame(data={
         "epoch_start": times, 
@@ -97,10 +98,7 @@ def GSSC_to_csv(edf_path: str | Path, out_dir: Path = GSSC_DIR) -> None:
         4: "REM",
     })
 
-    
-
     out_path = out_dir / f"{session_id}_gssc.csv"
     df.to_csv(out_path, index=False)
 
     print(f"Saved: {out_path}")
-
