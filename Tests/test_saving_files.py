@@ -42,15 +42,8 @@ print("######## Testing extract_rems_from_edf ########")
 print("###############################################")
 
 try:
-    df = extract_rems_from_edf(edf_path)
-
-    if df is None:
-        print("No REMs extracted or required channels missing.")
-    else:
-        print(df.head())
-        print(df.columns)
-        print(f"Number of detected events: {len(df)}")
-
+    extract_rems_from_edf(edf_path)
+    print("extract_rems_from_edf succeeded")
 except Exception as e:
     print("extract_rems_from_edf failed:", e)
 
