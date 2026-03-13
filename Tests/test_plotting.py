@@ -3,12 +3,13 @@ from __future__ import annotations
 import mne
 import torch
 import gssc.networks
+import numpy as np
 import pandas as pd
 import neurokit2 as nk
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from pathlib import Path
-from preprocessing.plot import plot_eog_epochs
+#from preprocessing.plot import plot_eog_epochs
 torch.serialization.add_safe_globals([gssc.networks.ResSleep])
 import matplotlib.patches as mpatches
 from matplotlib.gridspec import GridSpec
@@ -99,7 +100,7 @@ def plot_eog_gssc(edf_path, csv_path, timestamp_col='timestamp', stage_col='stag
                        alpha=0.07, color=stage_colors.get(stage, '#95a5a6'), linewidth=0)
 
         # plot cleaned EOG via neurokit
-        nk.signal_plot(sig, sampling_rate=fs, ax=ax, show=False)
+        nk.signal_plot(sig, sampling_rate=fs, ax=ax)
         ax.get_lines()[0].set(color='#2c3e50', linewidth=0.5)  # restyle nk line
         ax.set_ylabel(ch_name, fontsize=10)
         ax.set_title('')
@@ -125,7 +126,7 @@ GSSC_FILE = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_1_a_gssc.csv")
 fig, axes = plot_eog_gssc(
     edf_path= EDF_FILE,
     csv_path=GSSC_FILE,
-    timestamp_col="time_sec",    # adjust to your CSV column name
+    timestamp_col="epoch_start",# adjust to your CSV column name
     stage_col="stage",           # adjust to your CSV column name
 )
 plt.savefig("eog_gssc_plot.png", dpi=150, bbox_inches='tight')

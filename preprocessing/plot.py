@@ -129,8 +129,9 @@ def plot_eog_epochs(file: str | Path,
             ax.plot(t, epoch_df[col].values, color=color, linewidth=0.8) # Plot the signal
             ax.set_ylabel(label, fontsize=10)                            # Set y-axis label
             ax.set_xlim(0, window_sec)                                   # Set x-axis limits to the window size  
-            ax.axhline(0, color="gray", linewidth=0.5, linestyle="--")   # Add a horizontal line at y=0 for reference
+            ax.axhline(0, color="black", linewidth=0.5)                  # Add a horizontal line at y=0 for reference
             ax.tick_params(labelsize=8)
+            ax.grid(alpha=0.5, linestyle="--")
  
         axs[-1].set_xlabel("Time within epoch (s)", fontsize=10)
 
@@ -144,3 +145,12 @@ def plot_eog_epochs(file: str | Path,
             plt.show()
             plt.close(fig)
     tprint("DONE")
+
+# TEST
+plot_eog_epochs(
+    file="C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv",
+    stage="REM",
+    window_sec=10.0,
+    max_epochs=10,
+    out_dir=None
+)
