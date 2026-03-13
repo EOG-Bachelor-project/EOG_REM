@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import mne
+import torch
+import gssc.networks
 import pandas as pd
 import neurokit2 as nk
 import matplotlib.pyplot as plt
@@ -30,7 +32,7 @@ def plot_eog_gssc(edf_path, csv_path, timestamp_col='timestamp', stage_col='stag
     fs  = int(raw.info['sfreq'])
 
     eog_channels = [ch for ch in raw.ch_names
-                    if any(k in ch.upper() for k in ['LOC', 'ROC', 'EOG', 'E1', 'E2'])]
+                    if any(k in ch.upper() for k in ['LOC', 'ROC', 'EOGH', 'EOGV', 'E1', 'E2'])]
     print(f"Found EOG channels: {eog_channels}")
 
     eog_data, times = raw[eog_channels]  # (n_ch, n_samples)
@@ -116,10 +118,14 @@ def plot_eog_gssc(edf_path, csv_path, timestamp_col='timestamp', stage_col='stag
 
 
 # ── Usage ─────────────────────────────────────────────────────────────────────
+
+EDF_FILE = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_1_a\contiguous.edf")
+GSSC_FILE = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_1_a_gssc.csv")
+
 fig, axes = plot_eog_gssc(
-    edf_path="your_recording.edf",
-    csv_path="gssc_output.csv",
-    timestamp_col="timestamp",   # adjust to your CSV column name
+    edf_path= EDF_FILE,
+    csv_path=GSSC_FILE,
+    timestamp_col="time_sec",    # adjust to your CSV column name
     stage_col="stage",           # adjust to your CSV column name
 )
 plt.savefig("eog_gssc_plot.png", dpi=150, bbox_inches='tight')
