@@ -113,27 +113,43 @@ def plot_eog_epochs(file: str | Path,
         t = epoch_df[time_col].values - epoch_start
 
         # 4) Create figure with two subplots
-        fig, axs = plt.subplots(2, 1, figsize=(15, 5), sharex=True, gridspec_kw={'hspace': 0.4})
+        fig, axs = plt.subplots(3, 1, figsize=(15, 7), sharex=True, gridspec_kw={'hspace': 0.5})
 
         # Title for the epoch
         fig.suptitle(
-            f"Epoch {i+1}  |  Stage: {stage}  |  t = {epoch_start:.1f} – {epoch_end:.1f} s",
+            f"Epoch {i+1}  |  Stage: {stage}  |  t = {epoch_start:.1f} - {epoch_end:.1f} s",
             fontsize=12,
             fontweight="bold",
         )
 
-        # Define signals to plot
-        signals = [(loc_col,"LOC", "steelblue"), (roc_col, "ROC", "tomato")]
-
-        for ax, (col, label, color) in zip(axs, signals):
-            ax.plot(t, epoch_df[col].values, color=color, linewidth=0.8) # Plot the signal
-            ax.set_ylabel(label, fontsize=10)                            # Set y-axis label
-            ax.set_xlim(0, window_sec)                                   # Set x-axis limits to the window size  
-            ax.axhline(0, color="black", linewidth=0.5)                  # Add a horizontal line at y=0 for reference
-            ax.tick_params(labelsize=8)
-            ax.grid(alpha=0.5, linestyle="--")
+        # --- Subplot 1: LOC ---
+        axs[0].plot(t, epoch_df[loc_col].values, color="steelblue", linewidth=0.8) # Plot the LOC signal
+        axs[0].set_title("LOC", fontsize=10)                                       # Set title for the subplot
+        axs[0].set_ylabel("Amplitude", fontsize=9)                                 # Set y-axis label
+        axs[0].axhline(0, color="black", linewidth=0.5)                            # Add a horizontal line at y=0 for reference
+        axs[0].grid(alpha=0.5, linestyle="--")
+        axs[0].tick_params(labelsize=8)
  
-        axs[-1].set_xlabel("Time within epoch (s)", fontsize=10)
+        # --- Subplot 2: ROC ---
+        axs[1].plot(t, epoch_df[roc_col].values, color="tomato", linewidth=0.8) # Plot the ROC signal
+        axs[1].set_title("ROC", fontsize=10)                                    # Set title for the subplot
+        axs[1].set_ylabel("Amplitude", fontsize=9)                              # Set y-axis label
+        axs[1].axhline(0, color="black", linewidth=0.5)                         # Add a horizontal line at y=0 for reference
+        axs[1].grid(alpha=0.5, linestyle="--")
+        axs[1].tick_params(labelsize=8)
+ 
+        # --- Subplot 3: LOC + ROC overlapping ---
+        axs[2].plot(t, epoch_df[loc_col].values, color="steelblue", linewidth=0.8, label="LOC") # Plot the LOC signal
+        axs[2].plot(t, epoch_df[roc_col].values, color="tomato",    linewidth=0.8, label="ROC") # Plot the ROC signal
+        axs[2].set_title("LOC + ROC", fontsize=10)                                              # Set title for the subplot
+        axs[2].set_ylabel("Amplitude", fontsize=9)                                              # Set y-axis label
+        axs[2].axhline(0, color="black", linewidth=0.5)                                         # Add a horizontal line at y=0 for reference
+        axs[2].grid(alpha=0.5, linestyle="--")
+        axs[2].tick_params(labelsize=8)
+        axs[2].legend(fontsize=8, loc="upper right")                                            # Add legend to the overlapping plot
+ 
+        axs[-1].set_xlabel("Time within epoch (s)", fontsize=10)                                # Set x-axis label on the last subplot
+        axs[-1].set_xlim(0, window_sec)
 
         # 5) Save or show the plot
         if out_dir is not None:
