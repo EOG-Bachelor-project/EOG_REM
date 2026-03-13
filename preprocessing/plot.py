@@ -127,7 +127,7 @@ def plot_eog_epochs(file: str | Path,
     for i, epoch_start in enumerate(stage_blocks):
         epoch_end = epoch_start + window_sec
 
-        epoch_df = df[(df[time_col] >= epoch_start) & (df[time_col] < epoch_end)]
+        epoch_df = df[(df[time_col] >= epoch_start) & (df[time_col] < epoch_end)].copy().copy()
 
         if epoch_df.empty:
             print(f"Epoch {i+1}: no data in window [{epoch_start:.1f}, {epoch_end:.1f}] — skipping.")
@@ -151,7 +151,7 @@ def plot_eog_epochs(file: str | Path,
         )
  
         # Helper to shade stage regions on an axis
-        def add_stage_shading(ax):
+        def add_stage_shading(ax, span_groups=span_groups):
             for _, span in span_groups.iterrows():
                 color = STAGE_COLORS.get(span["stage"], "#cccccc")
                 ax.axvspan(span["t_start"], span["t_end"], color=color, alpha=0.2, linewidth=0)
