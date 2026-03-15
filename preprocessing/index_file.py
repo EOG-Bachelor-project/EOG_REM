@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import re
 import pandas as pd
+from art import *
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Iterable
@@ -66,15 +67,15 @@ TXT_NAME = "lights.txt"
 # Functions
 # =====================================================================
 
-# —————————————————————————————————————————————————————————————————————
-# Main function to index patient sessions
-# —————————————————————————————————————————————————————————————————————
-def index_sessions(root_dir: str | Path, 
-                   edf: bool = True, 
-                   csv: bool = True,
-                   txt: bool = True,
-                   recursive: bool = False,
-                   strict: bool = False,
+# 1 —————————————————————————————————————————————————————————————————————
+# 1 Main function to index patient sessions
+# 1 —————————————————————————————————————————————————————————————————————
+def index_sessions(root_dir:   str | Path, 
+                   edf:        bool = True, 
+                   csv:        bool = True,
+                   txt:        bool = True,
+                   recursive:  bool = False,
+                   strict:     bool = False,
                    file_print: bool = False,
                 ) -> list[SessionRecord]:
     """
@@ -123,7 +124,7 @@ def index_sessions(root_dir: str | Path,
     records: list[SessionRecord] = []
     skipped = 0
 
-    # 1) Iterate through patient folders 
+    # --- 1) Iterate through patient folders ---
     for folder in sorted(p for p in root_dir.iterdir() if p.is_dir()):
         if file_print:
             print("\nFound folder: ", folder.name)
@@ -147,7 +148,7 @@ def index_sessions(root_dir: str | Path,
         if txt and file_print:
             print("  - TXT exists:", txt_path is not None)
 
-        # 2) Check for missing requested files 
+        # --- 2) Check for missing requested files ---
         missing = []
         if edf and edf_path is None: missing.append(EDF_NAME)
         if csv and csv_path is None: missing.append(CSV_NAME)
@@ -162,7 +163,7 @@ def index_sessions(root_dir: str | Path,
                 print(f"{BOLD}Skipping:{RESET}", msg)
                 continue
 
-        # 3) Store the record 
+        # --- 3) Store the record ---
         record_n = SessionRecord(
             patient_id=folder.name,
             patient_number=patient_nr,
@@ -177,25 +178,25 @@ def index_sessions(root_dir: str | Path,
         if file_print:
             print(f" {BOLD}Added:{RESET} {record_n.patient_id}  (patient={record_n.patient_number}, session={record_n.session_type})")
 
-    # 4) Final safety check
+    # --- 4) Final safety check ---
     if not records:
         raise RuntimeError(
             "No valid patient records found. "
             "Check root path or enable recursive=True."
         )
     
-    # 5) Summary
+    # --- 5) Summary ---
     print("\n")
     print("="*50)
     print(f"Indexed {len(records)} session. Skipped {skipped}.")
     print("="*50)
     return records
 
-# —————————————————————————————————————————————————————————————————————
-# Function to convert the list of SessionRecords to a DataFrame
-# —————————————————————————————————————————————————————————————————————
+# 2 —————————————————————————————————————————————————————————————————————
+# 2 Function to convert the list of SessionRecords to a DataFrame
+# 2 —————————————————————————————————————————————————————————————————————
 
-def records_to_df(records: Iterable[SessionRecord], 
+def records_to_df(records:  Iterable[SessionRecord], 
                   out_root: str | Path | None = None, 
                   sort_alg: str = "stable",
                   save_csv: bool = False,
@@ -232,7 +233,7 @@ def records_to_df(records: Iterable[SessionRecord],
     # Creat empy list to hold rows for DataFrame
     rows = []
 
-    # 1) Convert each dataclass record into a dictionary row
+    # --- 1) Convert each dataclass record into a dictionary row ---
     for r in records:
         
         # Define output directory per patient if out_root is provided
@@ -250,13 +251,13 @@ def records_to_df(records: Iterable[SessionRecord],
         }
         rows.append(row)
     
-    # 2) Create DataFrame 
+    # --- 2) Create DataFrame ---
     df = pd.DataFrame(rows)
 
-    # 3) Sort sessions
+    # --- 3) Sort sessions ---
     df = df.sort_values(by=["patient_number", "session_type"], kind=sort_alg).reset_index(drop=True)
 
-    # 4) Optionally save to CSV
+    # --- 4) Optionally save to CSV ---
     if save_csv and out_root is not None:
         out_root.mkdir(parents=True, exist_ok=True)
         csv_path = out_root / csv_name
@@ -264,6 +265,51 @@ def records_to_df(records: Iterable[SessionRecord],
         print(f"\nDataFrame saved to: {csv_path}")
 
     return df
+
+# 3 —————————————————————————————————————————————————————————————————————
+# 3 Function to parse lights.txt
+# 3 —————————————————————————————————————————————————————————————————————
+def parse_lights_txt(txt_path: str | Path) -> tuple[float, float]:
+    """
+    Parse a lights.txt file and return the lights-off and lights-on timestamps in seconds.
+
+    Expected CSV format (single header row + single data row):
+        Lights_off,Lights_on
+        t1,t2
+
+    Parameters
+    ----------
+    txt_path : str | Path
+        Path to the lights.txt file.
+    
+    Returns
+    -------
+    tuple[float, float]
+        A (lights_off_sec, lights_on_sec) tuple, both in seconds from recording start.
+    """
+    txt_path = Path(txt_path)
+
+    if not txt_path.exists():
+        raise FileNotFoundError(f"lights.txt not found: {txt_path}")
+    
+    df = pd.read_csv(txt_path)
+
+    # Nomalize column name
+    df.columns = [c.strip().lower() for c in df.columns]
+
+    if "lights_off" not in df.columns or "lights_on" not in df.columns:
+        raise ValueError(
+            f"lights.txt must contain 'Lights_off' and 'Lights_on' columns. "
+            f"Found: {list(df.columns)}"
+        )
+    
+    lights_off = float(df["lights_off"].iloc[0])
+    lights_on  = float(df["lights_on"].iloc[0])
+
+    print(f"Lights off: {lights_off:.1f} s  |   Lights on {lights_on:.1f} s "
+          f"\n(sleep period: {(lights_on - lights_off)/60:.1f} min)")
+
+    return lights_off, lights_on
 
 # =====================================================================
 # Test

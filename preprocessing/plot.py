@@ -20,11 +20,11 @@ from art import *
  
 # Color map for each sleep stage
 STAGE_COLORS = {
-    "W":   "#FA8072",  # orange
-    "N1":  "#0c0d0d",  # light teal
-    "N2":  "#457b9d",  # medium blue
-    "N3":  "#1d3557",  # dark navy
-    "REM": "#C71585",  # red
+    "W":   "#FA8072", 
+    "N1":  "#48D1CC",  
+    "N2":  "#7B68EE",  
+    "N3":  "#B0C4DE", 
+    "REM": "#98FB98", 
 }
  
 # Numeric mapping for hypnogram y-axis
@@ -34,9 +34,9 @@ STAGE_ORDER = {"W": 4, "N1": 3, "N2": 2, "N3": 1, "REM": 0}
 # Functions
 # =====================================================================
 
-# —————————————————————————————————————————————————————————————————————
-# Function to plot EOG epochs for a given sleep stage
-# —————————————————————————————————————————————————————————————————————
+# 1 —————————————————————————————————————————————————————————————————————
+# 1 Function to plot EOG epochs for a given sleep stage
+# 1 —————————————————————————————————————————————————————————————————————
 def plot_eog_epochs(file: str | Path, 
                     stage: str = "REM",
                     window_sec: float = 30,
@@ -79,6 +79,10 @@ def plot_eog_epochs(file: str | Path,
     -------
     None
     """
+    
+    lprint(length=100, height=2, char="%")
+    print("PLOT  EOG  EPOCHS")
+    lprint(length=100, height=2, char="%")
 
     # --- 1) Load CSV file ---
     df = pd.read_csv(file)
@@ -176,23 +180,23 @@ def plot_eog_epochs(file: str | Path,
         add_stage_shading(axs[0])
  
         # Subplot 2: ROC 
-        axs[1].plot(t, epoch_df[roc_col].values, color="tomato", linewidth=0.8) # Plot the ROC signal
-        axs[1].set_title("ROC", fontsize=10)                                    # Set title for the subplot
-        axs[1].set_ylabel("Amplitude", fontsize=9)                              # Set y-axis label
-        axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)              # Add a horizontal line at y=0 for reference
+        axs[1].plot(t, epoch_df[roc_col].values, color="MidnightBlue", linewidth=0.8) # Plot the ROC signal
+        axs[1].set_title("ROC", fontsize=10)                                          # Set title for the subplot
+        axs[1].set_ylabel("Amplitude", fontsize=9)                                    # Set y-axis label
+        axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)                    # Add a horizontal line at y=0 for reference
         axs[1].grid(alpha=0.5, linestyle="--")
         axs[1].tick_params(labelsize=8)
         add_stage_shading(axs[1])
  
         # Subplot 3: LOC + ROC overlapping 
-        axs[2].plot(t, epoch_df[loc_col].values, color="steelblue", linewidth=0.8, label="LOC") # Plot the LOC signal
-        axs[2].plot(t, epoch_df[roc_col].values, color="tomato",    linewidth=0.8, label="ROC") # Plot the ROC signal
-        axs[2].set_title("LOC + ROC", fontsize=10)                                              # Set title for the subplot
-        axs[2].set_ylabel("Amplitude", fontsize=9)                                              # Set y-axis label
-        axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)                              # Add a horizontal line at y=0 for reference
+        axs[2].plot(t, epoch_df[loc_col].values, color="steelblue", linewidth=0.8, label="LOC")    # Plot the LOC signal
+        axs[2].plot(t, epoch_df[roc_col].values, color="MidnightBlue", linewidth=0.8, label="ROC") # Plot the ROC signal
+        axs[2].set_title("LOC + ROC", fontsize=10)                                                 # Set title for the subplot
+        axs[2].set_ylabel("Amplitude", fontsize=9)                                                 # Set y-axis label
+        axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)                                 # Add a horizontal line at y=0 for reference
         axs[2].grid(alpha=0.5, linestyle="--")
         axs[2].tick_params(labelsize=8)
-        axs[2].legend(fontsize=8, loc="best")                                                   # Add legend to the overlapping plot
+        axs[2].legend(fontsize=8, loc="best")                                                      # Add legend to the overlapping plot
         add_stage_shading(axs[2])
 
         # Subplot 4: Hypnogram bar
@@ -239,9 +243,10 @@ def plot_eog_epochs(file: str | Path,
             plt.show()
             plt.close(fig)
     tprint("DONE")
-# —————————————————————————————————————————————————————————————————————
-# Function to plot the full-night overview
-# —————————————————————————————————————————————————————————————————————
+
+# 2 —————————————————————————————————————————————————————————————————————
+# 2 Function to plot the full-night overview
+# 2 —————————————————————————————————————————————————————————————————————
 def plot_fullnight_overview(file: str | Path,
                             time_col: str = "time_sec",
                             loc_col: str = "LOC",
@@ -327,7 +332,7 @@ def plot_fullnight_overview(file: str | Path,
     add_stage_shading(axs[0])
  
     # Subplot 2: ROC
-    axs[1].plot(t, df[roc_col].values, color="tomato", linewidth=0.4)
+    axs[1].plot(t, df[roc_col].values, color="MidnightBlue", linewidth=0.4)
     axs[1].set_title("ROC", fontsize=10)
     axs[1].set_ylabel("Amplitude", fontsize=9)
     axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)
@@ -336,8 +341,8 @@ def plot_fullnight_overview(file: str | Path,
     add_stage_shading(axs[1])
  
     # Subplot 3: LOC + ROC overlapping
-    axs[2].plot(t, df[loc_col].values, color="steelblue", linewidth=0.4, label="LOC")
-    axs[2].plot(t, df[roc_col].values, color="tomato",    linewidth=0.4, label="ROC")
+    axs[2].plot(t, df[loc_col].values, color="steelblue",    linewidth=0.4, label="LOC")
+    axs[2].plot(t, df[roc_col].values, color="MidnightBlue", linewidth=0.4, label="ROC")
     axs[2].set_title("LOC + ROC", fontsize=10)
     axs[2].set_ylabel("Amplitude", fontsize=9)
     axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)
@@ -393,9 +398,9 @@ def plot_fullnight_overview(file: str | Path,
     tprint("DONE")
  
  
-# —————————————————————————————————————————————————————————————————————
-# Function to plot transition epochs
-# —————————————————————————————————————————————————————————————————————
+# 3 —————————————————————————————————————————————————————————————————————
+# 3 Function to plot transition epochs
+# 3 —————————————————————————————————————————————————————————————————————
 def plot_transition_epochs(file: str | Path,
                            from_stage: str | None = None,
                            to_stage: str | None = None,
@@ -471,7 +476,7 @@ def plot_transition_epochs(file: str | Path,
     if max_epochs is not None:
         transitions = transitions.iloc[:max_epochs]
  
-    label = f"{from_stage or 'any'} → {to_stage or 'any'}"
+    label = f"{from_stage or 'any'} -> {to_stage or 'any'}"
     print(f"Found {len(transitions)} transition(s) [{label}]. Plotting...")
  
     if out_dir is not None:
@@ -620,18 +625,15 @@ def plot_transition_epochs(file: str | Path,
 plot_eog_epochs(
     file="C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv",
     stage="REM",
-    window_sec=10.0,
-    max_epochs=10,
+    window_sec=30.0,
+    max_epochs=1,
     out_dir=None
 )
 
 plot_fullnight_overview(
-    file="your_merged.csv",
+    file="C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv",
     out_dir=None
 )
 
-# All transitions
-plot_transition_epochs(file="your_merged.csv", window_sec=60)
-
-# Only N2 → REM
-plot_transition_epochs(file="your_merged.csv", from_stage="N2", to_stage="REM", window_sec=60)
+# Only REM to W
+#plot_transition_epochs(file="C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv", from_stage="REM", to_stage="W", window_sec=60)

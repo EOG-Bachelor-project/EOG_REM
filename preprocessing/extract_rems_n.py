@@ -12,9 +12,12 @@ import os
 import pandas as pd
 from pathlib import Path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from preprocessing.channel_standardization import build_rename_map
-from extract_rems import detect_rem_jaec
 from gssc.infer import EEGInfer
+
+from preprocessing.channel_standardization import build_rename_map
+from preprocessing.index_file import parse_lights_txt
+from extract_rems import detect_rem_jaec
+
 
 # =====================================================================
 # Constants
@@ -25,11 +28,13 @@ EXTRACT_REMS_DIR.mkdir(parents=True, exist_ok=True)
 # =====================================================================
 # Function
 # =====================================================================
-def extract_rems_from_edf(edf_path: Path, out_dir: Path = EXTRACT_REMS_DIR) -> pd.DataFrame | None:
+def extract_rems_from_edf(edf_path:    Path, 
+                          out_dir:     Path = EXTRACT_REMS_DIR,
+                          lights_path: Path | None = None
+                          ) -> pd.DataFrame | None:
     """
-    Load one EDF file, rename EOG channels to canonical names, run GSSC
-    sleep staging using EOG channels, detect REM events, and save the
-    extracted REM events as a CSV file.
+    Load one EDF file, rename EOG channels to canonical names, run GSSC sleep staging using EOG channels, detect REM events, and save the extracted REM events as a CSV file.\\
+    If a lights.txt path is provided, the signal is trimmed to the sleep period before detection
 
     Parameters
     ----------
@@ -37,6 +42,8 @@ def extract_rems_from_edf(edf_path: Path, out_dir: Path = EXTRACT_REMS_DIR) -> p
         The path to the input EDF file.
     out_dir : Path
         The directory where the output CSV file will be saved.
+    lights_path : Path | None
+        Optional path to lights.txt file. If provided, the CSV is trimmed to the sleep period.
 
     Returns
     -------
@@ -70,8 +77,14 @@ def extract_rems_from_edf(edf_path: Path, out_dir: Path = EXTRACT_REMS_DIR) -> p
     # Set channel types 
     raw.set_channel_types({'LOC':'eog','ROC':'eog'})
 
+    # rim tTo lights-off/lights-on window
+    if lights_path is not None:
+        lights_off, lights_on = parse_lights_txt(lights_path)
+        raw = raw.crop(tmin = lights_off, tmax = lights_on)
+        print(f" Trimmed to sleep period: {lights_off:.1f} s - {lights_on:.1f} s.") 
 
-    #GSCC staging EOG only 
+
+    # GSCC staging EOG only 
     raw.filter(0.3,30, picks = ['LOC','ROC'])
     infer = EEGInfer(use_cuda = False)
     staging = infer.mne_infer(inst=raw, eeg=[], eog=['LOC', 'ROC'], eog_drop = False, filter = False)

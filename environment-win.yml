@@ -8,7 +8,8 @@ dependencies:
   - python=3.11
 
   # Core scientific stack
-  - numpy<2
+  - numpy>=1.24, <2.0
+  - numba>=0.59, <0.61 # Pinned to match numpy <2.0
   - scipy
   - pandas
   - matplotlib
@@ -27,6 +28,5 @@ dependencies:
 
   - pip
   - pip:
-      - gssc
       - dtcwt
       - art
