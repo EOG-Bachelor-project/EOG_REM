@@ -15,7 +15,7 @@ import pandas as pd
 EOG_FILE = Path("C:/Users/AKLO0022/EOG_REM/local_csv_eog/DCSM_1_a_contiguous_eog.csv")
 GSSC_FILE = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_1_a_gssc.csv")
 EVENTS_FILE = Path("C:/Users/AKLO0022/EOG_REM/extracted_rems/DCSM_1_a_extracted_rems.csv")
-OUTPUT_DIR =  EOG_FILE.parent/"merged_outpu"
+OUTPUT_DIR =  OUT_DIR = Path("merged_csv_eog")
 OUTPUT_FILE = OUTPUT_DIR/f"{EOG_FILE.stem}_merged.csv"
 
 # =====================================================================
