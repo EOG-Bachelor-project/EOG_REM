@@ -12,7 +12,7 @@ import pandas as pd
 # =====================================================================
 # Paths
 # =====================================================================
-EOG_FILE = Path("C:/Users/AKLO0022/EOG_REM/local_csv_eog/DCSM_1_a_contiguous_eog.csv")
+EOG_FILE = Path("C:/Users/AKLO0022/EOG_REM/eog_csv/DCSM_1_a_contiguous_eog.csv")
 GSSC_FILE = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_1_a_gssc.csv")
 EVENTS_FILE = Path("C:/Users/AKLO0022/EOG_REM/extracted_rems/DCSM_1_a_extracted_rems.csv")
 OUTPUT_DIR =  OUT_DIR = Path("merged_csv_eog")

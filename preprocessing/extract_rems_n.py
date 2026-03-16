@@ -77,7 +77,7 @@ def extract_rems_from_edf(edf_path:    Path,
     # Set channel types 
     raw.set_channel_types({'LOC':'eog','ROC':'eog'})
 
-    # rim tTo lights-off/lights-on window
+    # Trim to lights-off/lights-on window if provided (before filtering and staging)
     if lights_path is not None:
         lights_off, lights_on = parse_lights_txt(lights_path)
         raw = raw.crop(tmin = lights_off, tmax = lights_on)
@@ -125,6 +125,15 @@ def extract_rems_from_edf(edf_path:    Path,
       3:'N3', 
       4:'REM'})
     
+    # Offset event times to allign with EOG `time_sec` (which starts at `lights_off`)
+    # `detect_rem_jaec()` operates on a signal starting at 0, so we add `lights_off` 
+    # to make Start, End, Peak match the absolute time reference in the EOG CSV
+    if lights_path is not None:
+        print(f"    Offsetting event time by `lights_off` = {lights_off:.1f} s")
+        for col in ["Start", "Peak", "End"]:
+            if col in df.columns:
+                df[col] = df[col] + lights_off
+
     out_path = out_dir / f"{session_id}_extracted_rems.csv"
     df.to_csv(out_path, index=False)
 

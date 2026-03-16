@@ -18,7 +18,7 @@ from preprocessing.channel_standardization import build_rename_map
 # Constants
 # – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - – - –
 RAW_ROOT = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok")
-OUT_DIR = Path("local_csv_eog")
+OUT_DIR = Path("eog_csv")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # =====================================================================
