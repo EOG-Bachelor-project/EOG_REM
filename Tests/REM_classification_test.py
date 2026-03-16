@@ -17,28 +17,51 @@ def classify_REM(df: pd.DataFrame, epoch_duration: float = 4.0)-> pd.DataFrame:
 
     """
     Classifies 4-second REM epochs as Phasic or Tonic based on eye movement activity.
-    Phasic:  
-        >= 2 consecutive EMs detected in adjacent 2-second windows,
-        with amplitude > 150 µV and duration < 0.5 s
-    Tonic:   
-        No EMs detected, amplitude < 25 µV in adjacent 2-second windows
-    Epochs must be at least 8 seconds apart to avoid contamination.
-    
-    Parameters
 
+    Parameters
     ----------
     df : pd.DataFrame
-        A DataFrame containing detected eye movements with columns 'Start', 'Duration', 'ROCAbsValPeak', 'LOCAbsValPeak' and 'Stage
-    epoch_duration : float (default = 4.0)
-        Duration to classify as one epoch in seconds. Default is 4 seconds as this is based on the paper listed above. 
-        If something different than 4 seconds are slected there is no guarantee classification will be correct. 
-        If something different than 4 seconds are selected it would also be recommended to adjust the phasic and tonic REM criteria to fit the custom epoch duration.
-    Returns 
-    ----------
-    pandas DataFrame 
+        DataFrame output from detect_rem_jaec() containing the following columns:
+        - Start           : float, start time of the eye movement in seconds
+        - End             : float, end time of the eye movement in seconds
+        - Duration        : float, duration of the eye movement in seconds
+        - LOCAbsValPeak   : float, absolute LOC amplitude at peak in volts
+        - ROCAbsValPeak   : float, absolute ROC amplitude at peak in volts
+        - LOCAbsRiseSlope : float, absolute LOC rise slope
+        - ROCAbsRiseSlope : float, absolute ROC rise slope
+        - LOCAbsFallSlope : float, absolute LOC fall slope
+        - ROCAbsFallSlope : float, absolute ROC fall slope
+        - Stage           : str, sleep stage — only rows with 'REM' are processed
+
+    epoch_duration : float, optional
+        Duration of each epoch in seconds. Default is 4.0.
+
+    Classification criteria
+    -----------------------
+    Phasic:
+        At least 1 phasic EM candidate in each of two adjacent 2-second windows.
+        A phasic EM candidate must satisfy:
+        - LOCAbsValPeak or ROCAbsValPeak > 150 µV (150e-6 V)
+        - Duration < 0.5 s
+
+    Tonic:
+        No EMs present in the epoch, or all EMs have:
+        - LOCAbsValPeak < 25 µV (25e-6 V)
+        - ROCAbsValPeak < 25 µV (25e-6 V)
+
+    Epochs must be at least 8 seconds apart to avoid contamination between states.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with one row per kept epoch containing:
+        - EpochStart : float, start time of the epoch in seconds
+        - EpochEnd   : float, end time of the epoch in seconds
+        - REM_Type   : str, 'Phasic' or 'Tonic'
+        - EM_count   : int, number of eye movements detected in the epoch
     """
 
-    if 'stage' not in df.columns:
+    if 'Stage' not in df.columns:
         raise ValueError ("DataFrame must contain a 'Stage' column")
     
     # Get REM stages only
