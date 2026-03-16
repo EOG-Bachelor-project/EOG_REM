@@ -172,38 +172,38 @@ def plot_eog_epochs(file: str | Path,
         )
 
         # Subplot 1: LOC 
-        axs[0].plot(t, epoch_df[loc_col].values, color="#004D40", linewidth=0.8) # Plot the LOC signal
-        axs[0].set_title("LOC", fontsize=10)                                       # Set title for the subplot
-        axs[0].set_ylabel("Amplitude", fontsize=9)                                 # Set y-axis label
-        axs[0].axhline(0, color="black", alpha=0.5, linewidth=0.5)                 # Add a horizontal line at y=0 for reference
+        axs[0].plot(t, epoch_df[loc_col].values *1e6, color="#004D40", linewidth=0.8) # Plot the LOC signal
+        axs[0].set_title("LOC", fontsize=10)                                            # Set title for the subplot
+        axs[0].set_ylabel(f"Amplitude [$\mu$V]", fontsize=9)                            # Set y-axis label
+        axs[0].axhline(0, color="black", alpha=0.5, linewidth=0.5)                      # Add a horizontal line at y=0 for reference
         axs[0].grid(alpha=0.3, linestyle="--")
         axs[0].tick_params(labelsize=8)
         add_stage_shading(axs[0])
  
         # Subplot 2: ROC 
-        axs[1].plot(t, epoch_df[roc_col].values, color="#000000", linewidth=0.8) # Plot the ROC signal
-        axs[1].set_title("ROC", fontsize=10)                                          # Set title for the subplot
-        axs[1].set_ylabel("Amplitude", fontsize=9)                                    # Set y-axis label
-        axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)                    # Add a horizontal line at y=0 for reference
+        axs[1].plot(t, epoch_df[roc_col].values * 1e6, color="#000000", linewidth=0.8) # Plot the ROC signal
+        axs[1].set_title("ROC", fontsize=10)                                             # Set title for the subplot
+        axs[1].set_ylabel("Amplitude [$\mu$V]", fontsize=9)                              # Set y-axis label
+        axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)                       # Add a horizontal line at y=0 for reference
         axs[1].grid(alpha=0.5, linestyle="--")
         axs[1].tick_params(labelsize=8)
         add_stage_shading(axs[1])
  
         # Subplot 3: LOC + ROC overlapping 
-        axs[2].plot(t, epoch_df[loc_col].values, color="#004D40", linewidth=0.8, label="LOC")    # Plot the LOC signal
-        axs[2].plot(t, epoch_df[roc_col].values, color="#000000", linewidth=0.8, label="ROC") # Plot the ROC signal
-        axs[2].set_title("LOC + ROC", fontsize=10)                                                 # Set title for the subplot
-        axs[2].set_ylabel("Amplitude", fontsize=9)                                                 # Set y-axis label
-        axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)                                 # Add a horizontal line at y=0 for reference
-        axs[2].grid(alpha=0.5, linestyle="--")
-        axs[2].tick_params(labelsize=8)
-        axs[2].legend(fontsize=8, loc="best")                                                      # Add legend to the overlapping plot
+        axs[2].plot(t, epoch_df[loc_col].values * 1e6, color="#004D40", linewidth=0.8, label="LOC") # Plot the LOC signal
+        axs[2].plot(t, epoch_df[roc_col].values * 1e6, color="#000000", linewidth=0.8, label="ROC") # Plot the ROC signal
+        axs[2].set_title("LOC + ROC", fontsize=10)                                                    # Set title for the subplot
+        axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9)                                           # Set y-axis label
+        axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)                                    # Add a horizontal line at y=0 for reference
+        axs[2].grid(alpha=0.5, linestyle="--")      
+        axs[2].tick_params(labelsize=8)      
+        axs[2].legend(fontsize=8, loc="best")                                                         # Add legend to the overlapping plot
         add_stage_shading(axs[2])
 
         # Subplot 4: Hypnogram bar
         for _, span in span_groups.iterrows():
             color = STAGE_COLORS.get(span["stage"], "#cccccc")
-            y_val = STAGE_ORDER.get(span["stage"], -1) # Get the numeric y-value for the stage, default to -1 if stage is unknown
+            y_val = STAGE_ORDER.get(span["stage"], -1)  # Get the numeric y-value for the stage, default to -1 if stage is unknown
             axs[3].barh(
                 y=y_val,                                # Plot a horizontal bar at the corresponding y-value for the stage
                 width=span["t_end"] - span["t_start"],  # Width of the bar corresponds to the duration of the stage run
@@ -328,28 +328,28 @@ def plot_fullnight_overview(file: str | Path,
     fig.suptitle("Full-Night EOG Overview", fontsize=13, fontweight="bold")
  
     # Subplot 1: LOC
-    axs[0].plot(t, df[loc_col].values, color="#004D40", linewidth=0.4)
+    axs[0].plot(t, df[loc_col].values * 1e6, color="#004D40", linewidth=0.4)
     axs[0].set_title("LOC", fontsize=10)
-    axs[0].set_ylabel("Amplitude", fontsize=9)
+    axs[0].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
     axs[0].axhline(0, color="black", alpha=0.5, linewidth=0.5)
     axs[0].grid(alpha=0.3, linestyle="--")
     axs[0].tick_params(labelsize=8)
     add_stage_shading(axs[0])
  
     # Subplot 2: ROC
-    axs[1].plot(t, df[roc_col].values, color="#000000", linewidth=0.4)
+    axs[1].plot(t, df[roc_col].values * 1e6, color="#000000", linewidth=0.4)
     axs[1].set_title("ROC", fontsize=10)
-    axs[1].set_ylabel("Amplitude", fontsize=9)
+    axs[1].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
     axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)
     axs[1].grid(alpha=0.3, linestyle="--")
     axs[1].tick_params(labelsize=8)
     add_stage_shading(axs[1])
  
     # Subplot 3: LOC + ROC overlapping
-    axs[2].plot(t, df[loc_col].values, color="#004D40",    linewidth=0.4, label="LOC")
-    axs[2].plot(t, df[roc_col].values, color="#000000", linewidth=0.4, label="ROC")
+    axs[2].plot(t, df[loc_col].values * 1e6, color="#004D40", linewidth=0.4, label="LOC")
+    axs[2].plot(t, df[roc_col].values * 1e6, color="#000000", linewidth=0.4, label="ROC")
     axs[2].set_title("LOC + ROC", fontsize=10)
-    axs[2].set_ylabel("Amplitude", fontsize=9)
+    axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
     axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)
     axs[2].grid(alpha=0.3, linestyle="--")
     axs[2].tick_params(labelsize=8)
@@ -552,28 +552,28 @@ def plot_transition_epochs(file: str | Path,
             ax.axvline(0, color="black", linewidth=1.0, linestyle="--", alpha=0.7, label="Transition")
  
         # Subplot 1: LOC
-        axs[0].plot(t, epoch_df[loc_col].values, color="#004D40", linewidth=0.8)
+        axs[0].plot(t, epoch_df[loc_col].values * 1e6, color="#004D40", linewidth=0.8)
         axs[0].set_title("LOC", fontsize=10)
-        axs[0].set_ylabel("Amplitude", fontsize=9)
+        axs[0].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
         axs[0].axhline(0, color="black", alpha=0.5, linewidth=0.5)
         axs[0].grid(alpha=0.3, linestyle="--")
         axs[0].tick_params(labelsize=8)
         add_stage_shading(axs[0])
  
         # Subplot 2: ROC
-        axs[1].plot(t, epoch_df[roc_col].values, color="#000000", linewidth=0.8)
+        axs[1].plot(t, epoch_df[roc_col].values * 1e6, color="#000000", linewidth=0.8)
         axs[1].set_title("ROC", fontsize=10)
-        axs[1].set_ylabel("Amplitude", fontsize=9)
+        axs[1].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
         axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)
         axs[1].grid(alpha=0.3, linestyle="--")
         axs[1].tick_params(labelsize=8)
         add_stage_shading(axs[1])
  
         # Subplot 3: LOC + ROC overlapping
-        axs[2].plot(t, epoch_df[loc_col].values, color="#004D40", linewidth=0.8, label="LOC")
-        axs[2].plot(t, epoch_df[roc_col].values, color="#000000",    linewidth=0.8, label="ROC")
+        axs[2].plot(t, epoch_df[loc_col].values * 1e6, color="#004D40", linewidth=0.8, label="LOC")
+        axs[2].plot(t, epoch_df[roc_col].values * 1e6, color="#000000", linewidth=0.8, label="ROC")
         axs[2].set_title("LOC + ROC", fontsize=10)
-        axs[2].set_ylabel("Amplitude", fontsize=9)
+        axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
         axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)
         axs[2].grid(alpha=0.3, linestyle="--")
         axs[2].tick_params(labelsize=8)
