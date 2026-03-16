@@ -1,0 +1,188 @@
+# Filename: detect_eye_movements.py
+# Authors: Adam Klovborg & Rasmus Kleffel
+# Description: Rule-based detector to classify eye movements as slow (SEM) or rapid (REM) based on duration, slope, and amplitude thresholds.
+
+# References:
+#   - Christensen et al. (2017), Sleep Medicine 33:171-180
+#     "Novel method for evaluation of eye movements in patients with narcolepsy"
+#     DOI: 10.1016/j.sleep.2016.10.016
+
+# =====================================================================
+# Imports
+# =====================================================================
+from __future__ import annotations
+ 
+import numpy as np
+import pandas as pd
+from pathlib import Path
+import art 
+ 
+# =====================================================================
+# Constants 
+# =====================================================================
+
+# Duration thresholds (seconds)
+REM_DURATION_MIN = 0.3  # [s]; minimum duration for REM 
+REM_DURATION_MAX = 0.5  # [s]; maximum duration for REM
+SEM_DURATION_MIN = 0.5  # [s]; minimum duration for SEM
+SEM_DURATION_MAX = 3.0  # [s]; maximum duration for SEM (
+ 
+# Amplitude thresholds
+AMP_MIN = 50e-6         # [V]; minimum amplitude for eye movements
+AMP_MAX = 325e-6        # [V]; maximum amplitude for eye movements 
+ 
+# Slope threshold (V/s) 
+REM_SLOPE_MIN = 50e-6   # [V/s]; minimum slope for REM
+SEM_SLOPE_MAX = 50e-6   # [V/s]; maximum slope for SEM
+
+# =====================================================================
+# Main function
+# =====================================================================
+def classify_em(
+        events_file: str | Path,
+    out_dir: str | Path | None = None,
+    rem_duration_min: float = REM_DURATION_MIN,
+    rem_duration_max: float = REM_DURATION_MAX,
+    sem_duration_min: float = SEM_DURATION_MIN,
+    sem_duration_max: float = SEM_DURATION_MAX,
+    amp_min: float = AMP_MIN,
+    amp_max: float = AMP_MAX,
+    rem_slope_min: float = REM_SLOPE_MIN,
+    sem_slope_max: float = SEM_SLOPE_MAX,
+    )-> pd.DataFrame:
+    """
+    Classify detected eye movement events as slow (SEM) or rapid (REM) using a rule-based approach based on duration, amplitude, and slope thresholds.
+ 
+    The input events CSV is the output of `detect_rem_jaec()` which already applies DTCWT anti-correlation cleaning (Christensen et al. 2017) upstream, so all
+    features are derived from the cleaned signal.
+
+    Classification logic:
+      1. **Duration:**
+        - REM: `rem_duration_min` to `rem_duration_max` [s]  
+        - SEM: `sem_duration_min` to `sem_duration_max` [s]
+      2. **Amplitude:** both LOC and ROC peak within `amp_min` to `amp_max`
+      3. **Slope:**
+        - REM: mean rise slope >= `rem_slope_min`
+        - SEM: mean rise slope <= `sem_slope_max`
+      4. **UNKNOWN:** events not meeting any criteria
+
+
+    Parameters
+    ----------
+    events_file : str | Path
+        Path to the extracted REM events CSV, with columns: Start, Peak, End, Duration, LOCAbsValPeak, ROCAbsValPeak, LOCAbsRiseSlope, ROCAbsRiseSlope, LOCAbsFallSlope, ROCAbsFallSlope, Stage.
+    out_dir : str | Path | None
+        If provided, saves the classified events CSV here.
+    rem_duration_min : float
+        Minimum duration in seconds for REM. Default 0.3s.
+    rem_duration_max : float
+        Maximum duration in seconds for REM. Default 0.5s.
+    sem_duration_min : float
+        Minimum duration in seconds for SEM. Default 0.5s.
+    sem_duration_max : float
+        Maximum duration in seconds for SEM. Default 3.0s.
+    amp_min : float
+        Minimum peak amplitude in Volts. Default 50e-6 (50 uV).
+    amp_max : float
+        Maximum peak amplitude in Volts. Default 325e-6 (325 uV).
+    rem_slope_min : float
+        Minimum mean rise slope for REM in V/s. Default 50e-6.
+    sem_slope_max : float
+        Maximum mean rise slope for SEM in V/s. Default 50e-6.
+
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with an added 'eye_movement_type' column containing
+        'REM', 'SEM', or 'UNKNOWN' for each event.
+    """
+    lprint(length=100, height=1, char="%")
+    print(f"Classifying eye movement events from {events_file.name}")
+    lprint(length=100, height=1, char="%")
+
+    # Ensure Path object
+    events_file = Path(events_file) 
+    if not events_file.is_file():
+        raise FileNotFoundError(f"Events file not found: {events_file}")
+    
+    # --- 1) Load events CSV ---
+    df = pd.read_csv(events_file)
+
+    required_cols = [
+        "Start", 
+        "Peak", 
+        "End", 
+        "Duration",
+        "LOCAbsValPeak", 
+        "ROCAbsValPeak",
+        "LOCAbsRiseSlope", 
+        "ROCAbsRiseSlope",
+        "LOCAbsFallSlope", 
+        "ROCAbsFallSlope",
+        "Stage"
+    ]
+
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Input events CSV must contain '{col}' column.")
+        
+    print(f"\nLoaded {len(df)} events from {events_file.name}")
+    print(f"Stage distribution:\n{df['Stage'].value_counts().to_string()}\n")
+
+    # --- 2) Compute mean of rise slope and amplitudes ---
+    df["_mean_rise_slope"] = df[["LOCAbsRiseSlope", "ROCAbsRiseSlope"]].mean(axis=1) 
+    df["_mean_amp"]        = df[["LOCAbsValPeak", "ROCAbsValPeak"]].mean(axis=1)
+
+    # --- 3) Masks ---
+
+    # Duration masks
+    dur_rem =  (df["Duration"] >= rem_duration_min) & (df["Duration"] < rem_duration_max) # We use "<" since "<=" would allow events to be classified as both REM and SEM if they are exactly at the threshold
+    dur_sem =  (df["Duration"] >= sem_duration_min) & (df["Duration"] <= sem_duration_max) 
+
+    # Amplitude mask 
+    amp_ok = (
+        (df["LOCAbsValPeak"] >= amp_min) & (df["LOCAbsValPeak"] <= amp_max) &
+        (df["ROCAbsValPeak"] >= amp_min) & (df["ROCAbsValPeak"] <= amp_max)
+    )
+
+    # Slope masks
+    slope_rem = df["_mean_rise_slope"] >= rem_slope_min
+    slope_sem = df["_mean_rise_slope"] <= sem_slope_max
+
+    # --- 4) Classify events ---
+    is_rem = dur_rem & amp_ok & slope_rem
+    is_sem = dur_sem & amp_ok & slope_sem
+
+    df["eye_movement_type"] = "UNKNOWN"  # Default
+    df.loc[is_rem, "eye_movement_type"] = "REM"
+    df.loc[is_sem, "eye_movement_type"] = "SEM"
+
+    # --- 5) Summarize results ---
+    counts = df["eye_movement_type"].value_counts()
+    print("="*50)
+    print("Classification results:")
+    for label in ["REM", "SEM", "UNKNOWN"]:
+        n = counts.get(label, 0)
+        print(f"  {label:<10} {n:>5} ({100 * n / len(df):.1f}%)")
+    print("=" * 50)
+ 
+    print("\nCross-tabulation with GSSC Stage:")
+    print(pd.crosstab(df["Stage"], df["eye_movement_type"]).to_string())
+ 
+    print("\nFeature summary by classification:")
+    print(df.groupby("eye_movement_type")[
+        ["Duration", "_mean_amp", "_mean_rise_slope"]
+    ].mean().to_string())
+
+    # --- 6) Save results ---
+
+    # Drop internal columns before saving
+    df = df.drop(columns=["_mean_rise_slope", "_mean_amp"])
+
+    if out_dir is not None:
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        output_file = out_dir / f"{events_file.stem}_classified.csv"
+        df.to_csv(output_file, index=False)
+        print(f"\nClassified events saved to: {output_file}")
+ 
