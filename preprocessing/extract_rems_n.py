@@ -85,7 +85,7 @@ def extract_rems_from_edf(edf_path:    Path,
 
 
     # GSCC staging EOG only 
-    raw.filter(0.3,30, picks = ['LOC','ROC'])
+    raw.filter(0.1,30, picks = ['LOC','ROC'])
     infer = EEGInfer(use_cuda = False)
     staging = infer.mne_infer(inst=raw, eeg=[], eog=['LOC', 'ROC'], eog_drop = False, filter = False)
     hypno_int = staging[0]
