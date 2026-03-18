@@ -17,7 +17,7 @@ from gssc.infer import EEGInfer
 from preprocessing.channel_standardization import build_rename_map
 from preprocessing.index_file import parse_lights_txt
 from extract_rems import detect_rem_jaec
-
+from preprocessing.GSSC_to_csv import GSSC_to_csv
 
 # =====================================================================
 # Constants
@@ -85,10 +85,7 @@ def extract_rems_from_edf(edf_path:    Path,
 
 
     # GSCC staging EOG only 
-    raw.filter(0.1,30, picks = ['LOC','ROC'])
-    infer = EEGInfer(use_cuda = False)
-    staging = infer.mne_infer(inst=raw, eeg=[], eog=['LOC', 'ROC'], eog_drop = False, filter = False)
-    hypno_int = staging[0]
+    hypno_int = GSSC_to_csv(edf_path, lights_path=lights_path)  # This also saves the GSSC staging result as CSV, but we need the stages for REM detection so we return it from the function
     
     # Resample EDF if edf isnt sampled at 128 Hz
     sf = raw.info["sfreq"]

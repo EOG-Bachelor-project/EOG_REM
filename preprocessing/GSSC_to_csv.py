@@ -121,4 +121,7 @@ def GSSC_to_csv(edf_path:    str | Path,
     out_path = out_dir / f"{session_id}_gssc.csv"
     df.to_csv(out_path, index=False)
 
-    print(f"Saved: {out_path}")
+    print(f"Saved: {out_path}") 
+
+    # Return stages to use in extract_rems_n.py so we dont run GSSC twice 
+    return stages
