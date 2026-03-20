@@ -30,7 +30,8 @@ EXTRACT_REMS_DIR.mkdir(parents=True, exist_ok=True)
 # =====================================================================
 def extract_rems_from_edf(edf_path:    Path, 
                           out_dir:     Path = EXTRACT_REMS_DIR,
-                          lights_path: Path | None = None
+                          lights_path: Path | None = None,
+                          gssc_df:     pd.DataFrame | None = None,
                           ) -> pd.DataFrame | None:
     """
     Load one EDF file, rename EOG channels to canonical names, run GSSC sleep staging using EOG channels, detect REM events, and save the extracted REM events as a CSV file.\\
@@ -44,6 +45,9 @@ def extract_rems_from_edf(edf_path:    Path,
         The directory where the output CSV file will be saved.
     lights_path : Path | None
         Optional path to lights.txt file. If provided, the CSV is trimmed to the sleep period.
+    gssc_df : Path | None
+        Pre-computed GSSC staging dataframe (output of GSSC_to_csv).
+        Pass this in to avoid running GSSC a second time.
 
     Returns
     -------
@@ -84,14 +88,19 @@ def extract_rems_from_edf(edf_path:    Path,
         print(f" Trimmed to sleep period: {lights_off:.1f} s - {lights_on:.1f} s.") 
 
 
-    # GSCC staging EOG only 
-    hypno_int = GSSC_to_csv(edf_path, lights_path=lights_path)  # This also saves the GSSC staging result as CSV, but we need the stages for REM detection so we return it from the function
+    # GSCC staging EOG only
+    if gssc_df is None:
+        gssc_df = GSSC_to_csv(edf_path, lights_path=lights_path)
+    stage_map = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
+    hypno_int = gssc_df["stage"].map(stage_map).fillna(0).astype(int).values
+        
     
     # Resample EDF if edf isnt sampled at 128 Hz
     sf = raw.info["sfreq"]
     if sf != 128:
         print(f"Resampling from {sf} Hz to 128 Hz")
         raw = raw.copy().resample(128)
+        sf = 128
     loc = raw.get_data(picks=["LOC"])[0]
     roc = raw.get_data(picks=["ROC"])[0]
     

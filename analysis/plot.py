@@ -45,7 +45,7 @@ def plot_eog_epochs(file: str | Path,
                     time_col:   str = "time_sec",
                     loc_col:    str = "LOC",
                     roc_col:    str = "ROC",
-                    stage_col:  str = "event_Stage",
+                    stage_col:  str = "stage",
                     max_epochs: int | None = None,
                     out_dir:    Path | None = None,
                     show_em:    bool = True,
@@ -208,7 +208,7 @@ def plot_eog_epochs(file: str | Path,
 
 
         # --- 6) Create figure with subplots ---
-        fig, axs = plt.subplots(4, 1, figsize=(15, 9), sharex=True, gridspec_kw={'hspace': 0.5, 'height_ratios': [2, 2, 2, 1]})
+        fig, axs = plt.subplots(4, 1, figsize=(16, 9), dpi=120, sharex=True, gridspec_kw={'hspace': 0.25, 'height_ratios': [1, 1, 3, 0.5]})
 
         # Title for the epoch
         fig.suptitle(
@@ -691,7 +691,7 @@ plot_eog_epochs(
 
 
 #plot_fullnight_overview(
-#    file="C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv",
+#    file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv",
 #    out_dir=None
 #)
 

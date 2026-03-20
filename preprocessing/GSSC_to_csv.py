@@ -32,7 +32,7 @@ GSSC_DIR.mkdir(parents=True, exist_ok=True)
 def GSSC_to_csv(edf_path:    str | Path, 
                 out_dir:     Path = GSSC_DIR,
                 lights_path: Path | None = None
-                ) -> None:
+                ) -> pd.DataFrame:
     """
     Load one EDF file, run GSSC inference, and save the result as CSV. \\
     If a lights.txt path is provided, the output is trimmed to the lights-off/lights-on window.
@@ -48,7 +48,8 @@ def GSSC_to_csv(edf_path:    str | Path,
     
     Returns
     -------
-    None
+    pd.DataFrame
+        The trimmed staging datafram
     """
     edf_path = Path(edf_path)
 
@@ -123,5 +124,6 @@ def GSSC_to_csv(edf_path:    str | Path,
 
     print(f"Saved: {out_path}") 
 
-    # Return stages to use in extract_rems_n.py so we dont run GSSC twice 
-    return stages
+    # Return the trimmed dataframe so callers (e.g. extract_rems_from_edf)
+    # can reuse it directly, so there is no need to run GSSC a second time.
+    return df
