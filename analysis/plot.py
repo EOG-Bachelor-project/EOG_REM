@@ -28,6 +28,11 @@ STAGE_COLORS = {
     "N1":  "#88CCEE",  
     "W":   "#CC6677", 
 }
+
+EM_COLORS = {
+    "LOC": "#FFB000",
+    "ROC": "#44AA99"
+}
  
 # Numeric mapping for hypnogram y-axis
 STAGE_ORDER = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
@@ -186,8 +191,10 @@ def plot_eog_epochs(file: str | Path,
             em_mask = epoch_df[event_col].fillna(False).values.astype(bool)
 
         # Helper for coloring the EM segments
-        def plot_signal_with_em(ax, signal, base_color, label=None):
-            """Plot signal with EM segments highlighted"""
+        def plot_signal_with_em(ax, signal, base_color, em_color, label=None, em_label=None):
+            """
+            Plot signal with EM segments highlighted.
+            """
             t_vals = epoch_df["_t"].values
             sig_vals = signal * 1e6
 
@@ -199,16 +206,20 @@ def plot_eog_epochs(file: str | Path,
 
             # Overlay EM segments on top
             # Find contiguous EM runs and plot each as a seperate line segment
+            first = True # Only label the first EM segment so it appears once in legend
             em_runs = np.where(np.diff(np.concatenate([[False], em_mask, [False]])))[0]
             starts  = em_runs[0::2]
             ends    = em_runs[1::2]
 
             for s, e in zip(starts, ends):
-                ax.plot(t_vals[s:e], sig_vals[s:e], color="#FFB000", linewidth = 1.5, zorder=3)
+                ax.plot(t_vals[s:e], sig_vals[s:e], 
+                        color=em_color, linewidth = 1.1, zorder=3,
+                        label=em_label if first else None)
+                first = False
 
 
         # --- 6) Create figure with subplots ---
-        fig, axs = plt.subplots(4, 1, figsize=(16, 9), dpi=120, sharex=True, gridspec_kw={'hspace': 0.25, 'height_ratios': [1, 1, 3, 0.5]})
+        fig, axs = plt.subplots(4, 1, figsize=(18, 9), dpi=120, sharex=True, gridspec_kw={'hspace': 0.5, 'height_ratios': [1, 1, 3, 0.5]})
 
         # Title for the epoch
         fig.suptitle(
@@ -218,13 +229,13 @@ def plot_eog_epochs(file: str | Path,
         )
 
         # Subplot 1: LOC 
-        axs[0].set_title("LOC", fontsize=10)                                          # Set title for the subplot
-        axs[0].set_ylabel(f"Amplitude [$\mu$V]", fontsize=9)                          # Set y-axis label
-        axs[0].axhline(0, color="black", alpha=0.5, linewidth=0.5)                    # Add a horizontal line at y=0 for reference
-        axs[0].grid(alpha=0.3, linestyle="--")                                        # Set grid
+        axs[0].set_title("LOC", fontsize=10)                                                                     # Set title for the subplot
+        axs[0].set_ylabel(f"Amplitude [$\mu$V]", fontsize=9)                                                     # Set y-axis label
+        axs[0].axhline(0, color="black", alpha=0.5, linewidth=0.5)                                               # Add a horizontal line at y=0 for reference
+        axs[0].grid(alpha=0.3, linestyle="--")                                                                   # Set grid
         axs[0].tick_params(labelsize=8)
-        add_stage_shading(axs[0])
-        plot_signal_with_em(axs[0], epoch_df[loc_col].values, base_color="#332288") # Plot the LOC signal with EM
+        add_stage_shading(axs[0])                                                                                # Stages shading
+        plot_signal_with_em(axs[0], epoch_df[loc_col].values, base_color="#332288", em_color=EM_COLORS["LOC"]) # Plot the LOC signal with EM
  
         # Subplot 2: ROC 
         axs[1].set_title("ROC", fontsize=10)                                          # Set title for the subplot
@@ -233,18 +244,19 @@ def plot_eog_epochs(file: str | Path,
         axs[1].grid(alpha=0.5, linestyle="--")                                        # Set grid
         axs[1].tick_params(labelsize=8)
         add_stage_shading(axs[1])
-        plot_signal_with_em(axs[1], epoch_df[roc_col].values, base_color="#882255") # Plot the ROC signal with EM
+        plot_signal_with_em(axs[1], epoch_df[roc_col].values, base_color="#882255", em_color=EM_COLORS["ROC"]) # Plot the ROC signal with EM
  
         # Subplot 3: LOC + ROC overlapping 
-        axs[2].set_title("LOC + ROC", fontsize=10)                                                 # Set title for the subplot
-        axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9)                                        # Set y-axis label
-        axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)                                 # Add a horizontal line at y=0 for reference
-        axs[2].grid(alpha=0.5, linestyle="--")                                                     # Set grid
+        axs[2].set_title("LOC + ROC", fontsize=10)                                                                            # Set title for the subplot
+        axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9)                                                                   # Set y-axis label
+        axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)                                                            # Add a horizontal line at y=0 for reference
+        axs[2].grid(alpha=0.5, linestyle="--")                                                                                # Set grid
         axs[2].tick_params(labelsize=8)      
-        add_stage_shading(axs[2])
-        plot_signal_with_em(axs[2], epoch_df[loc_col].values, base_color="#332288", label="LOC") # Plot the LOC signal with EM
-        plot_signal_with_em(axs[2], epoch_df[roc_col].values, base_color="#882255", label="ROC") # Plot the ROC signal with EM
-        axs[2].legend(fontsize=8, loc="best")                                                      # Add legend to the overlapping plot
+        add_stage_shading(axs[2])                                                                                             # Stages shading
+        plot_signal_with_em(axs[2], epoch_df[loc_col].values, base_color="#332288", em_color=EM_COLORS["LOC"], label="LOC", em_label="EM (LOC)") # Plot the LOC signal with EM
+        plot_signal_with_em(axs[2], epoch_df[roc_col].values, base_color="#882255", em_color=EM_COLORS["ROC"], label="ROC", em_label="EM (ROC)") # Plot the ROC signal with EM
+        handles, labels = axs[2].get_legend_handles_labels()
+        axs[2].legend(handles=handles, labels=labels, fontsize=8, loc="center left", bbox_to_anchor=(1, 0.5))
 
         # Subplot 4: Hypnogram bar
         for _, span in span_groups.iterrows():
@@ -262,15 +274,15 @@ def plot_eog_epochs(file: str | Path,
         axs[3].set_title("Hypnogram", fontsize=10)                   # Set title for the hypnogram subplot
         axs[3].set_yticks(list(STAGE_ORDER.values()))               
         axs[3].set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8) # Set y-tick labels to the stage names
+        axs[3].set_xticks(np.arange(0, window_sec + 0.5, 0.5))
+        axs[3].set_xticklabels(np.arange(0, window_sec + 0.5, 0.5), fontsize=6)
         axs[3].set_xlabel("Time within epoch [s]", fontsize=10)      # Set x-axis label for the hypnogram subplot
         axs[3].tick_params(labelsize=8)
         axs[3].set_xlim(0, window_sec)                               # Set x-axis limits to the epoch window
 
         # Shared stage legend at bottom 
         all_patches = legend_patches.copy()
-        if has_em_col:
-            all_patches.append(mpatches.Patch(color="#FFB000", label="EM event"))
-
+    
         fig.legend(
             handles=all_patches,
             loc="lower center",
@@ -685,7 +697,7 @@ plot_eog_epochs(
     file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv",
     stage="REM",
     window_sec=30.0,
-    max_epochs=10,
+    max_epochs=1,
     out_dir=None,
 )
 

@@ -64,6 +64,8 @@ def extract_rems_from_edf(edf_path:    Path,
 
     # Load EDF
     raw = mne.io.read_raw_edf(edf_path, preload=True, verbose=False)
+    print(" Loaded raw:", raw)
+    print(" sfreq:", raw.info["sfreq"],"Hz")
 
     # Rename channels for standardization
     rename_map = build_rename_map(raw.ch_names)
@@ -85,7 +87,7 @@ def extract_rems_from_edf(edf_path:    Path,
     if lights_path is not None:
         lights_off, lights_on = parse_lights_txt(lights_path)
         raw = raw.crop(tmin = lights_off, tmax = lights_on)
-        print(f" Trimmed to sleep period: {lights_off:.1f} s - {lights_on:.1f} s.") 
+        print(f"    Trimmed to sleep period: {lights_off:.1f} s - {lights_on:.1f} s.") 
 
 
     # GSCC staging EOG only
@@ -101,8 +103,11 @@ def extract_rems_from_edf(edf_path:    Path,
         print(f"Resampling from {sf} Hz to 128 Hz")
         raw = raw.copy().resample(128)
         sf = 128
-    loc = raw.get_data(picks=["LOC"])[0]
-    roc = raw.get_data(picks=["ROC"])[0]
+    loc = raw.get_data(picks=["LOC"])[0] * 1e6 # V to uV
+    roc = raw.get_data(picks=["ROC"])[0] * 1e6
+
+    print(f"Signal length: {len(loc)} samples at {sf} Hz = {len(loc)/sf:.1f} s")
+    print(f"hypno_int epochs: {len(hypno_int)} epochs = {len(hypno_int) * 30:.1f} s")
     
     # Upsampling hypnogram to match signal length
     samples_per_epoch = sf * 30
@@ -119,11 +124,20 @@ def extract_rems_from_edf(edf_path:    Path,
     roc = roc[:trim]
     hypno_up = hypno_up[:trim]
 
+    # Print info before we use detect_rem_jaec
+    print(f"LOC range: {loc.min():.2f} to {loc.max():.2f}   |   LOC length: {len(loc)}")
+    print(f"ROC range: {roc.min():.2f} to {roc.max():.2f}   |   ROC length: {len(roc)}")
+    print(f"hypno_up length: {len(hypno_up)}")
+    print(f"REM samples in hypno_up: {(hypno_up == 4).sum()}")
+    print(f"Total epochs: {len(hypno_up) / (128*30):.1f}")
+
+
     # Rem detection
     result = detect_rem_jaec(loc, roc, hypno_up, method = 'ssc_threshold')
 
     # Create dataframe to retrun results
     df = result.summary()
+
     df['Stage'] = df['Stage'].map({
       0:'W', 
       1:'N1', 
@@ -135,7 +149,7 @@ def extract_rems_from_edf(edf_path:    Path,
     # `detect_rem_jaec()` operates on a signal starting at 0, so we add `lights_off` 
     # to make Start, End, Peak match the absolute time reference in the EOG CSV
     if lights_path is not None:
-        print(f"    Offsetting event time by `lights_off` = {lights_off:.1f} s")
+        print(f"Offsetting event time by `lights_off` = {lights_off:.1f} s")
         for col in ["Start", "Peak", "End"]:
             if col in df.columns:
                 df[col] = df[col] + lights_off

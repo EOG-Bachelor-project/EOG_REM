@@ -53,6 +53,8 @@ def edf_to_csv(edf_path:    Path,
 
     # --- 1) Load EDF ---
     raw = mne.io.read_raw_edf(edf_path, preload=True, verbose=False)
+    print(" Loaded raw:", raw)
+    print(" sfreq:", raw.info["sfreq"],"Hz")
 
     # --- 2) Rename EOG channels ---
     rename_map = build_rename_map(raw.ch_names)
@@ -82,7 +84,7 @@ def edf_to_csv(edf_path:    Path,
     if lights_path is not None:
         lights_off, lights_on = parse_lights_txt(lights_path)
         df = df[(df["time_sec"] >= lights_off) & (df["time_sec"] <= lights_on)].reset_index(drop=True)
-        print(f" Trimmed to sleep period: {len(df)} samples remaining.")
+        print(f"    Trimmed to sleep period: {len(df)} samples remaining.")
 
     # --- 7) Save to CSV ---
     patient_id = edf_path.parent.name

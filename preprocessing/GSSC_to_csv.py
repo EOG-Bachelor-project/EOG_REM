@@ -63,9 +63,9 @@ def GSSC_to_csv(edf_path:    str | Path,
     # --- 1) Read EDF ---
     raw = mne.io.read_raw_edf(edf_path, preload=False, verbose=False)
 
-    print("Loaded raw:", raw)
-    print("Channels:", raw.ch_names[:20], "..." if len(raw.ch_names) > 20 else "")
-    print("sfreq:", raw.info["sfreq"])
+    print(" Loaded raw:", raw)
+    print(" Channels:", raw.ch_names[:20], "..." if len(raw.ch_names) > 20 else "")
+    print(" sfreq:", raw.info["sfreq"],"Hz")
 
     # --- 2) Rename EOG channels ---
     rename_map = build_rename_map(raw.ch_names)
@@ -73,7 +73,7 @@ def GSSC_to_csv(edf_path:    str | Path,
 
     if rename_map:
         raw.rename_channels(rename_map)
-    print("Channels after rename:", raw.ch_names[:20], "..." if len(raw.ch_names) > 20 else "")
+    print(" Channels after rename:", raw.ch_names[:20], "..." if len(raw.ch_names) > 20 else "")
 
     # --- 3) Pick channels ---
     picks = ["LOC", "ROC"]
@@ -116,7 +116,7 @@ def GSSC_to_csv(edf_path:    str | Path,
     if lights_path is not None:
         lights_off, lights_on = parse_lights_txt(lights_path)
         df = df[(df["epoch_start"] >= lights_off) & (df["epoch_start"] <= lights_on)].reset_index(drop=True)
-        print(f" Trimmed to sleep period: {len(df)} samples remaining.")
+        print(f"    Trimmed to sleep period: {len(df)} samples remaining.")
 
     # --- 9) Save as CSV ---
     out_path = out_dir / f"{session_id}_gssc.csv"
