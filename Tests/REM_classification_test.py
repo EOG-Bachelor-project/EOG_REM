@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 #from preprocessing.extract_rems_n import extract_rems_from_edf
 
-df = pd.read_csv(r'C:\Users\rasmu\Desktop\6. Semester\Bachelor Projekt\Git\EOG_REM\extracted_rems\Test edf filer_extracted_rems.csv')
+df = pd.read_csv(r'C:/Users/AKLO0022/EOG_REM/extracted_rems/DCSM_1_a_extracted_rems.csv')
 
 def classify_REM(df: pd.DataFrame, epoch_duration: float = 4.0)-> pd.DataFrame:
 
@@ -23,6 +23,7 @@ def classify_REM(df: pd.DataFrame, epoch_duration: float = 4.0)-> pd.DataFrame:
     df : pd.DataFrame
         DataFrame output from detect_rem_jaec() containing the following columns:
         - Start           : float, start time of the eye movement in seconds
+        - Peak            : float, ...
         - End             : float, end time of the eye movement in seconds
         - Duration        : float, duration of the eye movement in seconds
         - LOCAbsValPeak   : float, absolute LOC amplitude at peak in volts
@@ -68,7 +69,9 @@ def classify_REM(df: pd.DataFrame, epoch_duration: float = 4.0)-> pd.DataFrame:
     df = df[df['Stage'] == 'REM'].copy()
 
     # Define phasic REM
-    df['Phasic REM'] = (df['ROCAbsValPeak'] > 150e-6) or (df['LOCAbsValPeak'] > 150e-6) & (df['Duration'] > 0.5)
+    df['is_phasic_REM'] = (
+        (df['ROCAbsValPeak'] > 150e-6) | (df['LOCAbsValPeak'] > 150e-6)
+    ) & (df['Duration'] > 0.5)
 
     # Build mini epochs of 4 seconds
     epoch_starts = np.arange(df['Start'].min(), df['Start'].max(), epoch_duration)
@@ -85,18 +88,19 @@ def classify_REM(df: pd.DataFrame, epoch_duration: float = 4.0)-> pd.DataFrame:
         epoch_ems = df[(df['Start'] >= epoch_start) & (df['Start'] < epoch_end)]
 
         # Split into two 2-second windows
-        window1 = epoch_ems[epoch_ems['Start'] < mid] # We use < mid and not <= mid so the EMs at the exact midpoints do not overlap between the two windows.
+        window1 = epoch_ems[epoch_ems['Start'] <  mid] # We use < mid and not <= mid so the EMs at the exact midpoints do not overlap between the two windows.
         window2 = epoch_ems[epoch_ems['Start'] >= mid]
 
         # Phasic: at least 1 phasic EM candidate in each adjacent 2-sec window
-        phasic_in_w1 = window1['is_phasic_EM'].any()
-        phasic_in_w2 = window2['is_phasic_EM'].any()
+        phasic_in_w1 = window1['is_phasic_REM'].any()
+        phasic_in_w2 = window2['is_phasic_REM'].any()
         is_phasic = phasic_in_w1 and phasic_in_w2
 
         # Tonic: no EMs at all, and all amplitudes below 25 µV
         no_ems = len(epoch_ems) == 0
         low_amp = (
-            (df['ROCAbsValPeak'] < 25e-6) & (df['LOCAbsValPeak'] < 25e-6)
+            (epoch_ems['ROCAbsValPeak'] < 25 * 1e6) & 
+            (epoch_ems['LOCAbsValPeak'] < 25 * 1e6)
         ).all() if len(epoch_ems) > 0 else True
         is_tonic = no_ems or low_amp
 
@@ -105,7 +109,7 @@ def classify_REM(df: pd.DataFrame, epoch_duration: float = 4.0)-> pd.DataFrame:
     'EpochEnd':   round(epoch_end, 4),
     'REM_Type':   'Phasic' if is_phasic else 'Tonic' if is_tonic else 'Unclassified',
     'EM_count':   len(epoch_ems),
-})
+    })
     # Convert the ruslts to a DataFrame 
     epochs_df = pd.DataFrame(results)
 
@@ -120,9 +124,6 @@ def classify_REM(df: pd.DataFrame, epoch_duration: float = 4.0)-> pd.DataFrame:
             last_kept_start = row['EpochStart']
 
     return pd.DataFrame(kept).reset_index(drop=True)
-
-
-
 
 # test it 
 result = classify_REM(df)
