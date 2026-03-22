@@ -6,6 +6,7 @@
 # Imports
 # =====================================================================
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from preprocessing.upsample import upsample_gssc_to_eog
 
@@ -13,138 +14,113 @@ from preprocessing.upsample import upsample_gssc_to_eog
 # Functions
 # =====================================================================
 
-# —————————————————————————————————————————————————————————————————————
-# Function to merge EOG and GSSC CSV files
-# —————————————————————————————————————————————————————————————————————
-def merge_csv_files(eog_file: str | Path, gssc_file: str | Path, output_file: str | Path) -> None:
+# —————————————————————————————————————————————————————————————————————————————————————————————————
+# Helper - fast interval merge
+# —————————————————————————————————————————————————————————————————————————————————————————————————
+def _merge_events_fast(
+        merged_df:  pd.DataFrame,
+        events_df:  pd.DataFrame,
+        time_col:   str,
+        start_col:  str,
+        end_col:    str,
+        peak_col:   str,
+        prefix:     str,
+        flag_col:   str,
+        ) -> pd.DataFrame:
     """
-    Merges two CSV files based on a common column and saves the merged result to a new CSV file.\\
-    The GSSC staging is upsampled to align with the EOG sample timeline before merging.
-
+    Merges event-level annotations into the per-sample DataFrame using
+    merge_asof instead of a slow for-loop.
+ 
+    For each sample, finds the event whose start <= time_sec <= end and
+    copies all event columns across with the given prefix. Samples outside
+    any event window get NA.
+ 
     Parameters
     ----------
-    eog_file : str | Path
-        The path to the EOG CSV file.
-    gssc_file : str | Path
-        The path to the GSSC CSV file.
-    output_file : str | Path
-        The path to the output CSV file.
-    """
-
-    # 1) Load EOG CSV to check for required columns
-    eog_df = pd.read_csv(eog_file)
-
-    if "time_sec" not in eog_df.columns:
-        raise ValueError("EOG CSV must contain 'time_sec'.")
-
-    # 2) Get upsampled GSSC staging aligned to EOG timeline
-    gssc_df = upsample_gssc_to_eog(eog_file, gssc_file)
-
-    # 3) Merge the original EOG data with the upsampled GSSC staging
-    merged_df = pd.concat(
-        [
-            eog_df.reset_index(drop=True),
-            gssc_df.drop(columns=["time_sec"]).reset_index(drop=True),
-        ],
-        axis=1,
-    )
-    
-    # 4) Save the merged DataFrame to a new CSV file
-    merged_df.to_csv(output_file, index=False)
-
-    print(f"Merged file saved to: {Path(output_file).name}")
-
-# —————————————————————————————————————————————————————————————————————
-# Function to merge CSV files with extract_rems results
-# —————————————————————————————————————————————————————————————————————
-def merge_edf_rem_events(eog_path: str, 
-                         events_path: str,
-                         time_col: str = "time_sec",
-                         loc_col: str = "LOC",
-                         roc_col: str = "ROC",
-                         start_col: str = "Start",
-                         end_col: str = "End",
-                         peak_col: str = "Peak",
-                         ) -> pd.DataFrame:
-    """
-    Merges EOG CSV data with REM event annotations based on a common time column.
-
-    Parameters
-    ----------
-    eog_path : str
-        The path to the EOG CSV file.
-    events_path : str
-        The path to the CSV file containing REM event annotations.
-    time_col : str, optional
-        The name of the time column in both CSV files. Default is "time_sec". 
-    loc_col : str, optional
-        The name of the LOC column in the EOG CSV file. Default is "LOC".
-    roc_col : str, optional
-        The name of the ROC column in the EOG CSV file. Default is "ROC".
-    start_col : str, optional
-        The name of the start column in the events CSV file. Default is "Start".
-    end_col : str, optional
-        The name of the end column in the events CSV file. Default is "End".
-    peak_col : str, optional
-        The name of the peak column in the events CSV file. Default is "Peak".
-
+    merged_df : pd.DataFrame
+        Per-sample DataFrame.
+    events_df : pd.DataFrame
+        Event-level DataFrame with start_col, end_col columns.
+    time_col : str
+        Name of the time column in merged_df.
+    start_col : str
+        Name of the event start column in events_df.
+    end_col : str
+        Name of the event end column in events_df.
+    peak_col : str
+        Name of the event peak column in events_df.
+    prefix : str
+        Prefix added to all event columns in the output.
+        e.g. 'event_' or 'em_'
+    flag_col : str
+        Name of the boolean flag column marking samples inside an event.
+        e.g. 'is_rem_event' or 'is_em_event'
+ 
     Returns
     -------
-    signal_df : pd.DataFrame
-        A DataFrame containing the merged EOG data and REM event annotations.
+    pd.DataFrame
+        merged_df with added columns:
+        - {flag_col}          : bool, True if sample is inside an event
+        - {prefix}event_id    : int or NA, which event this sample belongs to
+        - {prefix}is_peak     : bool, True if this is the peak sample
+        - {prefix}{col}       : for every column in events_df
     """
+ 
+    events_df = events_df.copy().reset_index(drop=True)
+    events_df["_event_id"] = events_df.index
+ 
+    # Sort for merge_asof
+    merged_df     = merged_df.sort_values(time_col).reset_index(drop=True)
+    events_sorted = events_df.sort_values(start_col).reset_index(drop=True)
+ 
+    # Prefix all event columns except the start column (used as merge key)
+    rename_map     = {c: f"{prefix}{c}" for c in events_df.columns if c != start_col}
+    events_renamed = events_sorted.rename(columns=rename_map)
+ 
+    # Backward merge — each sample gets the most recent event that started before it
+    merged_df = pd.merge_asof(
+        merged_df,
+        events_renamed,
+        left_on=time_col,
+        right_on=start_col,
+        direction="backward",
+    )
+ 
+    # Mask out samples that fall after the event end
+    end_prefixed = f"{prefix}{end_col}"
+    id_prefixed  = f"{prefix}_event_id"
+    inside       = merged_df[time_col] <= merged_df[end_prefixed]
+ 
+    # Boolean flag
+    merged_df[flag_col] = inside
+ 
+    # Prefixed event_id — avoids collision when merging both REM events and EM events
+    merged_df[f"{prefix}event_id"] = merged_df[id_prefixed].where(inside, other=pd.NA)
+ 
+    # Zero out all prefixed columns for samples outside events
+    for col in [c for c in merged_df.columns if c.startswith(prefix)]:
+        merged_df.loc[~inside, col] = pd.NA
+ 
+    merged_df = merged_df.drop(columns=[id_prefixed], errors="ignore")
+ 
+    # Mark peak samples — prefixed so REM peaks and EM peaks don't collide
+    merged_df[f"{prefix}is_peak"] = False
+    if peak_col in events_df.columns:
+        for _, row in events_df.iterrows():
+            if pd.notna(row[peak_col]):
+                peak_idx = (merged_df[time_col] - row[peak_col]).abs().idxmin()
+                merged_df.loc[peak_idx, f"{prefix}is_peak"] = True
+ 
+    return merged_df
 
-    # 1) Load CSV
-    eog_df = pd.read_csv(eog_path)
-    events_df = pd.read_csv(events_path)
-
-    # 2) Check required columns
-    # Check EOG CSV
-    for col in [time_col, loc_col, roc_col]:
-        if col not in eog_df.columns:
-            raise ValueError(f"EOG CSV must contain '{col}' column.")
-    # Check events CSV
-    for col in [start_col, end_col]:
-        if col not in events_df.columns:
-            raise ValueError(f"Events CSV must contain '{col}' column.")
-
-    # 3) Keep only needed EOG columns and rename to standard names
-    signal_df = eog_df[[time_col, loc_col, roc_col]].copy()
-    signal_df = signal_df.rename(columns={
-        time_col: "time",
-        loc_col: "LOC",
-        roc_col: "ROC"
-    })
-
-    # 4) Add annotation columns
-    signal_df["is_rem_event"] = False
-    signal_df["event_id"] = pd.NA
-    signal_df["is_rem_peak"] = False
-
-    # 5) Mark samples belonging to each REM event
-    for i, row in events_df.iterrows():
-        start = row[start_col]
-        end = row[end_col]
-
-        mask = (signal_df["time"] >= start) & (signal_df["time"] <= end)
-        signal_df.loc[mask, "is_rem_event"] = True
-        signal_df.loc[mask, "event_id"] = i
-
-        # 5.a) Mark peak if the column exists
-        if peak_col in events_df.columns and pd.notna(row[peak_col]):
-            peak = row[peak_col]
-            peak_idx = (signal_df["time"] - peak).abs().idxmin()
-            signal_df.loc[peak_idx, "is_rem_peak"] = True
-
-    return signal_df
-
-# —————————————————————————————————————————————————————————————————————
-# Function to merge EOG, GSSC staging, and REM event annotations
-# —————————————————————————————————————————————————————————————————————
+# —————————————————————————————————————————————————————————————————————————————————————————————————
+# MAIN MERGE FUNCTION - combine EOG, GSSC, and REM events into a single DataFrame and save as CSV
+# —————————————————————————————————————————————————————————————————————————————————————————————————
 def merge_all(
         eog_file:    str | Path,
         gssc_file:   str | Path,
         events_file: str | Path,
+        em_file:     str | Path,
         output_file: str | Path,
         time_col:    str = "time_sec",
         loc_col:     str = "LOC",
@@ -154,9 +130,9 @@ def merge_all(
         peak_col:    str = "Peak",
         ) -> pd.DataFrame:
     """
-    Merges EOG signals, GSSC sleep staging, and REM event annotations into a single unified pandas DataFrame and saves it as a CSV file.
-
-    The GSSC staging is upsampled to math the EOG sample timeline. REM events are joined by interval lookup, preserving all original event columns (Start, End, Peak, etc.) alongside per-sample boolean flags.
+    Merges EOG signals, GSSC sleep staging, REM event annotations, and 
+    eye movement classifications (SEM/REM, Phasic/Tonic) into a single 
+    unified per-sample DataFrame and saves it as CSV.
 
     Parameters
     ----------
@@ -166,6 +142,8 @@ def merge_all(
         Path to GSSC CSV file with columns ['epoch_start', 'stage', 'prob_*'].
     events_file : str | Path
         Path to REM events CSV file with at minimum Start and End columns.
+    em_file : str | Path
+        Path to CSV file containing detected eye movement events with their classifications (SEM/REM, Phasic/Tonic).
     output_file : str | Path
         Path where the merged CSV will be saved.
     time_col : str
@@ -184,21 +162,57 @@ def merge_all(
     Returns
     -------
     pd.DataFrame
-        Merged pandas DataFrame with one row per EOG sample containing EOG signals, GSSC staging/probabilities, and REM event annotations.
+        Merged DataFrame with one row per EOG sample containing:
+
+        From EOG: \\
+            `time_sec`, `LOC`, `ROC`
+ 
+        From GSSC: \\
+            `stage`, `prob_w`, `prob_n1`, `prob_n2`, `prob_n3`, `prob_rem`
+ 
+        From REM events (extract_rems_from_edf): \\
+            `is_rem_event`        — bool, sample is inside a REM event \\
+            `event_event_id`      — which REM event \\
+            `event_is_peak`       — bool, sample is the REM event peak \\
+            `event_{col}`         — all other columns from events_file
+ 
+        From EM classifications (em_to_csv): \\
+            `is_em_event`         — bool, sample is inside a detected EM \\
+            `em_event_id`         — which EM event \\
+            `em_is_peak`          — bool, sample is the EM peak \\
+            `EM_Type`             — 'SEM' or 'REM' (top-level shortcut) \\
+            `EpochType`           — 'Phasic', 'Tonic', or 'Non-REM' (top-level shortcut) \\
+            `em_{col}`            — all other columns from em_file
     """
+    # --- Validate input files ---
+    for file in [eog_file, gssc_file, events_file]:
+        if not Path(file).is_file():
+            raise FileNotFoundError(f"File not found: {file}")
+    for col in [time_col, loc_col, roc_col, start_col, end_col, peak_col]:
+        if col in [time_col, loc_col, roc_col] and col not in pd.read_csv(eog_file).columns:
+            raise ValueError(f"EOG CSV must contain '{col}' column.")
+        if col in [start_col, end_col, peak_col] and col not in pd.read_csv(events_file).columns:
+            raise ValueError(f"Events CSV must contain '{col}' column.")
 
     # --- 1) Load EOG ---
-    print("Loading EOG file: ", {eog_file.parent.name})
+    print("=" * 60)
+    print(f"Loading EOG file: {eog_file.name} ...")
     eog_df = pd.read_csv(eog_file)
     for col in [time_col, loc_col, roc_col]:
         if col not in eog_df.columns:
-            raise ValueError(f"EOG CSV must contain `{col}` column.")
+            raise ValueError(
+                f"EOG CSV must contain `{col}` column."
+                f"Found columns: {list(eog_df.columns)}"
+            )
+    print(f"    {len(eog_df):,} samples  |  columns: {list(eog_df.columns)}")
 
     # --- 2) Upsample GSSC to EOG timeline ---
-    print("\nUpsample GSSC file to the EOG timeline")
+    print("\nUpsample GSSC file to the EOG timeline...")
     gssc_up = upsample_gssc_to_eog(eog_file, gssc_file)
+    print(f"    {len(gssc_up):,} rows after upsample")
 
     # --- 3) Merge EOG and GSSC ---
+    print("\nMerging EOG + GSSC...")
     merged_df = pd.concat(
         [
             eog_df.reset_index(drop=True),
@@ -206,13 +220,59 @@ def merge_all(
         ],
         axis=1
     )
+    print(f"    Merged shape: {merged_df.shape}")
 
-    # --- 4) Load REM events ---
+    # --- 4) Load and merge REM events ---
+    print("Merging REM events...")
     events_df = pd.read_csv(events_file)
     for col in [start_col, end_col]:
         if col not in events_df.columns:
-            raise ValueError(f"Events CSV must contain `{col}` column.")
-    
+            raise ValueError(
+                f"Events CSV must contain `{col}` column."
+                f"Found columns: {list(events_df.columns)}"
+            )
+    print(f"    {len(events_df):,} REM events found")
+
+    merged_df = _merge_events_fast(
+        merged_df  = merged_df,
+        events_df  = events_df,
+        time_col   = time_col,
+        start_col  = start_col,
+        end_col    = end_col,
+        peak_col   = peak_col,
+        prefix     = "event_",
+        flag_col   = "is_rem_event",
+    )
+    print(f"    {merged_df['is_rem_event'].sum():,} samples inside REM events")
+
+    # --- 5) Merge EM classifications ---
+    print("\nMerging EM classifications...")
+    em_df = pd.read_csv(em_file)
+    for col in [start_col, end_col, "EM_Type"]:
+        if col not in em_df.columns:
+            raise ValueError(f"EM CSV must contain '{col}'. Found: {list(em_df.columns)}")
+    print(f"  {len(em_df)} eye movements | "
+          f"SEM: {(em_df['EM_Type'] == 'SEM').sum()} | "
+          f"REM: {(em_df['EM_Type'] == 'REM').sum()}")
+ 
+    merged_df = _merge_events_fast(
+        merged_df  = merged_df,
+        events_df  = em_df,
+        time_col   = time_col,
+        start_col  = start_col,
+        end_col    = end_col,
+        peak_col   = peak_col,
+        prefix     = "em_",
+        flag_col   = "is_em_event",
+    )
+ 
+    # Pull EM_Type and EpochType to top level for easy access in plot
+    merged_df["EM_Type"]   = merged_df["em_EM_Type"]
+    merged_df["EpochType"] = merged_df["em_EpochType"] if "em_EpochType" in merged_df.columns else pd.NA
+ 
+    print(f"    SEM samples:    {(merged_df['EM_Type'] == 'SEM').sum():,}")
+    print(f"    REM EM samples: {(merged_df['EM_Type'] == 'REM').sum():,}")
+ 
 
     # --- 5) Add per-sample REM annotation columns ---
     merged_df["is_rem_event"] = False
@@ -224,26 +284,15 @@ def merge_all(
     for col in event_extra_cols:
         merged_df[f"event_{col}"] = pd.NA
 
-    # --- 6) Assign event metadata to each sample within an event window ---
-    for i, row in events_df.iterrows():
-        mask = (merged_df[time_col] >= row[start_col]) & (merged_df[time_col] <= row[end_col])
-        merged_df.loc[mask, "is_rem_event"] = True
-        merged_df.loc[mask, "event_id"] = 1
-        for col in event_extra_cols:
-            merged_df.loc[mask, f"event_{col}"] = row[col]
-
-    # --- 7) Mark peak sample ---
-    merged_df["is_rem_peak"] = False
-    if peak_col in events_df.columns:
-        for _, row in events_df.iterrows():
-            if pd.notna(row[peak_col]):
-                peak_idx = (merged_df[time_col]-row[peak_col]).abs().idxmin()
-                merged_df.loc[peak_idx, "is_rem_peak"] = True
-
-    # --- 8) Save to CSV ---
+    # --- 6) Save ---
     output_file = Path(output_file)
     output_file.parent.mkdir(parents=True, exist_ok=True)
     merged_df.to_csv(output_file, index=False)
-    print(f"Merged file saved to: {output_file.name}")
+
+    print("\n" + "=" * 60)
+    print(f"Saved: {output_file.name}")
+    print(f"Shape: {merged_df.shape}")
+    print(f"Columns: {list(merged_df.columns)}")
+    print("=" * 60)
 
     return merged_df

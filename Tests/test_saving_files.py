@@ -10,6 +10,7 @@ from pathlib import Path
 from preprocessing.extract_rems_n import extract_rems_from_edf
 from preprocessing.edf_to_csv import edf_to_csv
 from preprocessing.GSSC_to_csv import GSSC_to_csv
+from preprocessing.em_to_csv import em_to_csv
 from art import * 
 # =====================================================================
 # Paths
@@ -46,5 +47,19 @@ try:
     print("extract_rems_from_edf SUCCEEDED")
 except Exception as e:
     print("extract_rems_from_edf FAILED:", e)
+
+print("\n####################################")
+print("######## Testing em_to_csv #########")
+print("####################################")
+try:
+    em_to_csv(
+        edf_path=edf_path,
+        gssc_df=gssc_df,
+        hypno_int=gssc_df["stage_int"].values,
+        lights_path=lightstxt_path
+    )
+    print("em_to_csv SUCCEEDED")
+except Exception as e:
+    print("em_to_csv FAILED:", e)
 
 tprint("Done") 

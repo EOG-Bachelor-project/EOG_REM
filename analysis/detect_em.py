@@ -8,6 +8,7 @@
 import numpy as np
 import pandas as pd 
 from extract_rems import detect_rem_jaec
+from pathlib import Path
 
 
 # =====================================================================
@@ -160,9 +161,11 @@ def classify_rem_epochs(df:         pd.DataFrame,
         DataFrame containing detected eye movement events with their characteristics and classifications.
     hypno_int : np.ndarray
         Hypnogram as an array of integers representing sleep stages (0: W, 1: N1, 2: N2, 3: N3, 4: REM).
+    epoch_len : int, optional
+        Length of each epoch in seconds, by default 30 seconds.
     min_rapid : int, optional
         Minimum number of REMs required in an epoch to classify it as Phasic REM, by default 1.
-    
+
     Returns
     -------
     pd.DataFrame
@@ -226,5 +229,4 @@ def classify_rem_epochs(df:         pd.DataFrame,
     print(f"Epoch classification summary:\n{counts.to_string()}")
 
     df = df.reset_index(drop=True)
-
     return df
