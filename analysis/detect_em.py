@@ -94,24 +94,18 @@ def detect_em(
     print("Running REM detection algorithm...")
     result = detect_rem_jaec(loc, roc, hypno_up, method='ssc_threshold')
     df = result.summary()
-
-    # ---- 2) Recover cleaned signals from REMResults ----
-    loc_clean = result.data_filt[0]
-    roc_clean = result.data_filt[1]
-    print(f"Original LOC signal shape: {loc.shape}   |   Original ROC signal shape: {roc.shape}")
-    print(f"Cleaned LOC signal shape: {loc_clean.shape}   |   Cleaned ROC signal shape: {roc_clean.shape}")
     print(f"Detected {len(df)} eye movement events.")
 
-    # 3) Define Mean absolute peak amplitude from both channels
+    # 2) Define Mean absolute peak amplitude from both channels
     df['MeanAbsValPeak'] = (df['LOCAbsValPeak'] + df['ROCAbsValPeak']) / 2
 
-    # ---- 4) Define thresholds for SEM ----
+    # ---- 3) Define thresholds for SEM ----
     Dur_Thresh_SEM = Dur_Thresh_SEM  # [seconds] - change if needed 
     Amp_Thresh_SEM = Amp_Thresh_SEM  # [microvolts] - change if needed 
     print(f"Using duration threshold for SEM classification: {Dur_Thresh_SEM} [s]")
     print(f"Using amplitude threshold for SEM classification: {Amp_Thresh_SEM} [μV]")
 
-    # ---- 5) Classify Slow eye movement ----
+    # ---- 4) Classify Slow eye movement ----
     is_slow_em = (df['Duration'] > Dur_Thresh_SEM) | (df['MeanAbsValPeak'] < Amp_Thresh_SEM) 
     df['EM_Type'] = np.where(is_slow_em, 'SEM', 'REM')
     # NOTE: 
@@ -122,7 +116,7 @@ def detect_em(
     n_rem = (~is_slow_em).sum()
     print(f"Classified: {n_rem} REM events | {n_sem} SEM events")
 
-    # ---- 6) Remapping of stage integers ----
+    # ---- 5) Remapping of stage integers ----
     stage_map = {0: 'W', 1: 'N1', 2: 'N2', 3: 'N3', 4: 'REM'} 
     df['Stage'] = df['Stage'].map(stage_map) 
 

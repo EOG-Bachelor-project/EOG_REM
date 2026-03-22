@@ -32,8 +32,12 @@ except Exception as e:
 print("\n#####################################")
 print("######## Testing GSSC_to_csv ########")
 print("#####################################")
+gssc_df = None
+hypno_int = None
 try:
     gssc_df = GSSC_to_csv(edf_path, lights_path=lightstxt_path)
+    stage_map = {"W":0, "N1":1, "N2":2, "N3":3, "REM":4}
+    hypno_int = gssc_df["stage"].map(stage_map).fillna(0).astype(int).values
     print("GSSC_to_csv SUCCEEDED")
 except Exception as e:
     print("GSSC_to_csv FAILED:", e)
@@ -52,10 +56,12 @@ print("\n####################################")
 print("######## Testing em_to_csv #########")
 print("####################################")
 try:
+    if gssc_df is None or hypno_int is None:
+        raise RuntimeError("gssc_df or hypno_int is None")
     em_to_csv(
         edf_path=edf_path,
         gssc_df=gssc_df,
-        hypno_int=gssc_df["stage_int"].values,
+        hypno_int=hypno_int,
         lights_path=lightstxt_path
     )
     print("em_to_csv SUCCEEDED")

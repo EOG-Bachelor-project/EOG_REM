@@ -697,8 +697,8 @@ plot_eog_epochs(
     file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv",
     stage="REM",
     window_sec=30.0,
-    max_epochs=1,
-    out_dir=None,
+    max_epochs=10,
+    out_dir=None, #Path("C:/Users/AKLO0022/EOG_REM/plot")
 )
 
 
