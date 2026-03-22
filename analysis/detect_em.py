@@ -67,9 +67,15 @@ def detect_em(
     """
     # --- Validate inputs ---
     if loc.shape != roc.shape:
-        raise ValueError(f"LOC and ROC signals must have the same shape. Got LOC shape: {loc.shape}, ROC shape: {roc.shape}")
+        raise ValueError(
+            f"LOC and ROC signals must have the same shape." 
+            f"Got LOC shape: {loc.shape}, ROC shape: {roc.shape}"
+            )
     if loc.shape[0] != hypno_up.shape[0]:
-        raise ValueError(f"LOC/ROC signals and hypnogram must have the same length. Got LOC/ROC length: {loc.shape[0]}, hypnogram length: {hypno_up.shape[0]}")
+        raise ValueError(
+            f"LOC/ROC signals and hypnogram must have the same length." 
+            f"Got LOC/ROC length: {loc.shape[0]}, hypnogram length: {hypno_up.shape[0]}"
+            )
     if Dur_Thresh_SEM <= 0:
         raise ValueError(f"Duration threshold for SEM must be positive. Got: {Dur_Thresh_SEM}")
     if Amp_Thresh_SEM <= 0:
@@ -93,6 +99,7 @@ def detect_em(
     roc_clean = result.data_filt[1]
     print(f"Original LOC signal shape: {loc.shape}   |   Original ROC signal shape: {roc.shape}")
     print(f"Cleaned LOC signal shape: {loc_clean.shape}   |   Cleaned ROC signal shape: {roc_clean.shape}")
+    print(f"Detected {len(df)} eye movement events.")
 
     # 3) Define Mean absolute peak amplitude from both channels
     df['MeanAbsValPeak'] = (df['LOCAbsValPeak'] + df['ROCAbsValPeak']) / 2
@@ -100,8 +107,8 @@ def detect_em(
     # ---- 4) Define thresholds for SEM ----
     Dur_Thresh_SEM = Dur_Thresh_SEM  # [seconds] - change if needed 
     Amp_Thresh_SEM = Amp_Thresh_SEM  # [microvolts] - change if needed 
-    print(f"Using duration threshold for SEM classification: {Dur_Thresh_SEM} s")
-    print(f"Using amplitude threshold for SEM classification: {Amp_Thresh_SEM} μV")
+    print(f"Using duration threshold for SEM classification: {Dur_Thresh_SEM} [s]")
+    print(f"Using amplitude threshold for SEM classification: {Amp_Thresh_SEM} [μV]")
 
     # ---- 5) Classify Slow eye movement ----
     is_slow_em = (df['Duration'] > Dur_Thresh_SEM) | (df['MeanAbsValPeak'] < Amp_Thresh_SEM) 
@@ -110,6 +117,9 @@ def detect_em(
     #   `is_slow_em`    - Slow EM if duration is greater than threshold or amplitude is less than threshold.
     #   `df['EM_Type']` - If the EM meets the criteria for being a SEM, it is classified as 'SEM', otherwise it is classified as 'REM'. 
     #                     np.where returns 'SEM' for rows where `is_slow_em` is True and 'REM' for rows where `is_slow_em` is False.
+    n_sem = is_slow_em.sum() 
+    n_rem = (~is_slow_em).sum()
+    print(f"Classified: {n_rem} REM events | {n_sem} SEM events")
 
     # ---- 6) Remapping of stage integers ----
     stage_map = {0: 'W', 1: 'N1', 2: 'N2', 3: 'N3', 4: 'REM'} 
@@ -125,6 +135,10 @@ def detect_em(
     
     df = df.reset_index(drop=True) # Reset index to ensure it starts from 0 and is sequential after filtering and processing.
     return df
+
+# ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+# ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+# ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 # pass the dataframe from detect_em as input to this function
 def classify_rem_epochs(df:         pd.DataFrame, 
@@ -156,37 +170,35 @@ def classify_rem_epochs(df:         pd.DataFrame,
     """
 
     # --- Validate inputs ---
-    # DataFrame must contain 'EM_Type' column with classifications of eye movements
     if 'EM_Type' not in df.columns:
-        raise ValueError("Input DataFrame must contain 'EM_Type' column with classifications of eye movements.")
-    # Hypnogram must be a 1D array of integers representing sleep stages
+        raise ValueError("Input DataFrame must contain 'EM_Type' column. Run `detect_em` function first to get the required DataFrame format.")
     if not isinstance(hypno_int, np.ndarray):
-        raise ValueError(f"Hypnogram must be a numpy array, but got type: {type(hypno_int)}")
-    # Ensure that epoch_len and min_rapid are integers
+        hypno_int = np.array(hypno_int)
+        print(f"Converted hypnogram to numpy array with shape: {hypno_int.shape}")
     for i in [min_rapid, epoch_len]:
         if not isinstance(i, int):
             raise ValueError(f"{i} must be an integer, but got type: {type(i)}")
-    # Hypnogram values must be positive integers
     if epoch_len <= 0:
         raise ValueError(f"epoch_len must be a positive integer, but got: {epoch_len}")
-    # Minimum number of rapid eye movements must be a non-negative integer
     if min_rapid < 0:
         raise ValueError(f"min_rapid must be a non-negative integer, but got: {min_rapid}")
     
-    print(f"Classifying REM epochs with epoch length: {epoch_len} [s] and minimum REM count for Phasic classification: {min_rapid}")
-    
-    df = df.copy()                                          # Ensure that the input DataFrame is a copy to avoid modifying the original DataFrame outside of this function
-    df['EpochIdx'] = (df['Peak'] // epoch_len).astype(int)  # Calculate the epoch index for each eye movement event based on its peak time and the specified epoch length. 
+    print(f"Classifying REM epochs | epoch_len={epoch_len}[s] | min_rapid={min_rapid}")
+
+    df = df.copy()      
+
+    # --- 1) Assign each event to an epoch index ---
+    df['EpochIdx'] = (df['Peak'] // epoch_len).astype(int)  
     # NOTE:
     #   The floor division operator (//) is used to determine which epoch each event belongs to, 
     #   and the result is converted to an integer type for indexing purposes.
 
-    # ---- 1) Count number of REMs in each REM epoch ----
-    # Get indices of epochs that are classified as REM in the hypnogram
+    # --- 2) Get REM epoch indices as a SET for fast lookup ---
     rem_epoch_indices = np.where(hypno_int == 4)[0]
-    print(f"Total number of 4-second epochs in hypnogram: {len(hypno_int)}")
+    print(f"Total epochs in hypnogram: {len(hypno_int)}")
+    print(f"REM epochs: {len(rem_epoch_indices)}")
     
-    # For each epoch index count the number of REM's
+    # --- 3) Count REM events per epoch ---
     rem_counts = (
         df[df['EM_Type'] == 'REM'] # Filter the DataFrame to include only rows where 'EM_Type' is 'REM'
         .groupby('EpochIdx')       # Group the filtered DataFrame by the 'EpochIdx' column, which contains the index of the epoch to which each eye movement event belongs.
@@ -194,7 +206,7 @@ def classify_rem_epochs(df:         pd.DataFrame,
         .to_dict()                 # Convert the resulting Series to a dictionary where the keys are epoch indices and the values are the counts of REM events in those epochs.
     )
 
-    # ---- 2) Helper Function to Classify each 4-second epoch as Phasic or Tonic REM ----
+    # --- 4) Classify each event's epoch ---
     def epoch_type(row):
         """
         Classifies each epoch as 'Phasic', 'Tonic', or 'Non-REM' 
@@ -207,11 +219,12 @@ def classify_rem_epochs(df:         pd.DataFrame,
         n_rapid = rem_counts.get(epoch_idx, 0)
         return 'Phasic' if n_rapid >= min_rapid else 'Tonic'
     
-    # Apply `epoch_type` function to each row of the DataFrame to classify each epoch as 'Phasic', 'Tonic', or 'Non-REM'.
     df['EpochType'] = df.apply(epoch_type, axis=1)
-    print(f"Classification of REM epochs completed. Sample of classified epochs:\n{df[['EpochIdx', 'EpochType']].drop_duplicates().head()}")
 
-    # Reset index to ensure it starts from 0 and is sequential after adding new columns and classifications.
+    # --- 5) Summary ---
+    counts = df.drop_duplicates('EpochIdx')['EpochType'].value_counts()
+    print(f"Epoch classification summary:\n{counts.to_string()}")
+
     df = df.reset_index(drop=True)
 
     return df
