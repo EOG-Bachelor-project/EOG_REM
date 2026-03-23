@@ -224,3 +224,154 @@ def classify_rem_epochs(df:         pd.DataFrame,
 
     df = df.reset_index(drop=True)
     return df
+
+
+def classify_rem_epochs_Umaer(df: pd.DataFrame,
+                              loc: np.ndarray,
+                              roc: np.ndarray,
+                              hypno_int: np.ndarray,
+                              sf: float,
+                              epoch_len: int = 30, 
+                              sub_epoch_len: float = 4.0,
+                              window_len: float = 2.0,
+                              min_separation: float = 8.0,
+                              amp_thresh_rem : float = 150.0,
+                              dur_thresh_rem : float = 0.5,
+                              amp_thresh_tonic: float = 25.0,
+                              ) -> pd.DataFrame: 
+    """
+    Classifies 4-second subepochs within REM epochs as Phasic or TOnic based on eye movement activity.
+
+    Phasic sub-epoch are defined as those containing at least one qualifying EM in each of the two adjecent 2 second windows. 
+    Tonic  sub-epoch are defined as those containing no EMs at all and a mean absolute below `amp_thresh_tonic` in both 2 second windows.
+    To avoid contamination between the two stages segments are only selected if they are at least `min_separation` seconds apart.
+    Since this is based on a paper it is not recommended to change parameters without a good reason and understanding of the underlying method. 
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Output of detect_em() — must contain 'Start', 'Peak', 'End', 'Duration', 'MeanAbsValPeak', 'EM_Type' columns.
+    loc : np.ndarray
+        Raw LOC signal (same length as used in detect_em).
+    roc : np.ndarray
+        Raw ROC signal (same length as used in detect_em).
+    hypno_int : np.ndarray
+        Hypnogram as an array of integers representing sleep stages (0: W, 1: N1, 2: N2, 3: N3, 4: REM).
+    sf : float
+        Sampling frequency in Hz.
+    epoch_len : int, optional
+        Length of a scored epoch in seconds, by default 30 seconds.
+    sub_epoch_len : float, optional
+        Length of sub-epochs to classify in seconds, by default 4.0 seconds.
+    window_len : float, optional
+        Length of each adjacent window used for Phasic/Tonic detection in seconds, by default 2.0 seconds.
+    min_separation : float, optional
+        Minimum gap in seconds between a Phasic and a Tonic segment, by default 8.0 seconds.
+    amp_thresh_rem : float, optional
+        Minimum mean peak amplitude (µV) for an EM to count toward Phasic detection, by default 150.0 microvolts.
+    dur_thresh_rem : float, optional
+        Maximum duration (s) for an EM to count toward Phasic detection, by default 0.5 seconds.
+    amp_thresh_tonic : float, optional
+        Maximum mean absolute amplitude (µV) in both 2-second windows for Tonic classification, by default 25.0 microvolts.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with one row per 4-second sub-epoch inside a REM scored epoch, with the following columns:
+        - 'SubEpochStart': Start time of the sub-epoch (in seconds).
+        - 'SubEpochEnd'  : End time of the sub-epoch (in seconds).
+        - 'EpochIdx'     : Parent 30-second epoch index.
+        - 'EpochType'    : Classification of the sub-epoch as 'Phasic', 'Tonic', or 'Unclassified'.
+    """
+    # --- Validate inputs ---
+    required_cols = {"Start", "Peak", "End", "Duration", "MeanAbsValPeak", "EM_Type"}
+    missing = required_cols - set(df.columns)
+    if missing: 
+        raise ValueError(f"Input DataFrame is missing columns: {missing}")
+    if loc.shape != roc.shape:
+        raise ValueError (f"LOC and ROC must have the same shape. Got LOC: {loc.shape}, ROC: {roc.shape}")
+    if sub_epoch_len != 2 * window_len:
+        raise ValueError (f"sub_epoch_len({sub_epoch_len}s) must be exactly 2 x window_len ({window_len}s)")
+    
+    df = df.copy()
+    total_samples = len(loc)
+    total_duration = total_samples/sf 
+
+     # --- 1) Filter EMs that qualify as rapid for Phasic detection ---
+    rapid_mask = (
+    (df["MeanAbsValPeak"]>= amp_thresh_rem) &
+    (df["Duration"]< dur_thresh_rem)    
+    )
+
+    rapid_df = df[rapid_mask].reset_index(drop=True) # Store the rows that meet the criteria for later use
+    print(f"EMs qualifying for Phasic detection (amp≥{amp_thresh_rem}µV, dur<{dur_thresh_rem}s): {len(rapid_df)}")
+
+    # --- 2) Build list of all 4 seconds sub-epochs inside REM epochs --- 
+    rem_epoch_indices = set(np.where(hypno_int == 4)[0])
+
+    sub_epochs = []
+    t=0.0
+    while t + sub_epoch_len <= total_duration: # Stops when the last sub-epoch would exceed signal duration
+        parent_epoch = int(t // epoch_len) # Determine which 30 second epoch this sub epoch belongs to
+        if parent_epoch in rem_epoch_indices: # Only keep sub epochs if they are in REM 
+            sub_epochs.append({
+                'SubEpochStart': t,
+                'SubEpochEnd':   t + sub_epoch_len,
+                'EpochIdx':      parent_epoch,
+                'EpochType':     'Unclassified', # Will be filled in later based on EM activaity #### min seperation might cause problems here
+            })
+        t = round(t + sub_epoch_len, 6)
+
+    result_df = pd.DataFrame(sub_epochs)
+    if result_df.empty:
+        print("No REM sub-epochs found.")
+        return result_df
+    print(f"Total 4 second sub-epochs inside REM:{len(result_df)}")
+
+    # --- 3) classify each sub-epoch ---
+    def classify_sub_epoch(row):
+        t0, t1 = row["SubEpochStart"], row["SubEpochEnd"]
+        w_mid = t0 + window_len # Splits the window in 2 for the phasic detection rule
+
+        # Phasic: at least 1 qualifying epoch in each adjecent 2 second window
+        in_w1 = rapid_df[(rapid_df['Peak'] >= t0)    & (rapid_df['Peak'] < w_mid)] # Check for qualifying EM's in fist 2 second window
+        in_w2 = rapid_df[(rapid_df['Peak'] >= w_mid) & (rapid_df['Peak'] < t1)] # Check for qualifting EM's in second 2 second window
+        if len(in_w1) >= 1 and len(in_w2) >= 1: # Atleast 1 qualifying EM in each window
+            return 'Phasic'
+        
+        # Tonic: 
+        # If there are EMs but they do not meet the criteria for being Phasic We classify as unclassified. If no EMs are dtected code moves to next step.
+        any_em_in_epoch = df[(df['Peak'] >= t0) & (df['Peak'] < t1)]
+        if len(any_em_in_epoch) > 0:
+            return 'Unclassified'
+        
+        def mean_abs_amp(start_s , end_s):
+            s0, s1 = int(start_s * sf), int(end_s * sf)
+            s0, s1 = max(0, s0), min(total_samples, s1)
+            return (np.mean(np.abs(loc[s0:s1])) + np.mean(np.abs(roc[s0:s1]))) / 2
+        
+        # if zero EMs are detected and the mean absolute amplitude in both windows is below the threshold, classify as Tonic
+        if mean_abs_amp(t0, w_mid) < amp_thresh_tonic and mean_abs_amp(w_mid, t1) < amp_thresh_tonic:
+            return 'Tonic'
+
+        return 'Unclassified'
+
+    result_df['EpochType'] = result_df.apply(classify_sub_epoch, axis=1)
+
+    # ---- 4) Separation rule: discard segments within 8s of each other ----
+    classified = result_df[result_df['EpochType'].isin(['Phasic', 'Tonic'])].copy()
+    classified = classified.sort_values('SubEpochStart').reset_index()
+
+    last_kept_end = -np.inf # start at negative infinity to ensure first segment is kept
+    for _, row in classified.iterrows():
+        if row['SubEpochStart'] >= last_kept_end + min_separation:
+            last_kept_end = row['SubEpochEnd']
+        else:
+            result_df.loc[row['index'], 'EpochType'] = 'Unclassified' # Mark as unclassified if it is too close to the previous one
+
+    # ---- 5) Summary ----
+    counts = result_df['EpochType'].value_counts()
+    print(f"Sub-epoch classification summary:\n{counts.to_string()}")
+
+    result_df = result_df.reset_index(drop=True)
+    return result_df
