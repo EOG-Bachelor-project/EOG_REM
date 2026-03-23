@@ -88,6 +88,19 @@ def _shade_epoch_type(ax, epoch_df: pd.DataFrame):
         if color:
             ax.axvspan(sp["t_start"], sp["t_end"], color=color, alpha=0.25, linewidth=0)
 
+def _draw_epoch_boundaries(ax, window_sec: float, epoch_sec: float):
+    """
+    Draw vertical dashed lines at every epoch_sec boundary within the display window.
+ 
+    These lines mark the edges of the analysis epochs (e.g. every 4 s) so that the
+    viewer can relate signal features to the Phasic/Tonic classification granularity.
+    """
+    for xb in np.arange(epoch_sec, window_sec, epoch_sec):
+        ax.axvline(
+            xb, color="#333333", linewidth=1.2,
+            linestyle="--", alpha=0.85, zorder=1,
+        )
+
 def _plot_signal(ax, t, signal_uv, color, label=None, lw=0.8):
     """Plot a signal in µV."""
     ax.plot(t, signal_uv, color=color, linewidth=lw, label=label, zorder=2)
@@ -106,14 +119,15 @@ def _overlay_segments(ax, t, signal_uv, mask, color, label=None):
                 label=label if first else None)
         first = False
  
-def _format_signal_ax(ax, title, window_sec):
-    """Apply common formatting to a signal subplot."""
+def _format_signal_ax(ax, title, window_sec, epoch_sec: float = 4.0):
+    """Apply common formatting to a signal subplot, including epoch boundary lines."""
     ax.set_title(title, fontsize=10)
     ax.set_ylabel("Amplitude [µV]", fontsize=9)
     ax.axhline(0, color="black", alpha=0.4, linewidth=0.5)
     ax.grid(alpha=0.3, linestyle="--")
     ax.tick_params(labelsize=8)
     ax.set_xlim(0, window_sec)
+    _draw_epoch_boundaries(ax, window_sec, epoch_sec)
 
 def _epoch_type_legend_patches():
     """Return legend patches for Phasic/Tonic."""
@@ -128,9 +142,10 @@ def _epoch_type_legend_patches():
 # 1 Function to plot EOG epochs for a given sleep stage
 # 1 —————————————————————————————————————————————————————————————————————
 def plot_eog_epochs(
-        file: str | Path, 
+        file:       str | Path, 
         stage:      str = "REM",
         window_sec: float = 30,
+        epoch_sec:  float = 4.0,
         time_col:   str = "time_sec",
         loc_col:    str = "LOC",
         roc_col:    str = "ROC",
@@ -140,9 +155,9 @@ def plot_eog_epochs(
         show_em:    bool = True,
     ) -> None:
     """
-    Plot fixed-length EOG epochs for a given sleep stage as enumerated subplots.\\
+    Plot fixed-length EOG epochs for a given sleep stage as enumerated subplots.
     
-    Each epoch produces 4 subplots: \\
+    Each epoch produces 4 subplots:
     1. LOC + ROC — all EM info at once. Phasic  > Tonic > SEM > REM event.
     2. LOC + ROC — SEM and REM highlighted.
     3. LOC + ROC — Phasic and Tonic highlighted.
@@ -159,7 +174,10 @@ def plot_eog_epochs(
     stage : str
         Sleep stage to extract epochs from (e.g. 'REM', 'N2', 'W'). Default is 'REM'.
     window_sec : float
-        Length of each epoch window in seconds. Default is 30.0.
+        Length of each epoch window in seconds. Default is **30.0 s**.
+    epoch_sec : float
+        Length of each epoch in seconds. Default is **4.0 s**. \\
+        Vertical dashed lines are drawn at every ``epoch_sec`` boundary within the display window so you can relate the signal to the Phasic/Tonic classification.
     time_col : str
         Name of the time column. Default is 'time_sec'.
     loc_col : str
@@ -182,6 +200,8 @@ def plot_eog_epochs(
     
     lprint(length=100, height=1, char="%")
     print("PLOT  EOG  EPOCHS")
+    print(f"  display window : {window_sec} [s]")
+    print(f"  analysis epoch : {epoch_sec} [s]  ({window_sec/epoch_sec:.1f} epochs per window)")
     lprint(length=100, height=1, char="%")
 
     # ==== 1) Load CSV file ====
@@ -278,8 +298,7 @@ def plot_eog_epochs(
             _overlay_segments(axs[0], t, roc_uv, sem_mask, EM_TYPE_COLORS["SEM"])
             _overlay_segments(axs[0], t, loc_uv, rem_mask, EM_TYPE_COLORS["REM"], label="REM")
             _overlay_segments(axs[0], t, roc_uv, rem_mask, EM_TYPE_COLORS["REM"])
-        
-        _format_signal_ax(axs[0], "LOC + ROC  (all EM info)", window_sec) # Format the first subplot
+        _format_signal_ax(axs[0], "LOC + ROC  (all EM info)", window_sec, epoch_sec)
         top_handles, _ = axs[0].get_legend_handles_labels()
         axs[0].legend(                                                    # Add legend
             handles=top_handles + _epoch_type_legend_patches(),
@@ -296,8 +315,7 @@ def plot_eog_epochs(
             _overlay_segments(axs[1], t, roc_uv, sem_mask, EM_TYPE_COLORS["SEM"])
             _overlay_segments(axs[1], t, loc_uv, rem_mask, EM_TYPE_COLORS["REM"], label="REM")
             _overlay_segments(axs[1], t, roc_uv, rem_mask, EM_TYPE_COLORS["REM"])
- 
-        _format_signal_ax(axs[1], "LOC + ROC  (SEM / REM)", window_sec) # Format the second subplot
+        _format_signal_ax(axs[1], "LOC + ROC  (SEM / REM)", window_sec, epoch_sec)
         axs[1].legend(fontsize=8, loc="upper right", ncol=2)            # Add legend 
  
         # SUBPLOT 3: LOC + ROC with Phasic / Tonic shading
@@ -323,7 +341,7 @@ def plot_eog_epochs(
 
         _plot_signal(axs[2], t, loc_uv, SIG_COLORS["LOC"], label="LOC")        # Plot LOC signal
         _plot_signal(axs[2], t, roc_uv, SIG_COLORS["ROC"], label="ROC")        # Plot ROC signal
-        _format_signal_ax(axs[2], "LOC + ROC  (Phasic / Tonic)", window_sec)   # Format the third subplot
+        _format_signal_ax(axs[2], "LOC + ROC  (Phasic / Tonic)", window_sec, epoch_sec)
         ep_patches = [mpatches.Patch(color=c, label=s, alpha=0.5) for s, c in EPOCH_TYPE_COLORS.items()]
         loc_roc_handles, _ = axs[2].get_legend_handles_labels()
         axs[2].legend(handles=loc_roc_handles + ep_patches, fontsize=8, loc="upper right", ncol=2)
@@ -337,6 +355,7 @@ def plot_eog_epochs(
                 color = STAGE_COLORS.get(sp["stage"], "#cccccc"),
                 height=0.8, align="center",
             )
+        _draw_epoch_boundaries(axs[3], window_sec, epoch_sec)                 # Add vertical lines for epoch boundaries
         axs[3].set_yticks(list(STAGE_ORDER.values()))                         # Set y-ticks to numeric stage order
         axs[3].set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)          # Label y-ticks with stage names
         axs[3].set_xlabel("Time within epoch [s]", fontsize=10)               # Label x-axis
@@ -538,17 +557,19 @@ def plot_fullnight_overview(
 # 3 —————————————————————————————————————————————————————————————————————
 # 3 Function to plot transition epochs
 # 3 —————————————————————————————————————————————————————————————————————
-def plot_transition_epochs(file: str | Path,
-                           from_stage: str | None = None,
-                           to_stage: str | None = None,
-                           window_sec: float = 60.0,
-                           time_col: str = "time_sec",
-                           loc_col: str = "LOC",
-                           roc_col: str = "ROC",
-                           stage_col: str = "stage",
-                           max_epochs: int | None = None,
-                           out_dir: Path | None = None,
-                           ) -> None:
+def plot_transition_epochs(
+        file:           str | Path,
+        from_stage:     str | None = None,
+        to_stage:       str | None = None,
+        window_sec:     float = 60.0,
+        epoch_sec:      float = 4.0,
+        time_col:       str = "time_sec",
+        loc_col:        str = "LOC",
+        roc_col:        str = "ROC",
+        stage_col:      str = "stage",
+        max_epochs:     int | None = None,
+        out_dir:        Path | None = None,
+        ) -> None:
     """
     Plot EOG epochs centered on stage transitions, showing the signal before
     and after the transition within a single window.
@@ -566,7 +587,9 @@ def plot_transition_epochs(file: str | Path,
     to_stage : str | None
         The stage transitioning TO (e.g. 'REM'). If None, all target stages match.
     window_sec : float
-        Total window length in seconds, centered on the transition. Default is 60.0.
+        Total window length in seconds, centered on the transition. Default is **60.0 s**.
+    epoch_sec : float
+        Length of each analysis epoch in seconds (e.g. 4 s). Vertical dashed lines are drawn at every epoch_sec boundary within the display window. Default is **4.0 s**.
     time_col : str
         Name of the time column. Default is 'time_sec'.
     loc_col : str
@@ -664,6 +687,12 @@ def plot_transition_epochs(file: str | Path,
             for _, span in span_groups.iterrows():
                 color = STAGE_COLORS.get(span["stage"], "#cccccc")
                 ax.axvspan(span["t_start"], span["t_end"], color=color, alpha=0.2, linewidth=0)
+        
+        def draw_epoch_lines(ax):
+            """Draw epoch boundaries relative to the transition point (t=0)."""
+            for xb in np.arange(epoch_sec, half_win + epoch_sec, epoch_sec):
+                ax.axvline(xb,  color="#333333", linewidth=1.2, linestyle="--", alpha=0.85, zorder=1)
+                ax.axvline(-xb, color="#333333", linewidth=1.2, linestyle="--", alpha=0.85, zorder=1)
  
         # --- 6) Build figure ---
         fig, axs = plt.subplots(
@@ -682,6 +711,7 @@ def plot_transition_epochs(file: str | Path,
         # Vertical line marking the transition point
         for ax in axs[:3]:
             ax.axvline(0, color="black", linewidth=1.0, linestyle="--", alpha=0.7, label="Transition")
+            draw_epoch_lines(ax)  # Add epoch boundary lines
  
         # Subplot 1: LOC
         axs[0].plot(t, epoch_df[loc_col].values * 1e6, color=SIG_COLORS["LOC"], linewidth=0.8)
@@ -725,6 +755,7 @@ def plot_transition_epochs(file: str | Path,
                 align="center",
             )
         axs[3].axvline(0, color="black", linewidth=1.0, linestyle="--", alpha=0.7)
+        draw_epoch_lines(axs[3])
         axs[3].set_title("Hypnogram", fontsize=10)
         axs[3].set_yticks(list(STAGE_ORDER.values()))
         axs[3].set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)
@@ -768,6 +799,7 @@ if __name__ == "__main__":
         stage      = "REM",
         stage_col  = "stage",
         window_sec = 30.0,
+        epoch_sec  = 4.0,
         max_epochs = 10,
         out_dir    = None,
     )
@@ -779,7 +811,9 @@ if __name__ == "__main__":
     )
 
     plot_transition_epochs(
-        file="C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv", 
-        from_stage="REM", 
-        to_stage="W", 
-        window_sec=60)
+        file        = "C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv", 
+        from_stage  = "REM", 
+        to_stage    = "W", 
+        window_sec  = 60,
+        epoch_sec   = 4.0,
+        )

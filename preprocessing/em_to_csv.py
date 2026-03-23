@@ -13,7 +13,7 @@ from pathlib import Path
  
 from preprocessing.channel_standardization import build_rename_map
 from preprocessing.index_file import parse_lights_txt
-from analysis.detect_em import detect_em, classify_rem_epochs
+from analysis.detect_em import detect_em, classify_rem_epochs, classify_rem_epochs_Umaer
 
 # =====================================================================
 # Constants
@@ -37,6 +37,7 @@ def em_to_csv(
         Dur_Thresh_SEM: float = 0.5,
         Amp_Thresh_SEM: float = 50.0,
         min_rapid:      int = 1,
+        epoch_sec:      float = 4.0,
         fs_target:      int = 128,
         ) -> pd.DataFrame | None:
     """
@@ -50,10 +51,10 @@ def em_to_csv(
     edf_path : Path
         Path to the EDF file.
     gssc_df : pd.DataFrame
-        Pre-computed GSSC staging dataframe (output of GSSC_to_csv).
+        Pre-computed GSSC staging dataframe (output of GSSC_to_csv).\\
         Must contain 'stage' column with string stage labels.
     hypno_int : np.ndarray
-        Integer hypnogram from GSSC staging (one value per 30s epoch).
+        Integer hypnogram from GSSC staging (one value per 30s epoch). \\
         Used by classify_rem_epochs to determine Phasic/Tonic.
     out_dir : Path
         Directory where the output CSV will be saved. Default 'detected_ems/'.
@@ -61,15 +62,18 @@ def em_to_csv(
         Optional path to lights.txt. If provided, signal is cropped to the
         sleep period before detection.
     Dur_Thresh_SEM : float
-        Duration threshold in seconds for SEM classification. Default 0.5 s.
+        Duration threshold in seconds for SEM classification. Default **0.5 s**. \\
         Eye movements longer than this are classified as SEM.
     Amp_Thresh_SEM : float
-        Amplitude threshold in µV for SEM classification. Default 50 µV.
+        Amplitude threshold in µV for SEM classification. Default **50 µV**. \\
         Eye movements below this amplitude are classified as SEM.
     min_rapid : int
         Minimum REM events per epoch to classify as Phasic. Default 1.
+    epoch_sec : float
+        Duration of each analysis epoch in seconds for Phasic/Tonic classification. Default **4.0 s**. This is independent of the 30-second.\\
+        PSG scoring epoch - see classify_rem_epochs for details.
     fs_target : int
-        Target sampling rate in Hz. Signal is resampled if needed. Default 128.
+        Target sampling rate in Hz. Signal is resampled if needed. Default **128 Hz**.
  
     Returns
     -------
@@ -83,6 +87,17 @@ def em_to_csv(
 
         Returns None if required channels are missing or signal is too short.
     """
+    # --- Validation and setup ---
+    if not isinstance(hypno_int, np.ndarray):
+        raise ValueError(f"hypno_int must be a numpy array, but got type: {type(hypno_int)}")
+    if not isinstance(min_rapid, int):
+        raise ValueError(f"min_rapid must be an integer, but got type: {type(min_rapid)}")
+    if epoch_sec <= 0:
+        raise ValueError(f"epoch_sec must be a positive number, but got: {epoch_sec}")
+    if fs_target <= 0:
+        raise ValueError(f"fs_target must be a positive integer, but got: {fs_target}")
+    if min_rapid < 0:
+        raise ValueError(f"min_rapid must be a non-negative integer, but got: {min_rapid}")
  
     print(f"\nProcessing: {edf_path}")
  
@@ -109,14 +124,14 @@ def em_to_csv(
     raw.set_channel_types({"LOC": "eog", "ROC": "eog"})
  
     # --- 4) Crop to lights window ---
-    lights_off = 0.0
-    if lights_path is not None:
-        lights_off, lights_on = parse_lights_txt(lights_path)
-        raw = raw.crop(tmin=lights_off, tmax=lights_on)
-        print(f"    Cropped to lights window: {lights_off:.1f} - {lights_on:.1f} s")
+    lights_off = 0.0                                          # Default to 0 if no lights.txt provided, so times remain absolute
+    if lights_path is not None: 
+        lights_off, lights_on = parse_lights_txt(lights_path) # Returns lights_off and lights_on in seconds
+        raw = raw.crop(tmin=lights_off, tmax=lights_on)       # Crop raw signal to the lights off/on times to focus on the sleep period
+        print(f"    Cropped to lights window: {lights_off:.1f} - {lights_on:.1f} [s]")
  
     # --- 5) Resample if needed ---
-    sf = raw.info["sfreq"]
+    sf = raw.info["sfreq"]  
     if sf != fs_target:
         print(f"    Resampling {sf} Hz → {fs_target} Hz")
         raw = raw.copy().resample(fs_target)
@@ -135,6 +150,7 @@ def em_to_csv(
     # --- 8) Build upsampled hypnogram ---
     samples_per_epoch = int(sf * 30)
     hypno_up          = np.repeat(hypno_int, samples_per_epoch)
+    print(f"Upsampled hypnogram to match signal length: {len(hypno_up)} samples")
  
     # --- 9) Trim to match lengths and multiple of 2^14 (required by dtcwt) ---
     factor = 2 ** 14
@@ -146,7 +162,7 @@ def em_to_csv(
     loc_uv   = loc_uv[:trim]
     roc_uv   = roc_uv[:trim]
     hypno_up = hypno_up[:trim]
-    print(f"Signal length after trim: {trim} samples = {trim/sf:.1f} s")
+    print(f"Signal length after trim: {trim} samples = {trim/sf:.1f} [s]")
  
     # --- 10) Detect eye movements ---
     em_df = detect_em(
@@ -161,7 +177,7 @@ def em_to_csv(
     em_df = classify_rem_epochs(
         df        = em_df,
         hypno_int = hypno_int,
-        epoch_len = 30,
+        epoch_sec = epoch_sec,
         min_rapid = min_rapid,
     )
  
@@ -169,7 +185,7 @@ def em_to_csv(
     # detect_rem_jaec operates on a signal starting at 0
     # so we add lights_off to align Start/Peak/End with time_sec in the EOG CSV
     if lights_path is not None:
-        print(f" Offsetting EM times by lights_off = {lights_off:.1f} s")
+        print(f" Offsetting EM times by lights_off = {lights_off:.1f} [s]")
         for col in ["Start", "Peak", "End"]:
             if col in em_df.columns:
                 em_df[col] = em_df[col] + lights_off
