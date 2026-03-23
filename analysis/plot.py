@@ -46,20 +46,13 @@ EPOCH_TYPE_COLORS = {
     "Tonic":   "#CCDDAA", 
 }
  
-# Priority order for top plot (index 0 = highest priority)
-# When multiple labels apply to the same sample, highest priority wins
-EM_PRIORITY = ["Phasic", "Tonic", "SEM", "REM"]
- 
 # Numeric mapping for hypnogram y-axis
 STAGE_ORDER = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
 
 # =====================================================================
 # Helper functions
 # =====================================================================
-def _get_span_groups(
-        epoch_df: pd.DataFrame, 
-        stage_col: str
-        ) -> pd.DataFrame:
+def _get_span_groups(epoch_df: pd.DataFrame, stage_col: str) -> pd.DataFrame:
     """Returns a DataFrame of consecutive stage runs with t_start, t_end, stage."""
     epoch_df = epoch_df.copy()
     epoch_df["_span"] = (epoch_df[stage_col] != epoch_df[stage_col].shift()).cumsum()
@@ -77,6 +70,23 @@ def _shade_stages(ax, span_groups: pd.DataFrame):
             color=STAGE_COLORS.get(sp["stage"], "#cccccc"),
             alpha=0.2, linewidth=0
         )
+
+def _shade_epoch_type(ax, epoch_df: pd.DataFrame):
+    """Shade background by EpochType (Phasic/Tonic)."""
+    epoch_df = epoch_df.copy()
+    epoch_df["_epoch_span"] = (
+        epoch_df["EpochType"].fillna("None") !=
+        epoch_df["EpochType"].fillna("None").shift()
+    ).cumsum()
+    epoch_spans = (
+        epoch_df.groupby("_epoch_span")
+        .agg(t_start=("_t", "first"), t_end=("_t", "last"), etype=("EpochType", "first"))
+        .reset_index(drop=True)
+    )
+    for _, sp in epoch_spans.iterrows():
+        color = EPOCH_TYPE_COLORS.get(sp["etype"], None)
+        if color:
+            ax.axvspan(sp["t_start"], sp["t_end"], color=color, alpha=0.25, linewidth=0)
 
 def _plot_signal(ax, t, signal_uv, color, label=None, lw=0.8):
     """Plot a signal in µV."""
@@ -96,35 +106,6 @@ def _overlay_segments(ax, t, signal_uv, mask, color, label=None):
                 label=label if first else None)
         first = False
  
- 
-def _build_priority_mask(epoch_df: pd.DataFrame) -> np.ndarray:
-    """
-    Build a per-sample label array using the priority order:
-    Phasic > Tonic > SEM > REM event > None
- 
-    Returns an object array with one string label per sample (or None).
-    """
-    n = len(epoch_df)
-    labels = np.full(n, None, dtype=object)
- 
-    # Apply in reverse priority order so highest priority overwrites last
-    for label in reversed(EM_PRIORITY):
-        if label == "Phasic":
-            mask = epoch_df["EpochType"].fillna("") == "Phasic"
-        elif label == "Tonic":
-            mask = epoch_df["EpochType"].fillna("") == "Tonic"
-        elif label == "SEM":
-            mask = epoch_df["EM_Type"].fillna("") == "SEM"
-        elif label == "REM":
-            mask = epoch_df["is_em_event"].fillna(False).astype(bool) & \
-                   (epoch_df["EM_Type"].fillna("") == "REM")
-        else:
-            continue
-        labels[mask.values] = label
- 
-    return labels
- 
- 
 def _format_signal_ax(ax, title, window_sec):
     """Apply common formatting to a signal subplot."""
     ax.set_title(title, fontsize=10)
@@ -133,6 +114,12 @@ def _format_signal_ax(ax, title, window_sec):
     ax.grid(alpha=0.3, linestyle="--")
     ax.tick_params(labelsize=8)
     ax.set_xlim(0, window_sec)
+
+def _epoch_type_legend_patches():
+    """Return legend patches for Phasic/Tonic."""
+    return [mpatches.Patch(color=c, label=s, alpha=0.5)
+            for s, c in EPOCH_TYPE_COLORS.items()]
+
 # =====================================================================
 # Functions
 # =====================================================================
@@ -211,7 +198,6 @@ def plot_eog_epochs(
     # Check which EM columns are available
     has_em_type    = show_em and "EM_Type"     in df.columns
     has_epoch_type = show_em and "EpochType"   in df.columns
-    has_is_em      = show_em and "is_em_event" in df.columns
     
     # ==== 2) Find epoch start times from consecutive stage runs ====
     # Identify where stage transitions occur and label each run
@@ -266,15 +252,6 @@ def plot_eog_epochs(
                        epoch_df["is_em_event"].fillna(False).astype(bool).values
         else:
             sem_mask = rem_mask = np.zeros(len(epoch_df), dtype=bool)
- 
-        if has_epoch_type:
-            phasic_mask = (epoch_df["EpochType"].fillna("") == "Phasic").values
-            tonic_mask  = (epoch_df["EpochType"].fillna("") == "Tonic").values
-        else:
-            phasic_mask = tonic_mask = np.zeros(len(epoch_df), dtype=bool)
- 
-        # Priority mask for top plot
-        priority_labels = _build_priority_mask(epoch_df) if (has_em_type or has_epoch_type) else None
 
         # ==== 4) Build figure ====
         fig, axs = plt.subplots(
@@ -291,23 +268,23 @@ def plot_eog_epochs(
 
         # SUBPLOT 1: LOC + ROC with all EM info (priority coloured)
         _shade_stages(axs[0], span_groups)                              # Stages shading
+        if has_epoch_type:
+            _shade_epoch_type(axs[0], epoch_df)                         # Phasic/Tonic shading      
         _plot_signal(axs[0], t, loc_uv, SIG_COLORS["LOC"], label="LOC") # Plot LOC signal
         _plot_signal(axs[0], t, roc_uv, SIG_COLORS["ROC"], label="ROC") # Plot ROC signal
  
-        if priority_labels is not None:
-            all_labels = {
-                "Phasic": EPOCH_TYPE_COLORS["Phasic"],
-                "Tonic":  EPOCH_TYPE_COLORS["Tonic"],
-                "SEM":    EM_TYPE_COLORS["SEM"],
-                "REM":    EM_TYPE_COLORS["REM"],
-            }
-            for label, color in all_labels.items():
-                mask = priority_labels == label
-                _overlay_segments(axs[0], t, loc_uv, mask, color, label=label)
-                _overlay_segments(axs[0], t, roc_uv, mask, color)
- 
+        if has_em_type:
+            _overlay_segments(axs[0], t, loc_uv, sem_mask, EM_TYPE_COLORS["SEM"], label="SEM")
+            _overlay_segments(axs[0], t, roc_uv, sem_mask, EM_TYPE_COLORS["SEM"])
+            _overlay_segments(axs[0], t, loc_uv, rem_mask, EM_TYPE_COLORS["REM"], label="REM")
+            _overlay_segments(axs[0], t, roc_uv, rem_mask, EM_TYPE_COLORS["REM"])
+        
         _format_signal_ax(axs[0], "LOC + ROC  (all EM info)", window_sec) # Format the first subplot
-        axs[0].legend(fontsize=8, loc="upper right", ncol=3)              # Add legend 
+        top_handles, _ = axs[0].get_legend_handles_labels()
+        axs[0].legend(                                                    # Add legend
+            handles=top_handles + _epoch_type_legend_patches(),
+            fontsize=8, loc="upper right", ncol=3,
+        )
  
         # SUBPLOT 2: LOC + ROC with SEM / REM 
         _shade_stages(axs[1], span_groups)                              # Stages shading   
@@ -796,10 +773,13 @@ if __name__ == "__main__":
     )
 
 
-#plot_fullnight_overview(
-#    file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv",
-#    out_dir=None
-#)
+    plot_fullnight_overview(
+        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv",
+        out_dir=None
+    )
 
-# Only REM to W
-#plot_transition_epochs(file="C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv", from_stage="REM", to_stage="W", window_sec=60)
+    plot_transition_epochs(
+        file="C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv", 
+        from_stage="REM", 
+        to_stage="W", 
+        window_sec=60)
