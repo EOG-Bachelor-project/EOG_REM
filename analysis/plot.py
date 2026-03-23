@@ -811,7 +811,7 @@ if __name__ == "__main__":
     )
 
     plot_transition_epochs(
-        file        = "C:/Users/AKLO0022/EOG_REM/local_csv_eog/merged_outpu/DCSM_1_a_contiguous_eog_merged.csv", 
+        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv", 
         from_stage  = "REM", 
         to_stage    = "W", 
         window_sec  = 60,

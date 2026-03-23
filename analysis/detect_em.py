@@ -48,9 +48,9 @@ def detect_em(
     hypno_up : np.ndarray
         The hypnogram indicating sleep stages, upsampled to match the EOG signal length.
     Dur_Thresh_SEM : float, optional
-        Duration threshold for classifying an eye movement as a Slow Eye Movement (SEM) in seconds, by default 0.5 [s].
+        Duration threshold for classifying an eye movement as a Slow Eye Movement (SEM) in seconds, by default **0.5 [s]**.
     Amp_Thresh_SEM : float, optional
-        Amplitude threshold for classifying an eye movement as a Slow Eye Movement (SEM) in microvolts, by default 50.0 [μV].
+        Amplitude threshold for classifying an eye movement as a Slow Eye Movement (SEM) in microvolts, by default **50.0 [μV]**.
     
     Returns
     -------
@@ -95,7 +95,7 @@ def detect_em(
         hypno_up = np.array(hypno_up)
 
     # ---- 1) Run dtection to get cleaned signals and events ----
-    print("Running REM detection algorithm...")
+    print("\nRunning REM detection algorithm...")
     result = detect_rem_jaec(loc, roc, hypno_up, method='ssc_threshold')
     df = result.summary()
     print(f"    Detected {len(df)} eye movement events.")
@@ -161,7 +161,7 @@ def classify_rem_epochs(
     hypno_int : np.ndarray
         Hypnogram as an array of integers representing sleep stages (0: W, 1: N1, 2: N2, 3: N3, 4: REM).
     epoch_sec : float, optional
-        Duration of each analysis epoch in seconds.  Default is **4.0 s**.
+        Duration of each analysis epoch in seconds.  Default is **4.0 [s]**.
     min_rapid : int, optional
         Minimum number of REMs required in an epoch to classify it as Phasic REM, by default **1**.
 
@@ -183,7 +183,7 @@ def classify_rem_epochs(
     if epoch_sec <= 0:
         raise ValueError(f"epoch_sec must be a positive number, but got: {epoch_sec}")
     
-    print(f"Classifying REM epochs:  epoch_sec={epoch_sec} [s] | min_rapid={min_rapid}")
+    print(f"\nClassifying REM epochs:  epoch_sec={epoch_sec} [s] | min_rapid={min_rapid}")
 
     df = df.copy()      
 
@@ -280,19 +280,19 @@ def classify_rem_epochs_Umaer(
     sf : float
         Sampling frequency in Hz.
     epoch_len : int, optional
-        Length of a scored epoch in seconds, by default 30 seconds.
+        Length of a scored epoch in seconds, by default **30 [s]**.
     sub_epoch_len : float, optional
-        Length of sub-epochs to classify in seconds, by default 4.0 seconds.
+        Length of sub-epochs to classify in seconds, by default **4.0 [s]**.
     window_len : float, optional
-        Length of each adjacent window used for Phasic/Tonic detection in seconds, by default 2.0 seconds.
+        Length of each adjacent window used for Phasic/Tonic detection in seconds, by default **2.0 [s]**.
     min_separation : float, optional
-        Minimum gap in seconds between a Phasic and a Tonic segment, by default 8.0 seconds.
+        Minimum gap in seconds between a Phasic and a Tonic segment, by default **8.0 [s]**.
     amp_thresh_rem : float, optional
-        Minimum mean peak amplitude [µV] for an EM to count toward Phasic detection, by default 150.0 microvolts.
+        Minimum mean peak amplitude [µV] for an EM to count toward Phasic detection, by default **150.0 [μV]**.
     dur_thresh_rem : float, optional
-        Maximum duration [s] for an EM to count toward Phasic detection, by default 0.5 seconds.
+        Maximum duration [s] for an EM to count toward Phasic detection, by default **0.5 [s]**.
     amp_thresh_tonic : float, optional
-        Maximum mean absolute amplitude [µV] in both 2-second windows for Tonic classification, by default 25.0 microvolts.
+        Maximum mean absolute amplitude [µV] in both 2-second windows for Tonic classification, by default **25.0 [μV]**.
 
     Returns
     -------

@@ -100,14 +100,14 @@ def extract_rems_from_edf(edf_path:    Path,
     # Resample EDF if edf isnt sampled at 128 Hz
     sf = raw.info["sfreq"]
     if sf != 128:
-        print(f"Resampling from {sf} Hz to 128 Hz")
+        print(f"\nResampling from {sf} [Hz] to 128 [Hz]")
         raw = raw.copy().resample(128)
         sf = 128
     loc = raw.get_data(picks=["LOC"])[0] * 1e6 # V to uV
     roc = raw.get_data(picks=["ROC"])[0] * 1e6
 
-    print(f"Signal length: {len(loc)} samples at {sf} Hz = {len(loc)/sf:.1f} s")
-    print(f"hypno_int epochs: {len(hypno_int)} epochs = {len(hypno_int) * 30:.1f} s")
+    print(f"    Signal length: {len(loc)} samples at {sf} [Hz] = {len(loc)/sf:.1f} [s]")
+    print(f"    hypno_int epochs: {len(hypno_int)} epochs = {len(hypno_int) * 30:.1f} [s]")
     
     # Upsampling hypnogram to match signal length
     samples_per_epoch = sf * 30
@@ -125,11 +125,11 @@ def extract_rems_from_edf(edf_path:    Path,
     hypno_up = hypno_up[:trim]
 
     # Print info before we use detect_rem_jaec
-    print(f"LOC range: {loc.min():.2f} to {loc.max():.2f}   |   LOC length: {len(loc)}")
-    print(f"ROC range: {roc.min():.2f} to {roc.max():.2f}   |   ROC length: {len(roc)}")
-    print(f"hypno_up length: {len(hypno_up)}")
-    print(f"REM samples in hypno_up: {(hypno_up == 4).sum()}")
-    print(f"Total epochs: {len(hypno_up) / (128*30):.1f}")
+    print(f"    LOC range: {loc.min():.2f} to {loc.max():.2f}   |   LOC length: {len(loc)}")
+    print(f"    ROC range: {roc.min():.2f} to {roc.max():.2f}   |   ROC length: {len(roc)}")
+    print(f"    hypno_up length: {len(hypno_up)}")
+    print(f"    REM samples in hypno_up: {(hypno_up == 4).sum()}")
+    print(f"    Total epochs: {len(hypno_up) / (128*30):.1f}")
 
 
     # Rem detection
