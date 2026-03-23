@@ -29,16 +29,18 @@ EM_DIR.mkdir(parents=True, exist_ok=True)
 # Function
 # =====================================================================
 def em_to_csv(
-        edf_path:       Path,
-        gssc_df:        pd.DataFrame,
-        hypno_int:      np.ndarray,
-        out_dir:        Path = EM_DIR,
-        lights_path:    Path | None = None,
-        Dur_Thresh_SEM: float = 0.5,
-        Amp_Thresh_SEM: float = 50.0,
-        min_rapid:      int = 1,
-        epoch_sec:      float = 4.0,
-        fs_target:      int = 128,
+        edf_path:         Path,
+        gssc_df:          pd.DataFrame,
+        hypno_int:        np.ndarray,
+        out_dir:          Path = EM_DIR,
+        lights_path:      Path | None = None,
+        Dur_Thresh_SEM:   float = 0.5,
+        Amp_Thresh_SEM:   float = 50.0,
+        epoch_sec:        float = 4.0,
+        amp_thresh_rem:   float = 150.0,
+        dur_thresh_rem:   float = 0.5,
+        amp_thresh_tonic: float = 25.0,
+        fs_target:        int = 128,
         ) -> pd.DataFrame | None:
     """
     Load one EDF file, detect eye movements, classify them as SEM/REM and
@@ -62,16 +64,23 @@ def em_to_csv(
         Optional path to lights.txt. If provided, signal is cropped to the
         sleep period before detection.
     Dur_Thresh_SEM : float
-        Duration threshold in seconds for SEM classification. Default **0.5 s**. \\
+        Duration threshold in seconds for SEM classification. Default **0.5 [s]**. \\
         Eye movements longer than this are classified as SEM.
     Amp_Thresh_SEM : float
-        Amplitude threshold in µV for SEM classification. Default **50 µV**. \\
+        Amplitude threshold in µV for SEM classification. Default **50 [µV]**. \\
         Eye movements below this amplitude are classified as SEM.
-    min_rapid : int
-        Minimum REM events per epoch to classify as Phasic. Default 1.
     epoch_sec : float
-        Duration of each analysis epoch in seconds for Phasic/Tonic classification. Default **4.0 s**. This is independent of the 30-second.\\
+        Duration of each analysis epoch in seconds for Phasic/Tonic classification. Default **4.0 [s]**. This is independent of the 30-second.\\
         PSG scoring epoch - see classify_rem_epochs for details.
+    amp_thresh_rem : float
+        Amplitude threshold in µV for classifying an eye movement as REM. Default **150 [µV]**. \\
+        Eye movements with MeanAbsValPeak above this threshold are classified as REM.
+    dur_thresh_rem : float
+        Duration threshold in seconds for classifying an eye movement as REM. Default **0.5 [s]**. \\
+        Eye movements with Duration below this threshold are classified as REM.
+    amp_thresh_tonic : float
+        Amplitude threshold in µV for classifying an eye movement as Tonic. Default **25 [µV]**. \\
+        Eye movements with MeanAbsValPeak below this threshold are classified as Tonic.
     fs_target : int
         Target sampling rate in Hz. Signal is resampled if needed. Default **128 Hz**.
  
@@ -90,14 +99,10 @@ def em_to_csv(
     # --- Validation and setup ---
     if not isinstance(hypno_int, np.ndarray):
         raise ValueError(f"hypno_int must be a numpy array, but got type: {type(hypno_int)}")
-    if not isinstance(min_rapid, int):
-        raise ValueError(f"min_rapid must be an integer, but got type: {type(min_rapid)}")
     if epoch_sec <= 0:
         raise ValueError(f"epoch_sec must be a positive number, but got: {epoch_sec}")
     if fs_target <= 0:
         raise ValueError(f"fs_target must be a positive integer, but got: {fs_target}")
-    if min_rapid < 0:
-        raise ValueError(f"min_rapid must be a non-negative integer, but got: {min_rapid}")
  
     print(f"\nProcessing: {edf_path}")
  
@@ -175,10 +180,12 @@ def em_to_csv(
  
     # --- 11) Classify Phasic / Tonic ---
     em_df = classify_rem_epochs(
-        df        = em_df,
-        hypno_int = hypno_int,
-        epoch_sec = epoch_sec,
-        min_rapid = min_rapid,
+        df               = em_df,
+        hypno_int        = hypno_int,
+        epoch_sec        = epoch_sec,
+        amp_thresh_rem   = amp_thresh_rem,
+        dur_thresh_rem   = dur_thresh_rem,
+        amp_thresh_tonic = amp_thresh_tonic,
     )
  
     # --- 12) Offset times to absolute time reference ---
@@ -200,4 +207,3 @@ def em_to_csv(
           f"REM: {(em_df['EM_Type'] == 'REM').sum()}")
  
     return em_df
- 
