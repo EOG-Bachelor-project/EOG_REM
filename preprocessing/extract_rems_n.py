@@ -65,7 +65,7 @@ def extract_rems_from_edf(edf_path:    Path,
     # Load EDF
     raw = mne.io.read_raw_edf(edf_path, preload=True, verbose=False)
     print(" Loaded raw:", raw)
-    print(" sfreq:", raw.info["sfreq"],"Hz")
+    print(" sfreq:", raw.info["sfreq"],"[Hz]")
 
     # Rename channels for standardization
     rename_map = build_rename_map(raw.ch_names)
@@ -87,7 +87,7 @@ def extract_rems_from_edf(edf_path:    Path,
     if lights_path is not None:
         lights_off, lights_on = parse_lights_txt(lights_path)
         raw = raw.crop(tmin = lights_off, tmax = lights_on)
-        print(f"    Trimmed to sleep period: {lights_off:.1f} s - {lights_on:.1f} s.") 
+        print(f"    Trimmed to sleep period: {lights_off:.1f} [s] - {lights_on:.1f} [s].") 
 
 
     # GSCC staging EOG only
@@ -149,7 +149,7 @@ def extract_rems_from_edf(edf_path:    Path,
     # `detect_rem_jaec()` operates on a signal starting at 0, so we add `lights_off` 
     # to make Start, End, Peak match the absolute time reference in the EOG CSV
     if lights_path is not None:
-        print(f"Offsetting event time by `lights_off` = {lights_off:.1f} s")
+        print(f"Offsetting event time by `lights_off` = {lights_off:.1f} [s]")
         for col in ["Start", "Peak", "End"]:
             if col in df.columns:
                 df[col] = df[col] + lights_off

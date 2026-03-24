@@ -141,9 +141,10 @@ def detect_em(
 
 # pass the dataframe from detect_em as input to this function
 def classify_rem_epochs(
-        df:         pd.DataFrame, 
-        hypno_int:  np.ndarray, 
-        epoch_sec:  float = 4,
+        df:               pd.DataFrame, 
+        hypno_int:        np.ndarray, 
+        epoch_sec:        float = 4,
+        psg_epoch_sec:    float = 30.0,
         amp_thresh_rem:   float = 150.0,
         dur_thresh_rem:   float = 0.5,
         amp_thresh_tonic: float = 25.0,
@@ -172,7 +173,9 @@ def classify_rem_epochs(
     hypno_int : np.ndarray
         Hypnogram as an array of integers representing sleep stages (0: W, 1: N1, 2: N2, 3: N3, 4: REM).
     epoch_sec : float, optional
-        Duration of each analysis epoch in seconds.  Default is **4.0 [s]**.
+        Duration of each analysis epoch in seconds. Default is **4.0 [s]**.
+    psg_epoch_sec : float, optional
+        Default is **30.0 [s]**
     amp_thresh_rem : float, optional
         Minimum ``MeanAbsValPeak`` [µV] for an EM to qualify as a Phasic candidate. Default **150.0 [µV]**.
     dur_thresh_rem : float, optional
@@ -216,7 +219,7 @@ def classify_rem_epochs(
     # --- 2) Determine which epoch indices fall inside REM sleep ---
     # hypno_int is one value per 30-second PSG epoch.
     # We convert those to epoch_sec-length indices by scaling.
-    psg_epoch_sec = 30.0  # PSG scoring epoch is always 30 s
+    psg_epoch_sec = psg_epoch_sec
     rem_epoch_indices = set()
     for psg_idx in np.where(hypno_int == 4)[0]:
         t_start              = psg_idx * psg_epoch_sec
@@ -236,6 +239,8 @@ def classify_rem_epochs(
         (df['MeanAbsValPeak'] >= amp_thresh_rem) &
         (df['Duration']       <  dur_thresh_rem)
     )
+    print(f"\nRapid Candidates (amp>={amp_thresh_rem} AND dur<{dur_thresh_rem}): {df['_is_rapid'].sum()}")
+    print(df[df['_is_rapid']][['Peak', 'MeanAbsValPeak', 'Duration']].head(10))
 
      # --- 4) Classify each epoch ---
     def classify_epoch(epoch_idx: int) -> str:
@@ -273,7 +278,7 @@ def classify_rem_epochs(
 
     # --- 5) Summary ---
     counts = df.drop_duplicates('EpochIdx')['EpochType'].value_counts()
-    print(f"Epoch classification summary (one row per unique {epoch_sec} [s] epoch):\n{counts.to_string()}")
+    print(f"\nEpoch classification summary (one row per unique {epoch_sec} [s] epoch):\n{counts.to_string()}")
 
     df = df.reset_index(drop=True)
     return df

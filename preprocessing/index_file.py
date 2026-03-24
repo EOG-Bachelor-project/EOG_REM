@@ -306,8 +306,8 @@ def parse_lights_txt(txt_path: str | Path) -> tuple[float, float]:
     lights_off = float(df["lights_off"].iloc[0])
     lights_on  = float(df["lights_on"].iloc[0])
 
-    print(f"Lights off: {lights_off:.1f} s  |   Lights on {lights_on:.1f} s "
-          f"\n(sleep period: {(lights_on - lights_off)/60:.1f} min)")
+    print(f"Lights off: {lights_off:.1f} [s]  |   Lights on {lights_on:.1f} [s] "
+          f"\nsleep period: {(lights_on - lights_off)/60:.1f} [min]")
 
     return lights_off, lights_on
 

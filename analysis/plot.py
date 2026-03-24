@@ -302,11 +302,12 @@ def plot_eog_epochs(
         top_handles, _ = axs[0].get_legend_handles_labels()
         axs[0].legend(                                                    # Add legend
             handles=top_handles + _epoch_type_legend_patches(),
-            fontsize=8, loc="upper right", ncol=3,
+            fontsize=8, loc="center left", ncol=2,
+            bbox_to_anchor=(1,0.5), frameon=True
         )
  
         # SUBPLOT 2: LOC + ROC with SEM / REM 
-        _shade_stages(axs[1], span_groups)                              # Stages shading   
+        #_shade_stages(axs[1], span_groups)                             # Stages shading   
         _plot_signal(axs[1], t, loc_uv, SIG_COLORS["LOC"], label="LOC") # Plot LOC signal
         _plot_signal(axs[1], t, roc_uv, SIG_COLORS["ROC"], label="ROC") # Plot ROC signal
  
@@ -316,7 +317,11 @@ def plot_eog_epochs(
             _overlay_segments(axs[1], t, loc_uv, rem_mask, EM_TYPE_COLORS["REM"], label="REM")
             _overlay_segments(axs[1], t, roc_uv, rem_mask, EM_TYPE_COLORS["REM"])
         _format_signal_ax(axs[1], "LOC + ROC  (SEM / REM)", window_sec, epoch_sec)
-        axs[1].legend(fontsize=8, loc="upper right", ncol=2)            # Add legend 
+        axs[1].legend(                                                  # Add legend 
+            fontsize=8, 
+            loc="center left", ncol=2, 
+            bbox_to_anchor=(1,0.5), frameon=True
+            )  
  
         # SUBPLOT 3: LOC + ROC with Phasic / Tonic shading
         if has_epoch_type:
@@ -344,7 +349,11 @@ def plot_eog_epochs(
         _format_signal_ax(axs[2], "LOC + ROC  (Phasic / Tonic)", window_sec, epoch_sec)
         ep_patches = [mpatches.Patch(color=c, label=s, alpha=0.5) for s, c in EPOCH_TYPE_COLORS.items()]
         loc_roc_handles, _ = axs[2].get_legend_handles_labels()
-        axs[2].legend(handles=loc_roc_handles + ep_patches, fontsize=8, loc="upper right", ncol=2)
+        axs[2].legend(                                                         # Add legend
+            handles=loc_roc_handles + ep_patches, 
+            fontsize=8, loc="center left", ncol=2,
+            bbox_to_anchor=(1, 0.5), frameon=True
+            )
 
         # Subplot 4: Hypnogram bar
         for _, sp in span_groups.iterrows():
@@ -355,15 +364,15 @@ def plot_eog_epochs(
                 color = STAGE_COLORS.get(sp["stage"], "#cccccc"),
                 height=0.8, align="center",
             )
-        _draw_epoch_boundaries(axs[3], window_sec, epoch_sec)                 # Add vertical lines for epoch boundaries
-        axs[3].set_yticks(list(STAGE_ORDER.values()))                         # Set y-ticks to numeric stage order
-        axs[3].set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)          # Label y-ticks with stage names
-        axs[3].set_xlabel("Time within epoch [s]", fontsize=10)               # Label x-axis
-        axs[3].set_xticks(np.arange(0, window_sec + 1, 0.5))                  # Set x-ticks every 0.5 seconds
-        axs[3].set_xticklabels(np.arange(0, window_sec + 1, 0.5), fontsize=6) # Set x-tick labels with smaller font
-        axs[3].set_title("Hypnogram", fontsize=10)                            # Title for hypnogram subplot   
-        axs[3].set_xlim(0, window_sec)                                        # Set x-axis limits to match epoch window         
-        axs[3].tick_params(labelsize=8)                                       # Set tick label size for hypnogram subplot
+        _draw_epoch_boundaries(axs[3], window_sec, epoch_sec)                            # Add vertical lines for epoch boundaries
+        axs[3].set_yticks(list(STAGE_ORDER.values()))                                    # Set y-ticks to numeric stage order
+        axs[3].set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)                     # Label y-ticks with stage names
+        axs[3].set_xlabel("Time within epoch [s]", fontsize=10)                          # Label x-axis
+        axs[3].set_xticks(np.arange(0, window_sec+1, 0.5))                               # Set x-ticks every 0.5 seconds
+        axs[3].set_xticklabels(np.arange(0, window_sec+1, 0.5), fontsize=6, rotation=45) # Set x-tick labels with smaller font
+        axs[3].set_title("Hypnogram", fontsize=10)                                       # Title for hypnogram subplot   
+        axs[3].set_xlim(0, window_sec)                                                   # Set x-axis limits to match epoch window         
+        axs[3].tick_params(labelsize=8)                                                  # Set tick label size for hypnogram subplot
 
         
 
@@ -473,7 +482,7 @@ def plot_fullnight_overview(
         4, 1,
         figsize=(20, 9),
         sharex=True,
-        gridspec_kw={"hspace": 0.5, "height_ratios": [2, 2, 2, 1]},
+        gridspec_kw={"hspace": 0.5, "height_ratios": [2, 2, 3, 1]},
     )
  
     fig.suptitle("Full-Night EOG Overview", fontsize=13, fontweight="bold")
@@ -497,8 +506,8 @@ def plot_fullnight_overview(
     add_stage_shading(axs[1])
  
     # Subplot 3: LOC + ROC overlapping
-    axs[2].plot(t, df[loc_col].values * 1e6, color=SIG_COLORS["LOC"], linewidth=0.4, label="LOC")
-    axs[2].plot(t, df[roc_col].values * 1e6, color=SIG_COLORS["ROC"], linewidth=0.4, label="ROC")
+    axs[2].plot(t, df[loc_col].values * 1e6, color=SIG_COLORS["LOC"], linewidth=0.4, label="LOC", alpha=0.7)
+    axs[2].plot(t, df[roc_col].values * 1e6, color=SIG_COLORS["ROC"], linewidth=0.4, label="ROC", alpha=0.7)
     axs[2].set_title("LOC + ROC", fontsize=10)
     axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
     axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)
@@ -805,15 +814,15 @@ if __name__ == "__main__":
     )
 
 
-    plot_fullnight_overview(
+    """plot_fullnight_overview(
         file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv",
         out_dir=None
-    )
+    )"""
 
-    plot_transition_epochs(
+    """plot_transition_epochs(
         file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv", 
         from_stage  = "REM", 
         to_stage    = "W", 
         window_sec  = 60,
         epoch_sec   = 4.0,
-        )
+        )"""
