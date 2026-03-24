@@ -145,9 +145,7 @@ def classify_rem_epochs(
         hypno_int:        np.ndarray, 
         epoch_sec:        float = 4,
         psg_epoch_sec:    float = 30.0,
-        amp_thresh_rem:   float = 150.0,
-        dur_thresh_rem:   float = 0.5,
-        amp_thresh_tonic: float = 25.0,
+        min_rapid:        int = 1,
         ) -> pd.DataFrame:
     """
     Classifies REM epochs as Phasic or Tonic by analysing eye movement activity within each ``epoch_sec``-length window.
@@ -175,13 +173,10 @@ def classify_rem_epochs(
     epoch_sec : float, optional
         Duration of each analysis epoch in seconds. Default is **4.0 [s]**.
     psg_epoch_sec : float, optional
-        Default is **30.0 [s]**
-    amp_thresh_rem : float, optional
-        Minimum ``MeanAbsValPeak`` [µV] for an EM to qualify as a Phasic candidate. Default **150.0 [µV]**.
-    dur_thresh_rem : float, optional
-        Maximum duration [s] for an EM to qualify as a Phasic candidate. Default **0.5 [s]**.
-    amp_thresh_tonic : float, optional
-        Maximum ``MeanAbsValPeak`` [µV] for Tonic classification - all EMs in the epoch must be below this. Default **25.0 [µV]**.
+        Duration of each PSG scoring epoch in seconds, used to determine which analysis epochs fall inside REM sleep. Default is **30.0 [s]**
+    min_rapid : int, optional
+        Minimum number of REMs required in each half-window for an epoch to be classified as Phasic. Default is **1**.
+
 
     Returns
     -------
@@ -199,13 +194,12 @@ def classify_rem_epochs(
     if not isinstance(hypno_int, np.ndarray):
         hypno_int = np.array(hypno_int)
         print(f"Converted hypnogram to numpy array with shape: {hypno_int.shape}")
+    if not isinstance(min_rapid, int) or min_rapid < 1:
+        raise ValueError(f"min_rapid must be a positive integer. Got: {min_rapid}")
     if epoch_sec <= 0:
         raise ValueError(f"epoch_sec must be positive, got: {epoch_sec}")
  
-    print(f"\nClassifying REM epochs | epoch_sec={epoch_sec} [s]")
-    print(f"  Phasic thresholds : MeanAbsValPeak ≥ {amp_thresh_rem} [µV], Duration < {dur_thresh_rem} [s]")
-    print(f"  Tonic threshold   : MeanAbsValPeak < {amp_thresh_tonic} [µV] (no EMs)")
-
+    print(f"\nClassifying REM epochs | epoch_sec={epoch_sec} [s] | psg_epoch_sec={psg_epoch_sec} [s] | min_rapid={min_rapid}")
 
     df = df.copy()      
     half = epoch_sec / 2.0 # Half-window duration for Phasic classification criteria.
@@ -235,43 +229,22 @@ def classify_rem_epochs(
 
     # --- 3) Flag qualifying Phasic candidates ---
     # An EM qualifies as a Phasic candidate if it has high amplitude AND short duration
-    df['_is_rapid'] = (
-        (df['MeanAbsValPeak'] >= amp_thresh_rem) &
-        (df['Duration']       <  dur_thresh_rem)
+    rem_counts = (
+        df[df['EM_Type'] == 'REM']  # Filter to REM events only
+        .groupby('EpochIdx')         # Group by epoch index
+        .size()                      # Count events per epoch
+        .to_dict()                   # Convert to dict for fast lookup
     )
-    print(f"\nRapid Candidates (amp>={amp_thresh_rem} AND dur<{dur_thresh_rem}): {df['_is_rapid'].sum()}")
-    print(df[df['_is_rapid']][['Peak', 'MeanAbsValPeak', 'Duration']].head(10))
 
-     # --- 4) Classify each epoch ---
-    def classify_epoch(epoch_idx: int) -> str:
+    # --- 4) Classify each epoch ---
+    def epoch_type(row):
+        epoch_idx = row['EpochIdx']
         if epoch_idx not in rem_epoch_indices:
             return 'Non-REM'
+        n_rapid = rem_counts.get(epoch_idx, 0)
+        return 'Phasic' if n_rapid >= min_rapid else 'Tonic'
  
-        t0   = epoch_idx * epoch_sec
-        t1   = t0 + epoch_sec
-        mid  = t0 + half
- 
-        # All events whose peak falls in this epoch
-        in_epoch = df[df['EpochIdx'] == epoch_idx]
- 
-        # Phasic: at least 1 qualifying candidate in EACH half-window
-        in_w1 = in_epoch[(in_epoch['Peak'] >= t0)  & (in_epoch['Peak'] < mid)]
-        in_w2 = in_epoch[(in_epoch['Peak'] >= mid) & (in_epoch['Peak'] < t1)]
-        if in_w1['_is_rapid'].any() and in_w2['_is_rapid'].any():
-            return 'Phasic'
- 
-        # Tonic: no EMs at all, OR all EMs below amp_thresh_tonic
-        no_ems  = len(in_epoch) == 0
-        low_amp = (in_epoch['MeanAbsValPeak'] < amp_thresh_tonic).all() if not no_ems else True
-        if no_ems or low_amp:
-            return 'Tonic'
- 
-        return 'Unclassified'
- 
-    # Apply classification — one result per unique EpochIdx, then map back to all rows
-    unique_epochs  = df['EpochIdx'].unique()
-    epoch_type_map = {idx: classify_epoch(idx) for idx in unique_epochs}
-    df['EpochType'] = df['EpochIdx'].map(epoch_type_map)
+    df['EpochType'] = df.apply(epoch_type, axis=1)
  
     # Drop internal helper column
     df = df.drop(columns=['_is_rapid'])

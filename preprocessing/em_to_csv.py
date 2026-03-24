@@ -38,9 +38,7 @@ def em_to_csv(
         Amp_Thresh_SEM:   float = 50.0,
         epoch_sec:        float = 4.0,
         psg_epoch_sec:    float = 30.0,
-        amp_thresh_rem:   float = 150.0,
-        dur_thresh_rem:   float = 0.5,
-        amp_thresh_tonic: float = 25.0,
+        min_rapid:        int = 1,
         fs_target:        int = 128,
         ) -> pd.DataFrame | None:
     """
@@ -65,27 +63,21 @@ def em_to_csv(
         Optional path to lights.txt. If provided, signal is cropped to the
         sleep period before detection.
     Dur_Thresh_SEM : float
-        Duration threshold in seconds for SEM classification. Default **0.5 [s]**. \\
+        Duration threshold in seconds for SEM classification. Default is **0.5 [s]**. \\
         Eye movements longer than this are classified as SEM.
     Amp_Thresh_SEM : float
-        Amplitude threshold in µV for SEM classification. Default **50 [µV]**. \\
+        Amplitude threshold in µV for SEM classification. Default is **50 [µV]**. \\
         Eye movements below this amplitude are classified as SEM.
     epoch_sec : float
-        Duration of each analysis epoch in seconds for Phasic/Tonic classification. Default **4.0 [s]**. This is independent of the 30-second.\\
+        Duration of each analysis epoch in seconds for Phasic/Tonic classification. Default is **4.0 [s]**. This is independent of the 30-second.\\
         PSG scoring epoch - see classify_rem_epochs for details.
     psg_epoch_sec : float
-        eDefault **30.0 [s]**.
-    amp_thresh_rem : float
-        Amplitude threshold in µV for classifying an eye movement as REM. Default **150 [µV]**. \\
-        Eye movements with MeanAbsValPeak above this threshold are classified as REM.
-    dur_thresh_rem : float
-        Duration threshold in seconds for classifying an eye movement as REM. Default **0.5 [s]**. \\
-        Eye movements with Duration below this threshold are classified as REM.
-    amp_thresh_tonic : float
-        Amplitude threshold in µV for classifying an eye movement as Tonic. Default **25 [µV]**. \\
-        Eye movements with MeanAbsValPeak below this threshold are classified as Tonic.
+        Duration of each PSG scoring epoch in seconds Default is **30.0 [s]**.\\
+        Must match the epoch length used to build hypno_int. Used to trim hypno_int to align with the cropped signal.
+    min_rapid : int
+        Minimum number of REMs per epoch to classify as Phasic. Default is **1**.
     fs_target : int
-        Target sampling rate in Hz. Signal is resampled if needed. Default **128 Hz**.
+        Target sampling rate in Hz. Signal is resampled if needed. Default is**128 Hz**.
  
     Returns
     -------
@@ -137,7 +129,10 @@ def em_to_csv(
         lights_off, lights_on = parse_lights_txt(lights_path) # Returns lights_off and lights_on in seconds
         raw = raw.crop(tmin=lights_off, tmax=lights_on)       # Crop raw signal to the lights off/on times to focus on the sleep period
         print(f"    Cropped to lights window: {lights_off:.1f} - {lights_on:.1f} [s]")
-        print(f"    raw.times[0] after crop: {raw.times[0]:.1f} [s] (should be 0.0)")
+
+        # hypno_int covers the full recording from t=0 (one entry per psg_epoch_sec).
+        # After cropping, the signal starts at t=0 but corresponds to lights_off in
+        # the original recording. Slice hypno_int so index 0 = lights_of
 
         # Trim hypno_int to match cropped signal
         first_epoch = int(lights_off // psg_epoch_sec)
@@ -169,7 +164,7 @@ def em_to_csv(
  
     # --- 9) Trim to match lengths and multiple of 2^14 (required by dtcwt) ---
     factor = 2 ** 14
-    trim   = (min(len(loc_uv), len(hypno_up)) // factor) * factor
+    trim = (min(len(loc_uv), len(hypno_up)) // factor) * factor
     if trim == 0:
         print(f" Skipping {session_id} — signal too short for dtcwt")
         return None
@@ -196,12 +191,11 @@ def em_to_csv(
     print(f"Expected epoch indices from peaks: {(em_df['Peak'].head(5).values // epoch_sec).astype(int)}")
 
     em_df = classify_rem_epochs(
-        df               = em_df,
-        hypno_int        = hypno_int,
-        epoch_sec        = epoch_sec,
-        amp_thresh_rem   = amp_thresh_rem,
-        dur_thresh_rem   = dur_thresh_rem,
-        amp_thresh_tonic = amp_thresh_tonic,
+        df            = em_df,
+        hypno_int     = hypno_int,
+        epoch_sec     = epoch_sec,
+        psg_epoch_sec = psg_epoch_sec,
+        min_rapid     = min_rapid,
     )
  
     # --- 12) Offset times to absolute time reference ---
