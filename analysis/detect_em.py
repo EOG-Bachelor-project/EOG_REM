@@ -245,9 +245,6 @@ def classify_rem_epochs(
         return 'Phasic' if n_rapid >= min_rapid else 'Tonic'
  
     df['EpochType'] = df.apply(epoch_type, axis=1)
- 
-    # Drop internal helper column
-    df = df.drop(columns=['_is_rapid'])
 
     # --- 5) Summary ---
     counts = df.drop_duplicates('EpochIdx')['EpochType'].value_counts()

@@ -135,10 +135,10 @@ def em_to_csv(
         # the original recording. Slice hypno_int so index 0 = lights_of
 
         # Trim hypno_int to match cropped signal
-        first_epoch = int(lights_off // psg_epoch_sec)
-        last_epoch = int(lights_off // psg_epoch_sec)
-        hypno_int = hypno_int[first_epoch:last_epoch]
-        print(f"    hypno_int trimmed to epochs [{first_epoch}:{last_epoch}] = {len(hypno_int)} epochs")
+        #first_epoch = int(lights_off // psg_epoch_sec)
+        #last_epoch = int(lights_on // psg_epoch_sec)
+        #hypno_int = hypno_int[first_epoch:last_epoch]
+        #print(f"    hypno_int trimmed to epochs [{first_epoch}:{last_epoch}] = {len(hypno_int)} epochs")
  
     # --- 5) Resample if needed ---
     sf = raw.info["sfreq"]  
@@ -165,6 +165,8 @@ def em_to_csv(
     # --- 9) Trim to match lengths and multiple of 2^14 (required by dtcwt) ---
     factor = 2 ** 14
     trim = (min(len(loc_uv), len(hypno_up)) // factor) * factor
+    print(f"    len(loc_uv) = {len(loc_uv)} | len(hypno_up) = {len(hypno_up)} | factor={factor}")
+    print(f"    trim = {trim}")
     if trim == 0:
         print(f" Skipping {session_id} — signal too short for dtcwt")
         return None

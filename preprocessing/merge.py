@@ -223,7 +223,7 @@ def merge_all(
     print(f"    Merged shape: {merged_df.shape}")
 
     # --- 4) Load and merge REM events ---
-    print("Merging REM events...")
+    print("\nMerging REM events...")
     events_df = pd.read_csv(events_file)
     for col in [start_col, end_col]:
         if col not in events_df.columns:

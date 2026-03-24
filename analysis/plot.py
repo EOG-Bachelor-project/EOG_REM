@@ -191,7 +191,7 @@ def plot_eog_epochs(
     out_dir : Path | None
         If provided, saves each figure as a PNG in this directory instead of showing it.
     show_em : bool
-        If true, overlay detected EM events as shaded regions. Default is True.
+        If true, overlay detected EM events as shaded regions. Default is **True**.
  
     Returns
     -------
@@ -206,6 +206,8 @@ def plot_eog_epochs(
 
     # ==== 1) Load CSV file ====
     df = pd.read_csv(file)
+    print(f"Columns in merged CSV: \n{df.columns.tolist()}")
+    print(f"EpochType values: {df['EpochType'].value_counts().to_dict() if 'EpochType' in df.columns else 'NOT FOUND'}")
 
     # Validate required columns
     for col in [time_col, loc_col, roc_col, stage_col]:
@@ -809,15 +811,15 @@ if __name__ == "__main__":
         stage_col  = "stage",
         window_sec = 30.0,
         epoch_sec  = 4.0,
-        max_epochs = 10,
+        max_epochs = 1,
         out_dir    = None,
     )
 
 
-    """plot_fullnight_overview(
+    plot_fullnight_overview(
         file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv",
         out_dir=None
-    )"""
+    )
 
     """plot_transition_epochs(
         file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv", 
