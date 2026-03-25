@@ -306,6 +306,17 @@ def plot_eog_epochs(
         else:
             sem_mask = rem_mask = np.zeros(len(epoch_df), dtype=bool)
 
+        stage_patches = [mpatches.Patch(color=c, label=s) for s, c in STAGE_COLORS.items()]
+        _active_thresholds = thresholds if thresholds is not None else THRESHOLDS
+        thresh_handles = [
+            mpatches.Patch(
+                color=THRESHOLD_STYLES.get(n, {}).get("color", "grey"),
+                label = THRESHOLD_STYLES.get(n, {}).get("label"),
+                alpha=0.8 
+            )
+            for n in _active_thresholds
+        ]
+
         # ==== 4) Build figure ====
         fig, (ax_sig, ax_hyp) = plt.subplots(
             2, 1, figsize=(15, 10), sharex=False, 
@@ -337,8 +348,9 @@ def plot_eog_epochs(
         _format_signal_ax(ax_sig, "LOC + ROC", window_sec, epoch_sec)
  
         sig_handles, _ = ax_sig.get_legend_handles_labels()
+        ax_sig.set_xticks(np.arange(0, window_sec +1, 1))
         ax_sig.legend(
-            handles=sig_handles + _epoch_type_legend_patches() + thresh_handles,
+            handles=sig_handles + _epoch_type_legend_patches(),
             fontsize=8, loc="center left", ncol=2,
             bbox_to_anchor=(1, 0.5), frameon=True,
         )
@@ -354,9 +366,10 @@ def plot_eog_epochs(
             )
         ax_hyp.set_yticks(list(STAGE_ORDER.values()))
         ax_hyp.set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)
+        ax_hyp.set_xticks(np.arange(0, window_sec +1, 1))
         ax_hyp.set_xlabel("Time within epoch [s]", fontsize=10)
-        ax_hyp.set_title("Hypnogram", fontsize=9)
         ax_hyp.set_xlim(0, window_sec)
+        ax_hyp.set_title("Hypnogram", fontsize=9)
         ax_hyp.tick_params(labelsize=8)
  
         fig.legend(
@@ -390,6 +403,8 @@ def plot_fullnight_overview(
         roc_col:    str = "ROC",
         stage_col:  str = "stage",
         out_dir:    Path | None = None,
+        show_em:    bool = True,
+        thresholds:  dict | None = None
         ) -> None:
     """
     Plot the full-night EOG recording in a single figure with 4 subplots:
@@ -409,6 +424,12 @@ def plot_fullnight_overview(
         Name of the sleep stage column. Default is 'stage'.
     out_dir : Path | None
         If provided, saves the figure as a PNG. Otherwise displays interactively.
+    show_em : bool
+        If True, overlay SEM/REM segments and Phasic/Tonic shadinbg. Default is **True**
+    thresholds : dict | None
+        Mapping of threshold name → µV value for horizontal lines.
+        Defaults to the module-level THRESHOLDS dict.
+        Pass {} to suppress all threshold lines.
  
     Returns
     -------
@@ -426,8 +447,14 @@ def plot_fullnight_overview(
             raise ValueError(f"Merged CSV must contain '{col}' column.")
  
     df = df.sort_values(by=time_col).reset_index(drop=True)
-    t = df[time_col].values / 60  # convert to minutes for readability
- 
+    
+    has_em_type    = show_em and "EM_Type"     in df.columns
+    has_epoch_type = show_em and "EpochType"   in df.columns
+
+    t_min = df[time_col].values / 60
+    loc_uv = df[loc_col].values * 1e6
+    roc_uv = df[roc_col].values * 1e6
+    
     # --- 2) Compute stage shading spans ---
     df["_span_block"] = (df[stage_col] != df[stage_col].shift()).cumsum()
     span_groups = (
@@ -441,90 +468,118 @@ def plot_fullnight_overview(
     )
     span_groups["t_start_min"] = span_groups["t_start"] / 60
     span_groups["t_end_min"]   = span_groups["t_end"]   / 60
- 
-    def add_stage_shading(ax, span_groups=span_groups):
-        for _, span in span_groups.iterrows():
-            color = STAGE_COLORS.get(span["stage"], "#cccccc")
-            ax.axvspan(span["t_start_min"], span["t_end_min"], color=color, alpha=0.2, linewidth=0)
- 
-    # --- 3) Build shared legend patches ---
-    legend_patches = [
-        mpatches.Patch(color=color, label=s)
-        for s, color in STAGE_COLORS.items()
+
+    stage_patches = [mpatches.Patch(color=c, label=s) for s, c in STAGE_COLORS.items()]
+    _active_thresholds = thresholds if thresholds is not None else THRESHOLDS
+    thresh_handles = [
+       mpatches.Patch(
+            color=THRESHOLD_STYLES.get(n, {}).get("color", "grey"),
+            label = THRESHOLD_STYLES.get(n, {}).get("label"),
+            alpha=0.8 
+        )
+        for n in _active_thresholds
     ]
  
-    # --- 4) Build figure ---
-    fig, axs = plt.subplots(
-        4, 1,
+    # --- 3) Build figure ---
+    fig, (ax_sig, ax_hyp) = plt.subplots(
+        2, 1,
         figsize=(20, 9),
         sharex=True,
-        gridspec_kw={"hspace": 0.5, "height_ratios": [2, 2, 3, 1]},
+        gridspec_kw={"hspace": 0.5, "height_ratios": [5, 1]},
     )
  
     fig.suptitle("Full-Night EOG Overview", fontsize=13, fontweight="bold")
  
-    # Subplot 1: LOC
-    axs[0].plot(t, df[loc_col].values * 1e6, color=SIG_COLORS["LOC"], linewidth=0.4)
-    axs[0].set_title("LOC", fontsize=10)
-    axs[0].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
-    axs[0].axhline(0, color="black", alpha=0.5, linewidth=0.5)
-    axs[0].grid(alpha=0.3, linestyle="--")
-    axs[0].tick_params(labelsize=8)
-    add_stage_shading(axs[0])
- 
-    # Subplot 2: ROC
-    axs[1].plot(t, df[roc_col].values * 1e6, color=SIG_COLORS["ROC"], linewidth=0.4)
-    axs[1].set_title("ROC", fontsize=10)
-    axs[1].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
-    axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)
-    axs[1].grid(alpha=0.3, linestyle="--")
-    axs[1].tick_params(labelsize=8)
-    add_stage_shading(axs[1])
- 
-    # Subplot 3: LOC + ROC overlapping
-    axs[2].plot(t, df[loc_col].values * 1e6, color=SIG_COLORS["LOC"], linewidth=0.4, label="LOC", alpha=0.7)
-    axs[2].plot(t, df[roc_col].values * 1e6, color=SIG_COLORS["ROC"], linewidth=0.4, label="ROC", alpha=0.7)
-    axs[2].set_title("LOC + ROC", fontsize=10)
-    axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
-    axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)
-    axs[2].grid(alpha=0.3, linestyle="--")
-    axs[2].tick_params(labelsize=8)
-    axs[2].legend(fontsize=8, loc="upper right")
-    add_stage_shading(axs[2])
- 
-    # Subplot 4: Hypnogram
-    for _, span in span_groups.iterrows():
-        color = STAGE_COLORS.get(span["stage"], "#cccccc")
-        y_val = STAGE_ORDER.get(span["stage"], -1)
-        axs[3].barh(
-            y=y_val,
-            width=span["t_end_min"] - span["t_start_min"],
-            left=span["t_start_min"],
-            color=color,
-            height=0.8,
-            align="center",
+    # ── Signal panel ──────────────────────────────────────────────────
+    # Stage background
+    for _, sp in span_groups.iterrows():
+        ax_sig.axvspan(
+            sp["t_start_min"], sp["t_end_min"],
+            color=STAGE_COLORS.get(sp["stage"], "#cccccc"),
+            alpha=0.18, linewidth=0,
         )
- 
-    axs[3].set_title("Hypnogram", fontsize=10)
-    axs[3].set_yticks(list(STAGE_ORDER.values()))
-    axs[3].set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)
-    axs[3].set_xlabel("Time [min]", fontsize=10)
-    axs[3].tick_params(labelsize=8)
- 
-    # Shared legend
+    
+    # Phasic / Tonic shading
+    if has_epoch_type:
+        df["_ep_span"] = (
+            df["EpochType"].fillna("None") != df["EpochType"].fillna("None").shift()
+        ).cumsum()
+
+        ep_spans = (
+            df.groupby("_ep_span")
+            .agg(t_start=(time_col, "first"), t_end=(time_col, "last"), etype=("EpochType", "first"))
+            .reset_index(drop=True)
+        )
+        
+        for _, sp in ep_spans.iterrows():
+            color = EPOCH_TYPE_COLORS.get(sp["etype"], None)
+            if color:
+                ax_sig.axvspan(sp["t_start"] / 60, sp["t_end"] / 60, color=color, alpha=0.22, linewidth=0)
+        
+    # LOC + ROC signals
+    ax_sig.plot(t_min, loc_uv, color=SIG_COLORS["LOC"], linewidth=0.35, label="LOC", alpha=0.85, zorder=2)
+    ax_sig.plot(t_min, roc_uv, color=SIG_COLORS["ROC"], linewidth=0.35, label="ROC", alpha=0.85, zorder=2)
+    
+    # SEM / REM overlays
+    if has_em_type:
+        sem_mask = (df["EM_Type"].fillna("") == "SEM").values
+        rem_mask = (df["EM_Type"].fillna("") == "REM").values & df["is_em_event"].fillna(False).astype(bool).values
+        
+        def _overlay_fullnight(t_arr, sig, mask, color, label):
+            runs = np.where(np.diff(np.concatenate([[False], mask, [False]])))[0]
+            first = True
+            for s, e in zip(runs[0::2], runs[1::2]):
+                ax_sig.plot(t_arr[s:e], sig[s:e], color=color, linewidth=1.2, zorder=3,
+                            label=label if first else None)
+                first = False
+        
+        _overlay_fullnight(t_min, loc_uv, sem_mask, EM_TYPE_COLORS["SEM"], "SEM")
+        _overlay_fullnight(t_min, roc_uv, sem_mask, EM_TYPE_COLORS["SEM"], None)
+        _overlay_fullnight(t_min, loc_uv, rem_mask, EM_TYPE_COLORS["REM"], "REM event")
+        _overlay_fullnight(t_min, roc_uv, rem_mask, EM_TYPE_COLORS["REM"], None)
+        
+    _draw_threshold_lines(ax_sig, thresholds)
+        
+    ax_sig.set_title("LOC + ROC", fontsize=11)
+    ax_sig.set_ylabel("Amplitude [µV]", fontsize=10)
+    ax_sig.axhline(0, color="black", alpha=0.4, linewidth=0.5)
+    ax_sig.set_xticks(np.arange(t_min[0], t_min[-1] + 60, 60))
+    ax_sig.grid(alpha=0.25, linestyle="--")
+    ax_sig.tick_params(labelsize=8)
+    
+    sig_handles, _ = ax_sig.get_legend_handles_labels()
+    ax_sig.legend(
+        handles=sig_handles + _epoch_type_legend_patches(),
+        fontsize=8, loc="center left", ncol=2,
+        bbox_to_anchor=(1, 0.5), frameon=True,
+    )
+    
+    # ── Hypnogram panel ───────────────────────────────────────────────
+    for _, sp in span_groups.iterrows():
+        ax_hyp.barh(
+            y = STAGE_ORDER.get(sp["stage"], -1),
+            width = sp["t_end_min"] - sp["t_start_min"],
+            left = sp["t_start_min"],
+            color = STAGE_COLORS.get(sp["stage"], "#cccccc"),
+            height=0.8, align="center",
+            )
+    ax_hyp.set_title("Hypnogram", fontsize=9)
+    ax_hyp.set_yticks(list(STAGE_ORDER.values()))
+    ax_hyp.set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)
+    ax_hyp.set_xticks(np.arange(t_min[0], t_min[-1] + 60, 60))
+    ax_hyp.set_xlabel("Time [min]", fontsize=10)
+    ax_hyp.tick_params(labelsize=8)
+    
+    legend_patches = [mpatches.Patch(color=c, label=s) for s, c in STAGE_COLORS.items()]
     fig.legend(
         handles=legend_patches,
-        loc="lower center",
-        ncol=len(STAGE_COLORS),
-        fontsize=8,
-        title="Sleep Stage",
-        title_fontsize=8,
-        bbox_to_anchor=(0.5, 0.0),
-        frameon=True,
+        loc="lower center", ncol=len(STAGE_COLORS),
+        fontsize=8, title="Sleep Stage", title_fontsize=8,
+        bbox_to_anchor=(0.5, 0.0), frameon=True,
     )
-    fig.subplots_adjust(bottom=0.1)
- 
-    # --- 5) Save or show ---
+    fig.subplots_adjust(bottom=0.10, right=0.82)
+    
+    # --- 4) Save or show ---
     if out_dir is not None:
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -785,7 +840,7 @@ if __name__ == "__main__":
         stage_col  = "stage",
         window_sec = 30.0,
         epoch_sec  = 4.0,
-        max_epochs = 1,
+        max_epochs = 5,
         out_dir    = None,
     )
 
