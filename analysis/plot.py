@@ -45,7 +45,18 @@ EPOCH_TYPE_COLORS = {
     "Phasic":  "#AA3377",  
     "Tonic":   "#CCDDAA", 
 }
- 
+
+# Default detection thresholds (µV) – shown as ±horizontal lines on signal axes
+THRESHOLDS = {
+    "Amp_Thresh_SEM": 50.0,   # SEM amplitude threshold
+    "amp_thresh_rem": 150.0,  # REM amplitude threshold
+}
+
+THRESHOLD_STYLES = {
+    "Amp_Thresh_SEM": dict(color="#5C5C5C", linestyle=":",  linewidth=1.0, alpha=0.8, label="SEM thresh (50 µV)"),
+    "amp_thresh_rem": dict(color="#242424", linestyle="-.", linewidth=1.0, alpha=0.8, label="REM thresh (150 µV)"),
+}
+
 # Numeric mapping for hypnogram y-axis
 STAGE_ORDER = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
 
@@ -55,7 +66,7 @@ STAGE_ORDER = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
 def _get_span_groups(epoch_df: pd.DataFrame, stage_col: str) -> pd.DataFrame:
     """Returns a DataFrame of consecutive stage runs with t_start, t_end, stage."""
     epoch_df = epoch_df.copy()
-    epoch_df["_span"] = (epoch_df[stage_col] != epoch_df[stage_col].shift()).cumsum()
+    epoch_df["_span"] = (epoch_df[stage_col] != epoch_df[stage_col].shift()).cumsum() # Findstage changes occurrences and label each run with a unique span ID.
     return (
         epoch_df.groupby("_span")
         .agg(t_start=("_t", "first"), t_end=("_t", "last"), stage=(stage_col, "first"))
@@ -66,40 +77,59 @@ def _shade_stages(ax, span_groups: pd.DataFrame):
     """Shade background by sleep stage."""
     for _, sp in span_groups.iterrows():
         ax.axvspan(
-            sp["t_start"], sp["t_end"],
-            color=STAGE_COLORS.get(sp["stage"], "#cccccc"),
+            sp["t_start"], sp["t_end"],                         # Span start and end times
+            color=STAGE_COLORS.get(sp["stage"], "#cccccc"),   # Get color for the stage, default to light grey
             alpha=0.2, linewidth=0
         )
 
 def _shade_epoch_type(ax, epoch_df: pd.DataFrame):
     """Shade background by EpochType (Phasic/Tonic)."""
     epoch_df = epoch_df.copy()
+
     epoch_df["_epoch_span"] = (
-        epoch_df["EpochType"].fillna("None") !=
-        epoch_df["EpochType"].fillna("None").shift()
+        epoch_df["EpochType"].fillna("None") !=        # Identify where EpochType changes (treat NaN as "None")
+        epoch_df["EpochType"].fillna("None").shift()   # Compare to previous row to find changes
     ).cumsum()
+
     epoch_spans = (
         epoch_df.groupby("_epoch_span")
         .agg(t_start=("_t", "first"), t_end=("_t", "last"), etype=("EpochType", "first"))
         .reset_index(drop=True)
     )
+
     for _, sp in epoch_spans.iterrows():
         color = EPOCH_TYPE_COLORS.get(sp["etype"], None)
         if color:
             ax.axvspan(sp["t_start"], sp["t_end"], color=color, alpha=0.25, linewidth=0)
 
-def _draw_epoch_boundaries(ax, window_sec: float, epoch_sec: float):
+def _draw_threshold_lines(ax, thresholds: dict | None = None):
     """
-    Draw vertical dashed lines at every epoch_sec boundary within the display window.
+    Draw ±horizontal threshold lines on a signal axis.
  
-    These lines mark the edges of the analysis epochs (e.g. every 4 s) so that the
-    viewer can relate signal features to the Phasic/Tonic classification granularity.
+    Parameters
+    ----------
+    ax : matplotlib Axes
+    thresholds : dict | None
+        Mapping of threshold name → µV value.  If None, the module-level
+        THRESHOLDS dict is used.  Pass an empty dict {} to suppress lines.
     """
-    for xb in np.arange(epoch_sec, window_sec, epoch_sec):
-        ax.axvline(
-            xb, color="#333333", linewidth=1.2,
-            linestyle="--", alpha=0.85, zorder=1,
-        )
+    if thresholds is None:
+        thresholds = THRESHOLDS
+
+    added_labels = set()
+
+    for name, val in thresholds.items():
+        style = THRESHOLD_STYLES.get(name, dict(color="grey", linestyle=":", linewidth=0.8, alpha=0.6)) # Default style if not specified
+        label = style.get("label", name)                                                                # Use provided label or fallback to the threshold name
+        plot_kw = {k: v for k, v in style.items() if k != "label"}                                      # Extract plotting kwargs, except label
+
+        # positive threshold
+        ax.axhline( val, **plot_kw, label=label if label not in added_labels else None, zorder=1)
+
+        # negative threshold (mirror)
+        ax.axhline(-val, **plot_kw, label=None, zorder=1)
+
+        added_labels.add(label)
 
 def _plot_signal(ax, t, signal_uv, color, label=None, lw=0.8):
     """Plot a signal in µV."""
@@ -127,7 +157,6 @@ def _format_signal_ax(ax, title, window_sec, epoch_sec: float = 4.0):
     ax.grid(alpha=0.3, linestyle="--")
     ax.tick_params(labelsize=8)
     ax.set_xlim(0, window_sec)
-    _draw_epoch_boundaries(ax, window_sec, epoch_sec)
 
 def _epoch_type_legend_patches():
     """Return legend patches for Phasic/Tonic."""
@@ -153,15 +182,16 @@ def plot_eog_epochs(
         max_epochs: int | None = None,
         out_dir:    Path | None = None,
         show_em:    bool = True,
+        thresholds:  dict | None = None,
     ) -> None:
     """
-    Plot fixed-length EOG epochs for a given sleep stage as enumerated subplots.
-    
-    Each epoch produces 4 subplots:
-    1. LOC + ROC — all EM info at once. Phasic  > Tonic > SEM > REM event.
-    2. LOC + ROC — SEM and REM highlighted.
-    3. LOC + ROC — Phasic and Tonic highlighted.
-    4. Hypnogram bar 
+    Plot a single, large LOC + ROC subplot per epoch with a compact hypnogram below it.
+
+    The signal panel shows:
+     - Stage background shading
+     - Phasic / Tonic background shading (if EpochType column present)
+     - SEM and REM overlays (if EM_Type / is_em_event columns present)
+     - ±Threshold horizontal lines
 
     If `show-em` is True amd EM (eye movement) columns are present, detected eye movement periods are overlaid as shaded regions with a peak marker on all signal subplots. \\
     Epochs are derived from consecutive GSSC stage labels. Each unique run of the target stage is treated as one epoch, then cropped/padded to `window_sec`.
@@ -192,6 +222,10 @@ def plot_eog_epochs(
         If provided, saves each figure as a PNG in this directory instead of showing it.
     show_em : bool
         If true, overlay detected EM events as shaded regions. Default is **True**.
+    thresholds : dict | None
+        Mapping of threshold name → µV value for horizontal lines.
+        Defaults to the module-level THRESHOLDS dict.
+        Pass {} to suppress all threshold lines.
  
     Returns
     -------
@@ -221,7 +255,7 @@ def plot_eog_epochs(
     has_em_type    = show_em and "EM_Type"     in df.columns
     has_epoch_type = show_em and "EpochType"   in df.columns
     
-    # ==== 2) Find epoch start times from consecutive stage runs ====
+    # ==== 2) Find epoch start times ====
     # Identify where stage transitions occur and label each run
     df["_block"] = (df[stage_col] != df[stage_col].shift()).cumsum()
 
@@ -256,13 +290,10 @@ def plot_eog_epochs(
             print(f"Epoch {i+1}: no data in window [{epoch_start:.1f}, {epoch_end:.1f}] — skipping.")
             continue
 
-        # Relative time for each epoch 
-        epoch_df["_t"] = epoch_df[time_col].values - epoch_start
-        t              = epoch_df["_t"].values
-        
-        # Signal values in µV
-        loc_uv = epoch_df[loc_col].values * 1e6
-        roc_uv = epoch_df[roc_col].values * 1e6
+        epoch_df["_t"] = epoch_df[time_col].values - epoch_start # Relative time within the epoch (0 to window_sec)
+        t = epoch_df["_t"].values                                # Time vector for plotting
+        loc_uv = epoch_df[loc_col].values * 1e6                  # Convert LOC to µV
+        roc_uv = epoch_df[roc_col].values * 1e6                  # Convert ROC to µV
  
         # Stage spans for shading
         span_groups = _get_span_groups(epoch_df, stage_col)
@@ -276,123 +307,66 @@ def plot_eog_epochs(
             sem_mask = rem_mask = np.zeros(len(epoch_df), dtype=bool)
 
         # ==== 4) Build figure ====
-        fig, axs = plt.subplots(
-            4, 1, figsize=(15, 10), sharex=True, 
-            gridspec_kw={'hspace': 0.5, 'height_ratios': [3, 2, 2, 1]},
+        fig, (ax_sig, ax_hyp) = plt.subplots(
+            2, 1, figsize=(15, 10), sharex=False, 
+            gridspec_kw={'hspace': 0.5, 'height_ratios': [5, 1]},
         )
 
         # Title for the epoch
         fig.suptitle(
             f"Epoch {i+1}  |  Stage: {stage}  |  "
-            f"t = {epoch_start:.1f} - {epoch_end:.1f} s",
-            fontsize=12, fontweight="bold",
+            f"t = {epoch_start:.1f} - {epoch_end:.1f} [s]",
+            fontsize=13, fontweight="bold",
         )
 
-        # SUBPLOT 1: LOC + ROC with all EM info (priority coloured)
-        _shade_stages(axs[0], span_groups)                              # Stages shading
+        # ── Signal panel ──────────────────────────────────────────────
+        _shade_stages(ax_sig, span_groups)
         if has_epoch_type:
-            _shade_epoch_type(axs[0], epoch_df)                         # Phasic/Tonic shading      
-        _plot_signal(axs[0], t, loc_uv, SIG_COLORS["LOC"], label="LOC") # Plot LOC signal
-        _plot_signal(axs[0], t, roc_uv, SIG_COLORS["ROC"], label="ROC") # Plot ROC signal
+            _shade_epoch_type(ax_sig, epoch_df)
+ 
+        _plot_signal(ax_sig, t, loc_uv, SIG_COLORS["LOC"], label="LOC", lw=0.9)
+        _plot_signal(ax_sig, t, roc_uv, SIG_COLORS["ROC"], label="ROC", lw=0.9)
  
         if has_em_type:
-            _overlay_segments(axs[0], t, loc_uv, sem_mask, EM_TYPE_COLORS["SEM"], label="SEM")
-            _overlay_segments(axs[0], t, roc_uv, sem_mask, EM_TYPE_COLORS["SEM"])
-            _overlay_segments(axs[0], t, loc_uv, rem_mask, EM_TYPE_COLORS["REM"], label="REM")
-            _overlay_segments(axs[0], t, roc_uv, rem_mask, EM_TYPE_COLORS["REM"])
-        _format_signal_ax(axs[0], "LOC + ROC  (all EM info)", window_sec, epoch_sec)
-        top_handles, _ = axs[0].get_legend_handles_labels()
-        axs[0].legend(                                                    # Add legend
-            handles=top_handles + _epoch_type_legend_patches(),
+            _overlay_segments(ax_sig, t, loc_uv, sem_mask, EM_TYPE_COLORS["SEM"], label="SEM")
+            _overlay_segments(ax_sig, t, roc_uv, sem_mask, EM_TYPE_COLORS["SEM"])
+            _overlay_segments(ax_sig, t, loc_uv, rem_mask, EM_TYPE_COLORS["REM"], label="REM event")
+            _overlay_segments(ax_sig, t, roc_uv, rem_mask, EM_TYPE_COLORS["REM"])
+ 
+        _draw_threshold_lines(ax_sig, thresholds)
+        _format_signal_ax(ax_sig, "LOC + ROC", window_sec, epoch_sec)
+ 
+        sig_handles, _ = ax_sig.get_legend_handles_labels()
+        ax_sig.legend(
+            handles=sig_handles + _epoch_type_legend_patches() + thresh_handles,
             fontsize=8, loc="center left", ncol=2,
-            bbox_to_anchor=(1,0.5), frameon=True
+            bbox_to_anchor=(1, 0.5), frameon=True,
         )
  
-        # SUBPLOT 2: LOC + ROC with SEM / REM 
-        #_shade_stages(axs[1], span_groups)                             # Stages shading   
-        _plot_signal(axs[1], t, loc_uv, SIG_COLORS["LOC"], label="LOC") # Plot LOC signal
-        _plot_signal(axs[1], t, roc_uv, SIG_COLORS["ROC"], label="ROC") # Plot ROC signal
- 
-        if has_em_type:
-            _overlay_segments(axs[1], t, loc_uv, sem_mask, EM_TYPE_COLORS["SEM"], label="SEM")
-            _overlay_segments(axs[1], t, roc_uv, sem_mask, EM_TYPE_COLORS["SEM"])
-            _overlay_segments(axs[1], t, loc_uv, rem_mask, EM_TYPE_COLORS["REM"], label="REM")
-            _overlay_segments(axs[1], t, roc_uv, rem_mask, EM_TYPE_COLORS["REM"])
-        _format_signal_ax(axs[1], "LOC + ROC  (SEM / REM)", window_sec, epoch_sec)
-        axs[1].legend(                                                  # Add legend 
-            fontsize=8, 
-            loc="center left", ncol=2, 
-            bbox_to_anchor=(1,0.5), frameon=True
-            )  
- 
-        # SUBPLOT 3: LOC + ROC with Phasic / Tonic shading
-        if has_epoch_type:
-            # Identify contiguous runs of the same epoch type for shading.
-            epoch_df["_epoch_span"] = (
-                epoch_df["EpochType"].fillna("None") !=
-                epoch_df["EpochType"].fillna("None").shift()
-            ).cumsum()
-            # Group by these spans to get start/end times and epoch type for each contiguous segment.
-            epoch_spans = (
-                epoch_df.groupby("_epoch_span")
-                .agg(t_start=("_t", "first"), t_end=("_t", "last"), etype=("EpochType", "first"))
-                .reset_index(drop=True)
-            )
-            # Shade the background of the third subplot according to Phasic/Tonic segments
-            for _, sp in epoch_spans.iterrows():
-                color = EPOCH_TYPE_COLORS.get(sp["etype"], None)
-                if color:
-                    axs[2].axvspan(sp["t_start"], sp["t_end"], color=color, alpha=0.25, linewidth=0)
-        else:
-            _shade_stages(axs[2], span_groups) # If no epoch type info, just shade by stage
-
-        _plot_signal(axs[2], t, loc_uv, SIG_COLORS["LOC"], label="LOC")        # Plot LOC signal
-        _plot_signal(axs[2], t, roc_uv, SIG_COLORS["ROC"], label="ROC")        # Plot ROC signal
-        _format_signal_ax(axs[2], "LOC + ROC  (Phasic / Tonic)", window_sec, epoch_sec)
-        ep_patches = [mpatches.Patch(color=c, label=s, alpha=0.5) for s, c in EPOCH_TYPE_COLORS.items()]
-        loc_roc_handles, _ = axs[2].get_legend_handles_labels()
-        axs[2].legend(                                                         # Add legend
-            handles=loc_roc_handles + ep_patches, 
-            fontsize=8, loc="center left", ncol=2,
-            bbox_to_anchor=(1, 0.5), frameon=True
-            )
-
-        # Subplot 4: Hypnogram bar
+        # ── Hypnogram panel ───────────────────────────────────────────
         for _, sp in span_groups.iterrows():
-            axs[3].barh(
+            ax_hyp.barh(
                 y     = STAGE_ORDER.get(sp["stage"], -1),
                 width = sp["t_end"] - sp["t_start"],
                 left  = sp["t_start"],
                 color = STAGE_COLORS.get(sp["stage"], "#cccccc"),
                 height=0.8, align="center",
             )
-        _draw_epoch_boundaries(axs[3], window_sec, epoch_sec)                            # Add vertical lines for epoch boundaries
-        axs[3].set_yticks(list(STAGE_ORDER.values()))                                    # Set y-ticks to numeric stage order
-        axs[3].set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)                     # Label y-ticks with stage names
-        axs[3].set_xlabel("Time within epoch [s]", fontsize=10)                          # Label x-axis
-        axs[3].set_xticks(np.arange(0, window_sec+1, 0.5))                               # Set x-ticks every 0.5 seconds
-        axs[3].set_xticklabels(np.arange(0, window_sec+1, 0.5), fontsize=6, rotation=45) # Set x-tick labels with smaller font
-        axs[3].set_title("Hypnogram", fontsize=10)                                       # Title for hypnogram subplot   
-        axs[3].set_xlim(0, window_sec)                                                   # Set x-axis limits to match epoch window         
-        axs[3].tick_params(labelsize=8)                                                  # Set tick label size for hypnogram subplot
-
-        
-
-        # Shared stage legend at bottom 
-        stage_patches = [
-            mpatches.Patch(color=c, label=s) for s, c in STAGE_COLORS.items()
-        ]
+        ax_hyp.set_yticks(list(STAGE_ORDER.values()))
+        ax_hyp.set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)
+        ax_hyp.set_xlabel("Time within epoch [s]", fontsize=10)
+        ax_hyp.set_title("Hypnogram", fontsize=9)
+        ax_hyp.set_xlim(0, window_sec)
+        ax_hyp.tick_params(labelsize=8)
+ 
         fig.legend(
             handles=stage_patches,
-            loc="lower center", 
-            ncol=len(STAGE_COLORS),         
-            fontsize=8, title="Sleep stage", 
-            title_fontsize=8, 
-            bbox_to_anchor=(0.5, 0.0), 
-            frameon=True,
+            loc="lower center", ncol=len(STAGE_COLORS),
+            fontsize=8, title="Sleep stage", title_fontsize=8,
+            bbox_to_anchor=(0.5, 0.0), frameon=True,
         )
-
-        fig.subplots_adjust(bottom=0.1)
+        fig.subplots_adjust(bottom=0.12, right=0.82)
+ 
 
         # --- 5) Save or show the plot ---
         if out_dir is not None:
