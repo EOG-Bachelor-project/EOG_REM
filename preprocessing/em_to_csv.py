@@ -36,17 +36,36 @@ def em_to_csv(
         lights_path:      Path | None = None,
         Dur_Thresh_SEM:   float = 0.5,
         Amp_Thresh_SEM:   float = 50.0,
+        fs_target:        int = 128,
+
+        # classify_rem_epochs (default) params
         epoch_sec:        float = 4.0,
         psg_epoch_sec:    float = 30.0,
         min_rapid:        int = 1,
-        fs_target:        int = 128,
-        ) -> pd.DataFrame | None:
+        
+        
+        # Umaer params (pased through to classify_rem_epochs_Umaer)
+        use_Umaer : bool = False, 
+        sub_epoch_len: float = 4.0,
+        window_len: float = 2.0,
+        min_separation: float = 8.0,
+        amp_thresh_rem: float = 150,
+        dur_thresh_rem: float = 0.5,
+        amp_thresh_tonic: float = 25.0,
+
+        ) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame] | None:
     """
     Load one EDF file, detect eye movements, classify them as SEM/REM and
     Phasic/Tonic, and save the result as a CSV file.
  
     Reuses the GSSC staging from gssc_df so GSSC never runs twice.
- 
+
+    Two classifiers are available, selected via `use_Umaer`:
+    - **False** (default): uses classify_rem_epochs(), and annotates each EM event with EpochIdx and EpochType. \\
+                           Saves one CSV: ``{session_id}_em.csv``
+    - **True**: uses classify_rem_epochs_Umaer(), and produces a sub-epoch DataFrame (one row per 4-second sub-epoch inside REM). \\
+            Saves two CSV's: ``{session_id}_em.csv`` and ``{session_id}_subepochs.csv``
+
     Parameters
     ----------
     edf_path : Path
@@ -68,6 +87,11 @@ def em_to_csv(
     Amp_Thresh_SEM : float
         Amplitude threshold in µV for SEM classification. Default is **50 [µV]**. \\
         Eye movements below this amplitude are classified as SEM.
+    fs_target : int
+        Target sampling rate in Hz. Signal is resampled if needed. Default is**128 Hz**.
+
+    **classify_rem_epochs params (used when use_Umaer=False)**
+    
     epoch_sec : float
         Duration of each analysis epoch in seconds for Phasic/Tonic classification. Default is **4.0 [s]**. This is independent of the 30-second.\\
         PSG scoring epoch - see classify_rem_epochs for details.
@@ -76,28 +100,81 @@ def em_to_csv(
         Must match the epoch length used to build hypno_int. Used to trim hypno_int to align with the cropped signal.
     min_rapid : int
         Minimum number of REMs per epoch to classify as Phasic. Default is **1**.
-    fs_target : int
-        Target sampling rate in Hz. Signal is resampled if needed. Default is**128 Hz**.
+    
+    **classify_rem_epochs_Umaer params (used when use_Umaer=True)**
+
+    use_Umaer : bool
+        If True use `classify_rem_epochs_Umaer()` instead of `classify_rem_epochs()`
+        Default is **False**
+    sub_epoch_len : float
+        Length of sub-epochs to classify in seconds. Default is **4.0 [s]**
+    window_len : float 
+        Length of each adjacent window used for Phasic/Tonic detection in seconds. Default is **2.0 [s]**
+    min_seperation : float 
+        Default is **8.0 [s]**
+    amp_thresh_rem : float
+        Default is **150 [µV]** 
+    dur_thresh_rem : float
+        Default is **0.5 [s]**
+    amp_thresh_tonic : float
+        Maximum mean absolute amplitude [µV] in both 2-second windows for Tonic classification. Default is **25 [µV]**
  
     Returns
     -------
     pd.DataFrame | None
-        DataFrame with one row per detected eye movement containing:
+        When use_Umaer=False: DataFrame with one row per detected eye movement containing:
         - `Start`, `Peak`, `End`, `Duration`,
         - `LOCAbsValPeak`, `ROCAbsValPeak`, `MeanAbsValPeak`,
         - `LOCAbsRiseSlope`, `ROCAbsRiseSlope`,
         - `LOCAbsFallSlope`, `ROCAbsFallSlope`,
         - `Stage`, `EM_Type`, `EpochIdx`, `EpochType`.
 
+    tuple[pd.DataFrame, pd.DataFrame] | None
+        When use_Umaer=True: Tuple of (em_df, subepoch_df) where:
+        - em_df: Same EM event DataFRame as above (without EpochIdx/EpochType columns).
+        - subepoch_df: Datafram with one row per 4-second sub-epoch inside REM containing: `SubEpochStart`, `SubEpochEnd`, `EpochIdx`, `EpochType`  
+
         Returns None if required channels are missing or signal is too short.
     """
     # --- Validation and setup ---
     if not isinstance(hypno_int, np.ndarray):
         raise ValueError(f"hypno_int must be a numpy array, but got type: {type(hypno_int)}")
-    if epoch_sec <= 0:
-        raise ValueError(f"epoch_sec must be a positive number, but got: {epoch_sec}")
     if fs_target <= 0:
         raise ValueError(f"fs_target must be a positive integer, but got: {fs_target}")
+        
+    if not use_Umaer:
+        if epoch_sec <= 0:
+            raise ValueError(f"epoch_sec must be positive, but got: {epoch_sec}")
+        if psg_epoch_sec <= 0:
+            raise ValueError(f"psg_epoch_sec must be positive, but got: {psg_epoch_sec}")
+        if min_rapid < 1:
+            raise ValueError(f"min_rapid must be >= 1, but got: {min_rapid}")
+    
+
+    
+    if use_Umaer:
+        if sub_epoch_len <= 0:
+            raise ValueError(f"sub_epoch_len must be positive, but got: {sub_epoch_len}")
+        if window_len <= 0:
+            raise ValueError(f"window_len must be positive, but got: {window_len}")
+        if sub_epoch_len != 2 * window_len:
+            raise ValueError(
+                f"sub_epoch_len ({sub_epoch_len}) must be exactly 2 * window_len({window_len}). "
+                f"Got 2 * window_len = {2 * window_len} [s]"
+            )
+        if psg_epoch_sec % sub_epoch_len != 0:
+            raise ValueError(
+                f"sub_epoch_len ({sub_epoch_len}) must divide evenly into psg_epoch_sec ({psg_epoch_sec}). "
+                f"Got remainder: {psg_epoch_sec % sub_epoch_len} [s]."
+            )
+        if min_separation < sub_epoch_len:
+            raise ValueError(
+                f"min_separation ({min_separation}) must be >= sub_epoch_len ({sub_epoch_len}). "
+                f"Otherwise adjacent sub-epochs can never both be kept."
+            )
+            
+    
+    # Add edgecases for Umaer params
  
     print(f"\nProcessing: {edf_path}")
  
@@ -186,19 +263,36 @@ def em_to_csv(
     )
  
     # --- 11) Classify Phasic / Tonic ---
+    if use_Umaer == True:
+        print(f"\nRunning classify_rem_epochs_Umaer...")
+        subepoch_df = classify_rem_epochs_Umaer(
+            df                  = em_df,
+            loc                 = loc_uv,
+            roc                 = roc_uv,
+            hypno_int           = hypno_int,
+            sf                  = sf,
+            epoch_len           = int(psg_epoch_sec),
+            sub_epoch_len       = sub_epoch_len,
+            window_len          = window_len,
+            min_separation      = min_separation,
+            amp_thresh_rem      = amp_thresh_rem,
+            dur_thresh_rem      = dur_thresh_rem, 
+            amp_thresh_tonic    = amp_thresh_tonic,
+        )
+    else:
+        print(f"\nRunning classify_rem_epochs...")
+        # Debug prints before we run classify_rem_epochs
+        print(f"\nhypno_int length: {len(hypno_int)} | REM epochs {(hypno_int==4).sum()}")
+        print(f"Frist few Peak times in em_df: {em_df['Peak'].head(5).values}")
+        print(f"Expected epoch indices from peaks: {(em_df['Peak'].head(5).values // epoch_sec).astype(int)}")
 
-    # Debug prints before we run classify_rem_epochs
-    print(f"\nhypno_int length: {len(hypno_int)} | REM epochs {(hypno_int==4).sum()}")
-    print(f"Frist few Peak times in em_df: {em_df['Peak'].head(5).values}")
-    print(f"Expected epoch indices from peaks: {(em_df['Peak'].head(5).values // epoch_sec).astype(int)}")
-
-    em_df = classify_rem_epochs(
-        df            = em_df,
-        hypno_int     = hypno_int,
-        epoch_sec     = epoch_sec,
-        psg_epoch_sec = psg_epoch_sec,
-        min_rapid     = min_rapid,
-    )
+        em_df = classify_rem_epochs(
+            df            = em_df,
+            hypno_int     = hypno_int,
+            epoch_sec     = epoch_sec,
+            psg_epoch_sec = psg_epoch_sec,
+            min_rapid     = min_rapid,
+        )
  
     # --- 12) Offset times to absolute time reference ---
     # detect_rem_jaec operates on a signal starting at 0
@@ -208,6 +302,10 @@ def em_to_csv(
         for col in ["Start", "Peak", "End"]:
             if col in em_df.columns:
                 em_df[col] = em_df[col] + lights_off
+        if use_Umaer:
+            for col in ["SubEpochStart", "SubEpochEnd"]:
+                if col in subepoch_df.columns:
+                    subepoch_df[col] = subepoch_df[col] + lights_off
  
     # --- 13) Save ---
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -217,5 +315,12 @@ def em_to_csv(
     print(f"Total EMs: {len(em_df)} | "
           f"SEM: {(em_df['EM_Type'] == 'SEM').sum()} | "
           f"REM: {(em_df['EM_Type'] == 'REM').sum()}")
- 
+    
+    if use_Umaer:
+        subepoch_path = out_dir / f"{session_id}_subepochs.csv"
+        subepoch_df.to_csv(subepoch_path, index = False)
+        print(f"Saved: {subepoch_path}")
+        # Add prints
+        return em_df, subepoch_df
+    
     return em_df

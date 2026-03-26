@@ -117,22 +117,34 @@ def _merge_events_fast(
 # MAIN MERGE FUNCTION - combine EOG, GSSC, and REM events into a single DataFrame and save as CSV
 # —————————————————————————————————————————————————————————————————————————————————————————————————
 def merge_all(
-        eog_file:    str | Path,
-        gssc_file:   str | Path,
-        events_file: str | Path,
-        em_file:     str | Path,
-        output_file: str | Path,
-        time_col:    str = "time_sec",
-        loc_col:     str = "LOC",
-        roc_col:     str = "ROC",
-        start_col:   str = "Start",
-        end_col:     str = "End",
-        peak_col:    str = "Peak",
+        eog_file:           str | Path,
+        gssc_file:          str | Path,
+        events_file:        str | Path,
+        em_file:            str | Path,
+        output_file:        str | Path,
+        subepochs_file:     str | Path | None = None,
+        time_col:           str = "time_sec",
+        loc_col:            str = "LOC",
+        roc_col:            str = "ROC",
+        start_col:          str = "Start",
+        end_col:            str = "End",
+        peak_col:           str = "Peak",
         ) -> pd.DataFrame:
     """
-    Merges EOG signals, GSSC sleep staging, REM event annotations, and 
-    eye movement classifications (SEM/REM, Phasic/Tonic) into a single 
+    Merges EOG signals, GSSC sleep staging, REM event annotations, 
+    and eye movement classifications (SEM/REM, Phasic/Tonic) into a single 
     unified per-sample DataFrame and saves it as CSV.
+
+    Supports two EM classification modes:
+
+    Default (use_Umaer=False in em_to_csv): 
+    - Pass only `em_file`. EpochType is read directly from the EM event rows
+       and propagated to each sample that falls inside a detected EM.
+    
+    Umaer (use-umaer=True is em_to_csv):
+    - Pass both `em_file` and `subepochs_file`. EpochType is read from the sub-epoch 
+      DataFrame and each sample is labelled with the EpochType of the sub-epoch it falls in.
+
 
     Parameters
     ----------
@@ -146,6 +158,8 @@ def merge_all(
         Path to CSV file containing detected eye movement events with their classifications (SEM/REM, Phasic/Tonic).
     output_file : str | Path
         Path where the merged CSV will be saved.
+    subepochs_file : str | Path | None
+        Default is **None**
     time_col : str
         Name of time column in the EOG CSV. Default is 'time_sec'.
     loc_col : str 
@@ -184,15 +198,20 @@ def merge_all(
             `EpochType`           — 'Phasic', 'Tonic', or 'Non-REM' (top-level shortcut) \\
             `em_{col}`            — all other columns from em_file
     """
+    # --- Convert all paths up front so .name, .is_file() etc always work ---
+    eog_file    = Path(eog_file)
+    gssc_file   = Path(gssc_file)
+    events_file = Path(events_file)
+    output_file = Path(output_file)
+    if subepochs_file is not None:
+        subepochs_file = Path(subepochs_file)
+
     # --- Validate input files ---
-    for file in [eog_file, gssc_file, events_file]:
+    for file in [eog_file, gssc_file, events_file, em_file]:
         if not Path(file).is_file():
             raise FileNotFoundError(f"File not found: {file}")
-    for col in [time_col, loc_col, roc_col, start_col, end_col, peak_col]:
-        if col in [time_col, loc_col, roc_col] and col not in pd.read_csv(eog_file).columns:
-            raise ValueError(f"EOG CSV must contain '{col}' column.")
-        if col in [start_col, end_col, peak_col] and col not in pd.read_csv(events_file).columns:
-            raise ValueError(f"Events CSV must contain '{col}' column.")
+    if subepochs_file is not None and not subepochs_file.is_file():
+        raise FileNotFoundError(f"Subepochs file not found: {subepochs_file}")  
 
     # --- 1) Load EOG ---
     print("=" * 60)
@@ -268,24 +287,35 @@ def merge_all(
  
     # Pull EM_Type and EpochType to top level for easy access in plot
     merged_df["EM_Type"]   = merged_df["em_EM_Type"]
-    merged_df["EpochType"] = merged_df["em_EpochType"] if "em_EpochType" in merged_df.columns else pd.NA
- 
     print(f"    SEM samples:    {(merged_df['EM_Type'] == 'SEM').sum():,}")
     print(f"    REM EM samples: {(merged_df['EM_Type'] == 'REM').sum():,}")
  
 
-    # --- 5) Add per-sample REM annotation columns ---
-    merged_df["is_rem_event"] = False
-    merged_df["event_id"] = pd.NA
+    # --- 6) Add EpochType column ---
+    if subepochs_file is not None:
+        print(f"\nMerging Umaer sub_epoch classification")
+        subepoch_df = pd.read_csv(subepochs_file)
+        for col in ["SubEpochStart", "SubEpochEnd", "EpochType"]:
+            if col not in subepoch_df.columns:
+                raise ValueError(
+                    f"Subepochs CSV must contain '{col}'. "
+                    f"Found: {list(subepoch_df.columns)}")
+            
+        merged_df["EpochType"] = pd.NA
+        times = merged_df[time_col].values
 
-    # Copy all original event columns into per-sample columns (prefixed with "event_")
-    # Include Start and End so plot function can access event_Start and event_End
-    event_extra_cols = [c for c in events_df.columns]
-    for col in event_extra_cols:
-        merged_df[f"event_{col}"] = pd.NA
+        for _, row in subepoch_df.iterrows():
+            mask = (times >= row["SubEpochStart"]) & (times < row["SubEpochEnd"])
+            merged_df.loc[mask, "EpochType"] = row["EpochType"]
+        
+        counts = subepoch_df["EpochType"].value_counts()
+        print(f"    Sub-epochs - Phasic: {counts.get('Phasic', 0)} | "
+              f"Tonic: {counts.get('Tonic', 0)} | "
+              f"Unclassified: {counts.get('Unclassified', 0)}")
+    else:
+        merged_df["EpochType"] = merged_df["em_EpochType"] if "em_EpochType" in merged_df.columns else pd.NA
 
-    # --- 6) Save ---
-    output_file = Path(output_file)
+    # --- 7) Save ---
     output_file.parent.mkdir(parents=True, exist_ok=True)
     merged_df.to_csv(output_file, index=False)
 

@@ -52,20 +52,47 @@ try:
 except Exception as e:
     print("extract_rems_from_edf FAILED:", e)
 
-print("\n####################################")
-print("######## Testing em_to_csv #########")
-print("####################################")
+print("\n#######################################")
+print("######## Testing em_to_csv    #########")
+print("######## (default classifier) #########")
+print("#######################################")
 try:
     if gssc_df is None or hypno_int is None:
-        raise RuntimeError("gssc_df or hypno_int is None")
+        raise RuntimeError("gssc_df or hypno_int is None - GSSC_to_csv must succeed first")
     em_to_csv(
         edf_path=edf_path,
         gssc_df=gssc_df,
         hypno_int=hypno_int,
-        lights_path=lightstxt_path
+        lights_path=lightstxt_path,
+        use_Umaer=False
     )
-    print("em_to_csv SUCCEEDED")
+    print("em_to_csv (default) SUCCEEDED")
 except Exception as e:
-    print("em_to_csv FAILED:", e)
+    print("em_to_csv (default) FAILED:", e)
+
+print("\n#######################################")
+print("######## Testing em_to_csv  ###########")
+print("######## (Umaer classifier) ###########")
+print("#######################################")
+try:
+    if gssc_df is None or hypno_int is None:
+        raise RuntimeError("gssc_df or hypno_int is None - GSSC_to_csv must succeed first")
+    result = em_to_csv(
+        edf_path=edf_path,
+        gssc_df=gssc_df,
+        hypno_int=hypno_int,
+        lights_path=lightstxt_path,
+        use_Umaer=True
+    )
+    if result is not None:
+        em_df, subepoch = result
+        print("em_to_csv (Umaer) SUCCEEDED")
+        print(f"    EM events: {len(em_df)} rows")
+        print(f"    Sub-epochs: {len(em_df)} rows")
+    else:
+        print(f"em_to_csv (Umaer) returned None - check signal length")
+except Exception as e:
+    print("em_to_csv (Umaer) FAILED:", e)
+
 
 tprint("Done") 

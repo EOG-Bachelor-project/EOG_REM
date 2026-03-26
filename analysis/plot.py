@@ -100,7 +100,7 @@ def _shade_epoch_type(ax, epoch_df: pd.DataFrame):
     for _, sp in epoch_spans.iterrows():
         color = EPOCH_TYPE_COLORS.get(sp["etype"], None)
         if color:
-            ax.axvspan(sp["t_start"], sp["t_end"], color=color, alpha=0.25, linewidth=0)
+            ax.axvspan(sp["t_start"], sp["t_end"], color=color, alpha=0.4, linewidth=0)
 
 def _draw_threshold_lines(ax, thresholds: dict | None = None):
     """
@@ -835,7 +835,7 @@ def plot_transition_epochs(
 # =====================================================================
 if __name__ == "__main__":
     plot_eog_epochs(
-        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv",
+        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged_Umaer.csv",
         stage      = "REM",
         stage_col  = "stage",
         window_sec = 30.0,
@@ -846,7 +846,7 @@ if __name__ == "__main__":
 
 
     plot_fullnight_overview(
-        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv",
+        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged_Umaer.csv",
         out_dir=None
     )
 
