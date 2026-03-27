@@ -86,6 +86,44 @@ except Exception as e:
     print("Artefact removal verification FAILED:", e)
     traceback.print_exc()
 
+print("\n#################################################")
+print("######## Masking artefacts in EOG CSV    ########")
+print("#################################################")
+try:
+    if events_df is None:
+        raise RuntimeError("events_df is None — extract_rems_from_edf must succeed first")
+ 
+    session_id   = edf_path.parent.name
+    eog_csv_path = Path("eog_csv") / f"{session_id}_{edf_path.stem}_eog.csv"
+    eog_df       = pd.read_csv(eog_csv_path)
+ 
+    print(f"    EOG CSV loaded: {eog_csv_path.name}  ({len(eog_df):,} samples)")
+ 
+    # edf_to_csv saves signals in raw volts (no µV conversion).
+    # We apply the same 300 µV threshold, converted to volts.
+    AMPLITUDE_THRESH_V = 300.0 * 1e-6  # 300 µV → volts
+ 
+    artefact_mask = (
+        (np.abs(eog_df["LOC"].values) > AMPLITUDE_THRESH_V) |
+        (np.abs(eog_df["ROC"].values) > AMPLITUDE_THRESH_V)
+    )
+    n_masked = int(artefact_mask.sum())
+ 
+    eog_df.loc[artefact_mask, "LOC"] = np.nan
+    eog_df.loc[artefact_mask, "ROC"] = np.nan
+ 
+    eog_df.to_csv(eog_csv_path, index=False)
+ 
+    print(f"    Artefact samples masked: {n_masked:,} / {len(eog_df):,} ({n_masked / len(eog_df):.2%})")
+    print(f"    Threshold: {AMPLITUDE_THRESH_V * 1e6:.0f} µV (signals stored in volts in EOG CSV)")
+    print(f"    Saved masked EOG CSV: {eog_csv_path.name}")
+    print("Masking EOG CSV SUCCEEDED")
+ 
+except Exception as e:
+    import traceback
+    print("Masking EOG CSV FAILED:", e)
+    traceback.print_exc()
+
 print("\n#######################################")
 print("######## Testing em_to_csv    #########")
 print("######## (default classifier) #########")
