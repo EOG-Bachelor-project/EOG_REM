@@ -15,7 +15,7 @@ def remove_artefacts(
         df:                 pd.DataFrame, 
         loc:                np.ndarray, 
         roc:                np.ndarray, 
-        amplitude_thresh:    float = 300.0, 
+        amplitude_thresh:   float = 300.0, 
         fs:                 float = 128.0
         ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
     

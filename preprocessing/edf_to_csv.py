@@ -21,6 +21,12 @@ RAW_ROOT = Path("L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok")
 OUT_DIR = Path("eog_csv")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# Target sampling frequency for all saved EOG CSVs.
+# MNE upsamples all channels to the highest sfreq found in the EDF,
+# so files with mixed-rate channels (e.g. 1000 Hz) must be resampled
+# down to a consistent rate before saving.
+FS_TARGET = 250  # Hz
+
 # =====================================================================
 # Functions
 # =====================================================================
@@ -32,7 +38,8 @@ def edf_to_csv(
     edf_path:    Path,
     pre_load:    bool = False,
     out_dir:     Path = OUT_DIR,
-    lights_path: Path | None = None
+    lights_path: Path | None = None,
+    fs_target:   int = FS_TARGET,
     ) -> None:
     """
     Load one EDF file, rename EOG channels to canonical names, and save the full signal matrix as a CSV file locally.
@@ -50,7 +57,10 @@ def edf_to_csv(
         By default, it is set to OUT_DIR, which is a directory named "local_csv_eog" in the current working directory.
     lights_path : Path | None
         Optional path to lights.txt file. If provided, the CSV is trimmed to the sleep period.
-    
+    fs_target : int
+        The target sampling frequency for the saved CSV file. Default is **250 [Hz]**.\\
+        Set to match the expected downstream pipeline frequency.
+
     Returns
     -------
     None
@@ -61,11 +71,11 @@ def edf_to_csv(
     raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
     print(" Loaded raw:", raw)
     print(" preload was set to:", pre_load)
-    print(" sfreq:", raw.info["sfreq"],"Hz")
+    print(" sfreq:", raw.info["sfreq"],"[Hz]")
 
     # --- 2) Rename EOG channels ---
     rename_map = build_rename_map(raw.ch_names)
-    print("Rename map:", rename_map)
+    print("\nRename map:", rename_map)
 
     if rename_map:
         raw.rename_channels(rename_map)
@@ -75,31 +85,39 @@ def edf_to_csv(
     if missing:
         print(f"Skipping {edf_path.name} - missing channels: {missing}")
         return
+    
+    # --- 4) Resample to target frequency if needed ---
+    sf = raw.info["sfreq"]
+    if sf != fs_target:
+        print(f"\nResampling from {sf} [Hz] to {fs_target} [Hz].")
+        if not raw.preload:
+            raw.load_data()
+        raw = raw.resample(fs_target)
 
-    # --- 4) Extract data for LOC and ROC channels ---
+    # --- 5) Extract data for LOC and ROC channels ---
     loc = raw.get_data(picks=["LOC"])[0]
     roc = raw.get_data(picks=["ROC"])[0]
 
-    # --- 5) Create a DataFrame with time and EOG channels ---
+    # --- 6) Create a DataFrame with time and EOG channels ---
     df = pd.DataFrame({
         "time_sec": raw.times,
         "LOC": loc,
         "ROC": roc,
     })
 
-    # --- 6) Trim to lights-off/lights-on window
+    # --- 7) Trim to lights-off/lights-on window
     if lights_path is not None:
         lights_off, lights_on = parse_lights_txt(lights_path)
         df = df[(df["time_sec"] >= lights_off) & (df["time_sec"] <= lights_on)].reset_index(drop=True)
         print(f"    Trimmed to sleep period: {len(df)} samples remaining.")
 
-    # --- 7) Save to CSV ---
+    # --- 8) Save to CSV ---
     patient_id = edf_path.parent.name
     out_path = out_dir / f"{patient_id}_{edf_path.stem}_eog.csv"
 
     df.to_csv(out_path, index=False)
 
-    print(f"Saved: {out_path}")
+    print(f"\nSaved: {out_path}")
 
 # 2 —————————————————————————————————————————————————————————————————————
 # 2 Function to convert all EDF files to CSV

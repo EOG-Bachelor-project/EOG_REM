@@ -87,7 +87,7 @@ def extract_rems_from_edf(
 
     # --- Rename channels for standardization ---
     rename_map = build_rename_map(raw.ch_names)
-    print("Rename map:", rename_map)
+    print("\nRename map:", rename_map)
 
     if rename_map:
         raw.rename_channels(rename_map)
