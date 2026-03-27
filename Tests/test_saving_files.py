@@ -5,13 +5,16 @@
 # =====================================================================
 # Imports
 # =====================================================================
-
 from pathlib import Path
+import numpy as np
+import pandas as pd
+ 
 from preprocessing.extract_rems_n import extract_rems_from_edf
 from preprocessing.edf_to_csv import edf_to_csv
 from preprocessing.GSSC_to_csv import GSSC_to_csv
 from preprocessing.em_to_csv import em_to_csv
 from art import * 
+
 # =====================================================================
 # Paths
 # =====================================================================
@@ -44,13 +47,44 @@ except Exception as e:
 
 print("\n###############################################")
 print("######## Testing extract_rems_from_edf ########")
+print("######## (includes remove_artefacts)    ########")
 print("###############################################")
-
+events_df = None
 try:
-    extract_rems_from_edf(edf_path, lights_path=lightstxt_path, gssc_df=gssc_df)
+    events_df = extract_rems_from_edf(edf_path, lights_path=lightstxt_path, gssc_df=gssc_df)
     print("extract_rems_from_edf SUCCEEDED")
 except Exception as e:
     print("extract_rems_from_edf FAILED:", e)
+
+print("\n#################################################")
+print("######## Verifying artefact removal      ########")
+print("#################################################")
+try:
+    if events_df is None:
+        raise RuntimeError("events_df is None — extract_rems_from_edf must succeed first")
+ 
+    session_id = edf_path.parent.name
+    saved_path = Path("extracted_rems") / f"{session_id}_extracted_rems.csv"
+    saved_df   = pd.read_csv(saved_path)
+ 
+    n_events   = len(saved_df)
+    max_loc    = saved_df["LOCAbsValPeak"].max()
+    max_roc    = saved_df["ROCAbsValPeak"].max()
+ 
+    print(f"    Events in saved CSV: {n_events}")
+    print(f"    Max LOCAbsValPeak:   {max_loc:.1f} µV")
+    print(f"    Max ROCAbsValPeak:   {max_roc:.1f} µV")
+ 
+    assert (saved_df["LOCAbsValPeak"] <= 300.0).all(), "FAIL: LOC artefact still present in saved CSV"
+    assert (saved_df["ROCAbsValPeak"] <= 300.0).all(), "FAIL: ROC artefact still present in saved CSV"
+ 
+    print("    All assertions passed — saved CSV is artefact-free.")
+    print("Artefact removal verification SUCCEEDED")
+ 
+except Exception as e:
+    import traceback
+    print("Artefact removal verification FAILED:", e)
+    traceback.print_exc()
 
 print("\n#######################################")
 print("######## Testing em_to_csv    #########")
