@@ -19,24 +19,24 @@ from art import *
 # =====================================================================
 # Paths
 # =====================================================================
-edf_path = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_2_a\contiguous.edf")
-lightstxt_path = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_2_a\lights.txt")
+edf_path        = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_2_a\contiguous.edf")
+lightstxt_path  = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_2_a\lights.txt")
 
 # =====================================================================
 # Helpers
 # =====================================================================
 def _section(title: str) -> float:
     """Print a section header and return the start time."""
-    print(f"\n{'#' * (len(title) + 4)}")
+    print(f"\n{'#' * (len(title) + 6)}")
     print(f"## {title} ##")
-    print(f"{'#' * (len(title) + 4)}")
+    print(f"{'#' * (len(title) + 6)}")
     return time.perf_counter()
  
 def _done(t0: float, label: str = ""):
     """Print elapsed time for a section."""
     elapsed = time.perf_counter() - t0
     suffix = f" [{label}]" if label else ""
-    print(f"Time: {elapsed:.1f}s{suffix}")
+    print(f"\nTime: {elapsed:.1f}s{suffix}")
 
 # =====================================================================
 # TEST
@@ -128,7 +128,7 @@ try:
  
     eog_df.to_csv(eog_csv_path, index=False)
  
-    print(f"    Artefact samples masked: {n_masked:,} / {len(eog_df):,} ({n_masked / len(eog_df):.2%})")
+    print(f"    Artefact samples masked: {n_masked:,} / {len(eog_df):,} ({n_masked // len(eog_df):.2%})")
     print(f"    Threshold: {AMPLITUDE_THRESH_V * 1e6:.0f} µV (signals stored in volts in EOG CSV)")
     print(f"    Saved masked EOG CSV: {eog_csv_path.name}")
     print("Masking EOG CSV SUCCEEDED")
@@ -165,6 +165,7 @@ try:
         gssc_df=gssc_df,
         hypno_int=hypno_int,
         lights_path=lightstxt_path,
+        psg_epoch_sec=32,
         use_Umaer=True,
     )
     if result is not None:

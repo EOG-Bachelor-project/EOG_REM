@@ -225,7 +225,7 @@ def em_to_csv(
     # --- 5) Resample if needed ---
     sf = raw.info["sfreq"]  
     if sf != fs_target:
-        print(f"    Resampling {sf} Hz → {fs_target} Hz")
+        print(f"\nResampling {sf} Hz → {fs_target} Hz")
         raw = raw.copy().resample(fs_target)
         sf  = fs_target
  
@@ -236,13 +236,13 @@ def em_to_csv(
     # detect_rem_jaec expects µV — raw.get_data() returns volts so we convert
     loc_uv = raw.get_data(picks=["LOC"])[0] * 1e6
     roc_uv = raw.get_data(picks=["ROC"])[0] * 1e6
-    print(f"    LOC range: {loc_uv.min():.1f} to {loc_uv.max():.1f} [µV]")
+    print(f"    \nLOC range: {loc_uv.min():.1f} to {loc_uv.max():.1f} [µV]")
     print(f"    ROC range: {roc_uv.min():.1f} to {roc_uv.max():.1f} [µV]")
  
     # --- 8) Build upsampled hypnogram ---
     samples_per_epoch = int(sf * psg_epoch_sec)
     hypno_up          = np.repeat(hypno_int, samples_per_epoch)
-    print(f"Upsampled hypnogram to match signal length: {len(hypno_up)} samples")
+    print(f"\nUpsampled hypnogram to match signal length: {len(hypno_up)} samples")
  
     # --- 9) Trim to match lengths and multiple of 2^14 (required by dtcwt) ---
     factor = 2 ** 14
@@ -263,6 +263,7 @@ def em_to_csv(
         loc            = loc_uv,
         roc            = roc_uv,
         hypno_up       = hypno_up,
+        fs             = sf,
         Dur_Thresh_SEM = Dur_Thresh_SEM,
         Amp_Thresh_SEM = Amp_Thresh_SEM,
     )

@@ -22,6 +22,7 @@ def detect_em(
         loc:            np.ndarray, 
         roc:            np.ndarray, 
         hypno_up:       np.ndarray,
+        fs:             float = 128,
         Dur_Thresh_SEM: float = 0.5,
         Amp_Thresh_SEM: float = 50.0
         ) -> pd.DataFrame:
@@ -47,6 +48,10 @@ def detect_em(
         The EOG signal from the right eye (ROC).
     hypno_up : np.ndarray
         The hypnogram indicating sleep stages, upsampled to match the EOG signal length.
+    fs : float
+        Sampling frequency of the LOC/ROC signals in Hz.
+        Used to convert peak timestamps to sample indices when computing raw-signal amplitudes. \\
+        Default is **128 [μV]**.
     Dur_Thresh_SEM : float, optional
         Duration threshold for classifying an eye movement as a Slow Eye Movement (SEM) in seconds, by default **0.5 [s]**.
     Amp_Thresh_SEM : float, optional
@@ -101,7 +106,14 @@ def detect_em(
     print(f"    Detected {len(df)} eye movement events.")
 
     # 2) Define Mean absolute peak amplitude from both channels
-    df['MeanAbsValPeak'] = (df['LOCAbsValPeak'] + df['ROCAbsValPeak']) / 2
+    peak_samples = (
+        (df['Peak'] * fs)
+        .round()
+        .astype(int)
+        .clip(0, len(loc)-1)
+        )
+    
+    df['MeanAbsValPeak'] = (np.abs(loc[peak_samples.values])  + np.abs(roc[peak_samples.values])) / 2
 
     # ---- 3) Define thresholds for SEM ----
     Dur_Thresh_SEM = Dur_Thresh_SEM  # [s]  - change if needed 
@@ -173,7 +185,9 @@ def classify_rem_epochs(
     epoch_sec : float, optional
         Duration of each analysis epoch in seconds. Default is **4.0 [s]**.
     psg_epoch_sec : float, optional
-        Duration of each PSG scoring epoch in seconds, used to determine which analysis epochs fall inside REM sleep. Default is **30.0 [s]**
+        Duration of each PSG scoring epoch in seconds, 
+        used to determine which analysis epochs fall inside REM sleep. 
+        Default is **30.0 [s]**
     min_rapid : int, optional
         Minimum number of REMs required in each half-window for an epoch to be classified as Phasic. Default is **1**.
 
@@ -323,8 +337,8 @@ def classify_rem_epochs_Umaer(
         raise ValueError(f"Input DataFrame is missing columns: {missing}")
     if loc.shape != roc.shape:
         raise ValueError (f"LOC and ROC must have the same shape. Got LOC: {loc.shape}, ROC: {roc.shape}")
-    if sub_epoch_len != 2 * window_len:
-        raise ValueError (f"sub_epoch_len({sub_epoch_len} [s]) must be exactly 2 x window_len ({window_len} [s])")
+    #if sub_epoch_len != 2 * window_len:
+    #    raise ValueError (f"sub_epoch_len({sub_epoch_len} [s]) must be exactly 2 x window_len ({window_len} [s])")
     
     df = df.copy()
     total_samples = len(loc)

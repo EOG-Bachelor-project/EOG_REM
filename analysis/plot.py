@@ -53,7 +53,7 @@ THRESHOLDS = {
 }
 
 THRESHOLD_STYLES = {
-    "Amp_Thresh_SEM": dict(color="#5C5C5C", linestyle=":",  linewidth=1.0, alpha=0.8, label="SEM thresh (50 µV)"),
+    "Amp_Thresh_SEM": dict(color="#5C5C5C", linestyle="--",  linewidth=1.0, alpha=0.8, label="SEM thresh (50 µV)"),
     "amp_thresh_rem": dict(color="#242424", linestyle="-.", linewidth=1.0, alpha=0.8, label="REM thresh (150 µV)"),
 }
 
@@ -119,9 +119,9 @@ def _draw_threshold_lines(ax, thresholds: dict | None = None):
     added_labels = set()
 
     for name, val in thresholds.items():
-        style = THRESHOLD_STYLES.get(name, dict(color="grey", linestyle=":", linewidth=0.8, alpha=0.6)) # Default style if not specified
-        label = style.get("label", name)                                                                # Use provided label or fallback to the threshold name
-        plot_kw = {k: v for k, v in style.items() if k != "label"}                                      # Extract plotting kwargs, except label
+        style = THRESHOLD_STYLES.get(name, dict(color="grey", linestyle="-.", linewidth=0.8, alpha=0.6)) # Default style if not specified
+        label = style.get("label", name)                                                                 # Use provided label or fallback to the threshold name
+        plot_kw = {k: v for k, v in style.items() if k != "label"}                                       # Extract plotting kwargs, except label
 
         # positive threshold
         ax.axhline( val, **plot_kw, label=label if label not in added_labels else None, zorder=1)
