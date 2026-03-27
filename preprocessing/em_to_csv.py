@@ -37,6 +37,7 @@ def em_to_csv(
         Dur_Thresh_SEM:   float = 0.5,
         Amp_Thresh_SEM:   float = 50.0,
         fs_target:        int = 128,
+        pre_load:         bool = False,
 
         # classify_rem_epochs (default) params
         epoch_sec:        float = 4.0,
@@ -89,6 +90,10 @@ def em_to_csv(
         Eye movements below this amplitude are classified as SEM.
     fs_target : int
         Target sampling rate in Hz. Signal is resampled if needed. Default is**128 Hz**.
+     pre_load : bool
+        If True mne.io.read_raw_edf(preload = True). \\
+        If False mne.io.read_raw_edf(preload = False). \\
+        Default is **False**.
 
     **classify_rem_epochs params (used when use_Umaer=False)**
     
@@ -172,19 +177,19 @@ def em_to_csv(
                 f"min_separation ({min_separation}) must be >= sub_epoch_len ({sub_epoch_len}). "
                 f"Otherwise adjacent sub-epochs can never both be kept."
             )
-            
-    
-    # Add edgecases for Umaer params
  
     print(f"\nProcessing: {edf_path}")
  
-    if not edf_path.exists():
-        raise FileNotFoundError(f"EDF file not found: {edf_path}")
+    #if not edf_path.exists():
+    #    raise FileNotFoundError(f"EDF file not found: {edf_path}")
  
     session_id = edf_path.parent.name
  
     # --- 1) Load EDF ---
-    raw = mne.io.read_raw_edf(edf_path, preload=True, verbose=False)
+    raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
+    print(" Loaded raw:", raw)
+    print(" preload was set to:", pre_load)
+    print(" sfreq:", raw.info["sfreq"],"Hz")
  
     # --- 2) Rename channels ---
     rename_map = build_rename_map(raw.ch_names)

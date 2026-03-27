@@ -29,10 +29,12 @@ GSSC_DIR.mkdir(parents=True, exist_ok=True)
 # =====================================================================
 
 # GSSC test function
-def GSSC_to_csv(edf_path:    str | Path, 
-                out_dir:     Path = GSSC_DIR,
-                lights_path: Path | None = None
-                ) -> pd.DataFrame:
+def GSSC_to_csv(
+        edf_path:    str | Path, 
+        pre_load:    bool = False,
+        out_dir:     Path = GSSC_DIR,
+        lights_path: Path | None = None
+        ) -> pd.DataFrame:
     """
     Load one EDF file, run GSSC inference, and save the result as CSV. \\
     If a lights.txt path is provided, the output is trimmed to the lights-off/lights-on window.
@@ -41,6 +43,10 @@ def GSSC_to_csv(edf_path:    str | Path,
     ----------
     edf_path : str | Path
         The path to the EDF file to be loaded.
+     pre_load : bool
+        If True mne.io.read_raw_edf(preload = True). \\
+        If False mne.io.read_raw_edf(preload = False). \\
+        Default is **False**.
     out_dir : Path
         The directory where the output CSV file will be saved.
     lights_path : Path | None
@@ -61,9 +67,10 @@ def GSSC_to_csv(edf_path:    str | Path,
     print(f"\nProcessing: {edf_path}")
 
     # --- 1) Read EDF ---
-    raw = mne.io.read_raw_edf(edf_path, preload=False, verbose=False)
+    raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
 
     print(" Loaded raw:", raw)
+    print(" preload was set to:", pre_load)
     print(" Channels:", raw.ch_names[:20], "..." if len(raw.ch_names) > 20 else "")
     print(" sfreq:", raw.info["sfreq"],"Hz")
 

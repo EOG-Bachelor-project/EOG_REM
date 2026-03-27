@@ -18,8 +18,8 @@ from art import *
 # =====================================================================
 # Paths
 # =====================================================================
-edf_path = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_1_a\contiguous.edf")
-lightstxt_path = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_1_a\lights.txt")
+edf_path = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_2_a\contiguous.edf")
+lightstxt_path = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_2_a\lights.txt")
 # =====================================================================
 # TEST
 # =====================================================================
@@ -47,7 +47,7 @@ except Exception as e:
 
 print("\n###############################################")
 print("######## Testing extract_rems_from_edf ########")
-print("######## (includes remove_artefacts)    ########")
+print("######## (includes remove_artefacts)   ########")
 print("###############################################")
 events_df = None
 try:
@@ -56,9 +56,9 @@ try:
 except Exception as e:
     print("extract_rems_from_edf FAILED:", e)
 
-print("\n#################################################")
-print("######## Verifying artefact removal      ########")
-print("#################################################")
+print("\n############################################")
+print("######## Verifying artefact removal ########")
+print("############################################")
 try:
     if events_df is None:
         raise RuntimeError("events_df is None — extract_rems_from_edf must succeed first")
@@ -86,9 +86,9 @@ except Exception as e:
     print("Artefact removal verification FAILED:", e)
     traceback.print_exc()
 
-print("\n#################################################")
-print("######## Masking artefacts in EOG CSV    ########")
-print("#################################################")
+print("\n##############################################")
+print("######## Masking artefacts in EOG CSV ########")
+print("##############################################")
 try:
     if events_df is None:
         raise RuntimeError("events_df is None — extract_rems_from_edf must succeed first")
@@ -154,6 +154,7 @@ try:
         gssc_df=gssc_df,
         hypno_int=hypno_int,
         lights_path=lightstxt_path,
+        psg_epoch_sec= 32,
         use_Umaer=True
     )
     if result is not None:

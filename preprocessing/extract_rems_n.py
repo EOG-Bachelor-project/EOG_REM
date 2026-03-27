@@ -31,6 +31,7 @@ EXTRACT_REMS_DIR.mkdir(parents=True, exist_ok=True)
 # =====================================================================
 def extract_rems_from_edf(
         edf_path:    Path, 
+        pre_load:    bool = False,
         out_dir:     Path = EXTRACT_REMS_DIR,
         lights_path: Path | None = None,
         gssc_df:     pd.DataFrame | None = None,
@@ -43,6 +44,10 @@ def extract_rems_from_edf(
     ----------
     edf_path : Path
         The path to the input EDF file.
+    pre_load : bool
+        If True mne.io.read_raw_edf(preload = True). \\
+        If False mne.io.read_raw_edf(preload = False). \\
+        Default is **False**.
     out_dir : Path
         The directory where the output CSV file will be saved.
     lights_path : Path | None
@@ -75,8 +80,9 @@ def extract_rems_from_edf(
     session_id = edf_path.parent.name
 
     # --- Load EDF ---
-    raw = mne.io.read_raw_edf(edf_path, preload=True, verbose=False)
+    raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
     print(" Loaded raw:", raw)
+    print(" preload was set to:", pre_load)
     print(" sfreq:", raw.info["sfreq"],"[Hz]")
 
     # --- Rename channels for standardization ---

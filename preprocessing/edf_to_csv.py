@@ -28,10 +28,12 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 # 1 —————————————————————————————————————————————————————————————————————
 # 1 Function to convert a single EDF file to CSV
 # 1 —————————————————————————————————————————————————————————————————————
-def edf_to_csv(edf_path:    Path, 
-               out_dir:     Path = OUT_DIR,
-               lights_path: Path | None = None
-               ) -> None:
+def edf_to_csv(
+    edf_path:    Path,
+    pre_load:    bool = False,
+    out_dir:     Path = OUT_DIR,
+    lights_path: Path | None = None
+    ) -> None:
     """
     Load one EDF file, rename EOG channels to canonical names, and save the full signal matrix as a CSV file locally.
 
@@ -39,6 +41,10 @@ def edf_to_csv(edf_path:    Path,
     ----------
     edf_path : Path
         The path to the input EDF file.
+    pre_load : bool
+        If True mne.io.read_raw_edf(preload = True). \\
+        If False mne.io.read_raw_edf(preload = False). \\
+        Default is **False**.
     out_dir : Path
         The directory where the output CSV file will be saved. \\
         By default, it is set to OUT_DIR, which is a directory named "local_csv_eog" in the current working directory.
@@ -52,8 +58,9 @@ def edf_to_csv(edf_path:    Path,
     print(f"\nProcessing: {edf_path}")
 
     # --- 1) Load EDF ---
-    raw = mne.io.read_raw_edf(edf_path, preload=True, verbose=False)
+    raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
     print(" Loaded raw:", raw)
+    print(" preload was set to:", pre_load)
     print(" sfreq:", raw.info["sfreq"],"Hz")
 
     # --- 2) Rename EOG channels ---
