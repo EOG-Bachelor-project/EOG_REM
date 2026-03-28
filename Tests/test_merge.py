@@ -12,11 +12,11 @@ import pandas as pd
 # =====================================================================
 # Paths
 # =====================================================================
-EOG_FILE        = Path("C:/Users/AKLO0022/EOG_REM/eog_csv/DCSM_2_a_contiguous_eog.csv")
-GSSC_FILE       = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_2_a_gssc.csv")
-EVENTS_FILE     = Path("C:/Users/AKLO0022/EOG_REM/extracted_rems/DCSM_2_a_extracted_rems.csv")
-EM_FILE         = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_2_a_em.csv")
-SUBEPOCHS_FILE  = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_2_a_subepochs.csv")
+EOG_FILE        = Path("C:/Users/AKLO0022/EOG_REM/eog_csv/DCSM_3_a_contiguous_eog.csv")
+GSSC_FILE       = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_3_a_gssc.csv")
+EVENTS_FILE     = Path("C:/Users/AKLO0022/EOG_REM/extracted_rems/DCSM_3_a_extracted_rems.csv")
+EM_FILE         = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_3_a_em.csv")
+SUBEPOCHS_FILE  = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_3_a_subepochs.csv")
 
 
 OUTPUT_DIR  = Path("merged_csv_eog")

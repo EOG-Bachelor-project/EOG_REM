@@ -835,18 +835,29 @@ def plot_transition_epochs(
 # =====================================================================
 if __name__ == "__main__":
     plot_eog_epochs(
-        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged_Umaer.csv",
+        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged_Umaer.csv",
         stage      = "REM",
         stage_col  = "stage",
         window_sec = 30.0,
         epoch_sec  = 4.0,
-        max_epochs = 5,
+        max_epochs = 20,
+        out_dir    = None,
+    )
+
+    plot_eog_epochs(
+        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged.csv",
+        stage      = "REM",
+        stage_col  = "stage",
+        window_sec = 30.0,
+        epoch_sec  = 4.0,
+        max_epochs = 20,
         out_dir    = None,
     )
 
 
+
     plot_fullnight_overview(
-        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged_Umaer.csv",
+        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged_Umaer.csv",
         out_dir=None
     )
 
