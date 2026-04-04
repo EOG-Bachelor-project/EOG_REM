@@ -7,6 +7,7 @@
 # =====================================================================
 from __future__ import annotations
 
+from curses import raw
 from pathlib import Path
 import pandas as pd
 import mne
@@ -95,14 +96,14 @@ def edf_to_csv(
         raw = raw.resample(fs_target)
 
     # --- 5) Extract data for LOC and ROC channels ---
-    loc = raw.get_data(picks=["LOC"])[0]
-    roc = raw.get_data(picks=["ROC"])[0]
+    loc = raw.get_data(picks=["LOC"])[0] * 1e6 # Convert V to µV
+    roc = raw.get_data(picks=["ROC"])[0] * 1e6 # Convert V to µV
 
-    # --- 6) Create a DataFrame with time and EOG channels ---
+    # --- 6) Create a DataFrame with time and EOG channels (signals in µV) ---
     df = pd.DataFrame({
         "time_sec": raw.times,
-        "LOC": loc,
-        "ROC": roc,
+        "LOC": loc,   # µV
+        "ROC": roc,   # µV
     })
 
     # --- 7) Trim to lights-off/lights-on window

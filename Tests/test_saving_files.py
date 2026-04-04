@@ -115,11 +115,11 @@ try:
  
     print(f"    EOG CSV loaded: {eog_csv_path.name}  ({len(eog_df):,} samples)")
  
-    AMPLITUDE_THRESH_V = 300.0 * 1e-6  # 300 µV → volts
- 
+    AMPLITUDE_THRESH_UV = 300.0   # µV  (CSV is now stored in µV)
+
     artefact_mask = (
-        (np.abs(eog_df["LOC"].values) > AMPLITUDE_THRESH_V) |
-        (np.abs(eog_df["ROC"].values) > AMPLITUDE_THRESH_V)
+        (np.abs(eog_df["LOC"].values) > AMPLITUDE_THRESH_UV) |
+        (np.abs(eog_df["ROC"].values) > AMPLITUDE_THRESH_UV)
     )
     n_masked = int(artefact_mask.sum())
  
@@ -129,7 +129,7 @@ try:
     eog_df.to_csv(eog_csv_path, index=False)
  
     print(f"    Artefact samples masked: {n_masked:,} / {len(eog_df):,} ({n_masked // len(eog_df):.2%})")
-    print(f"    Threshold: {AMPLITUDE_THRESH_V * 1e6:.0f} µV (signals stored in volts in EOG CSV)")
+    print(f"    Threshold: {AMPLITUDE_THRESH_UV:.0f} µV (signals stored in µV in EOG CSV)")
     print(f"    Saved masked EOG CSV: {eog_csv_path.name}")
     print("Masking EOG CSV SUCCEEDED")
 except Exception as e:
