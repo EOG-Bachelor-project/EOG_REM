@@ -98,8 +98,23 @@ def edf_to_csv(
     # --- 5) Extract data for LOC and ROC channels ---
     loc = raw.get_data(picks=["LOC"])[0] * 1e6 # Convert V to µV
     roc = raw.get_data(picks=["ROC"])[0] * 1e6 # Convert V to µV
+    
+    # --- 5b) Mask artefact samples on continuous signal ---
+    ARTEFACT_THRESH_UV = 300.0  # µV
 
-    # --- 5b) Unit sanity check ---
+    artefact_mask = (np.abs(loc) > ARTEFACT_THRESH_UV) | (np.abs(roc) > ARTEFACT_THRESH_UV)
+    n_masked = int(artefact_mask.sum())
+    n_total  = len(loc)
+
+    loc = loc.astype(float)
+    roc = roc.astype(float)
+    loc[artefact_mask] = np.nan
+    roc[artefact_mask] = np.nan
+
+    print(f"    Artefact samples masked: {n_masked:,} / {n_total:,} "
+          f"({n_masked / n_total:.2%}) — threshold: {ARTEFACT_THRESH_UV:.0f} µV")
+
+    # --- 5c) Unit sanity check (on clean signal) ---
     loc_max = float(np.abs(loc).max())
     roc_max = float(np.abs(roc).max())
     print(f"    LOC range after conversion: {loc.min():.2f} to {loc.max():.2f} [µV]")
@@ -117,23 +132,6 @@ def edf_to_csv(
             f"(LOC max={loc_max:.1f}, ROC max={roc_max:.1f} µV). "
             f"EDF may already store values in µV — check physical_dimension in header."
         )
-    
-    # --- 5c) Mask artefact samples on continuous signal ---
-    # Any sample where |LOC| or |ROC| exceeds the threshold is set to NaN.
-    # This ensures the EOG CSV is clean before merging and feature extraction.
-    ARTEFACT_THRESH_UV = 300.0  # µV
-
-    artefact_mask = (np.abs(loc) > ARTEFACT_THRESH_UV) | (np.abs(roc) > ARTEFACT_THRESH_UV)
-    n_masked = int(artefact_mask.sum())
-    n_total  = len(loc)
-
-    loc = loc.astype(float)
-    roc = roc.astype(float)
-    loc[artefact_mask] = np.nan
-    roc[artefact_mask] = np.nan
-
-    print(f"    Artefact samples masked: {n_masked:,} / {n_total:,} "
-          f"({n_masked / n_total:.2%}) — threshold: {ARTEFACT_THRESH_UV:.0f} µV")
 
     # --- 6) Create a DataFrame with time and EOG channels (signals in µV) ---
     df = pd.DataFrame({
