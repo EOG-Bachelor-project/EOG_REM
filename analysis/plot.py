@@ -292,8 +292,8 @@ def plot_eog_epochs(
 
         epoch_df["_t"] = epoch_df[time_col].values - epoch_start # Relative time within the epoch (0 to window_sec)
         t = epoch_df["_t"].values                                # Time vector for plotting
-        loc_uv = epoch_df[loc_col].values * 1e6                  # Convert LOC to µV
-        roc_uv = epoch_df[roc_col].values * 1e6                  # Convert ROC to µV
+        loc_uv = epoch_df[loc_col].values
+        roc_uv = epoch_df[roc_col].values
  
         # Stage spans for shading
         span_groups = _get_span_groups(epoch_df, stage_col)
@@ -452,8 +452,8 @@ def plot_fullnight_overview(
     has_epoch_type = show_em and "EpochType"   in df.columns
 
     t_min = df[time_col].values / 60
-    loc_uv = df[loc_col].values * 1e6
-    roc_uv = df[roc_col].values * 1e6
+    loc_uv = df[loc_col].values
+    roc_uv = df[roc_col].values
     
     # --- 2) Compute stage shading spans ---
     df["_span_block"] = (df[stage_col] != df[stage_col].shift()).cumsum()
@@ -754,7 +754,7 @@ def plot_transition_epochs(
             draw_epoch_lines(ax)  # Add epoch boundary lines
  
         # Subplot 1: LOC
-        axs[0].plot(t, epoch_df[loc_col].values * 1e6, color=SIG_COLORS["LOC"], linewidth=0.8)
+        axs[0].plot(t, epoch_df[loc_col].values, color=SIG_COLORS["LOC"], linewidth=0.8)
         axs[0].set_title("LOC", fontsize=10)
         axs[0].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
         axs[0].axhline(0, color="black", alpha=0.5, linewidth=0.5)
@@ -763,7 +763,7 @@ def plot_transition_epochs(
         add_stage_shading(axs[0])
  
         # Subplot 2: ROC
-        axs[1].plot(t, epoch_df[roc_col].values * 1e6, color=SIG_COLORS["ROC"], linewidth=0.8)
+        axs[1].plot(t, epoch_df[roc_col].values, color=SIG_COLORS["ROC"], linewidth=0.8)
         axs[1].set_title("ROC", fontsize=10)
         axs[1].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
         axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)
@@ -772,8 +772,8 @@ def plot_transition_epochs(
         add_stage_shading(axs[1])
  
         # Subplot 3: LOC + ROC overlapping
-        axs[2].plot(t, epoch_df[loc_col].values * 1e6, color=SIG_COLORS["LOC"], linewidth=0.8, label="LOC")
-        axs[2].plot(t, epoch_df[roc_col].values * 1e6, color=SIG_COLORS["ROC"], linewidth=0.8, label="ROC")
+        axs[2].plot(t, epoch_df[loc_col].values, color=SIG_COLORS["LOC"], linewidth=0.8, label="LOC")
+        axs[2].plot(t, epoch_df[roc_col].values, color=SIG_COLORS["ROC"], linewidth=0.8, label="ROC")
         axs[2].set_title("LOC + ROC", fontsize=10)
         axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
         axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)
@@ -835,7 +835,7 @@ def plot_transition_epochs(
 # =====================================================================
 if __name__ == "__main__":
     plot_eog_epochs(
-        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged_Umaer.csv",
+        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_4_a_contiguous_eog_merged_Umaer.csv",
         stage      = "REM",
         stage_col  = "stage",
         window_sec = 30.0,
@@ -845,7 +845,7 @@ if __name__ == "__main__":
     )
 
     plot_eog_epochs(
-        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged.csv",
+        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_4_a_contiguous_eog_merged.csv",
         stage      = "REM",
         stage_col  = "stage",
         window_sec = 30.0,
@@ -857,7 +857,7 @@ if __name__ == "__main__":
 
 
     plot_fullnight_overview(
-        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged_Umaer.csv",
+        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_4_a_contiguous_eog_merged_Umaer.csv",
         out_dir=None
     )
 

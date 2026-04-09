@@ -117,8 +117,8 @@ def edf_to_csv(
     # --- 5c) Unit sanity check (on clean signal) ---
     loc_max = float(np.abs(loc).max())
     roc_max = float(np.abs(roc).max())
-    print(f"    LOC range after conversion: {loc.min():.2f} to {loc.max():.2f} [µV]")
-    print(f"    ROC range after conversion: {roc.min():.2f} to {roc.max():.2f} [µV]")
+    print(f"    LOC range after conversion: {np.nanmin(loc):.2f} to {np.nanmax(loc):.2f} [µV]")
+    print(f"    ROC range after conversion: {np.nanmin(roc):.2f} to {np.nanmax(roc):.2f} [µV]")
 
     if loc_max < 1.0 or roc_max < 1.0:
         raise ValueError(
