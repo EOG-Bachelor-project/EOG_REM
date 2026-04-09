@@ -254,7 +254,7 @@ def classify_rem_epochs(
     def epoch_type(row):
         epoch_idx = row['EpochIdx']
         if epoch_idx not in rem_epoch_indices:
-            return 'Non-REM'
+            return 'Unclassified'
         n_rapid = rem_counts.get(epoch_idx, 0)
         return 'Phasic' if n_rapid >= min_rapid else 'Tonic'
  

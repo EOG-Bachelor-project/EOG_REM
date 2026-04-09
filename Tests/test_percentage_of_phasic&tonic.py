@@ -14,11 +14,6 @@ import pandas as pd
 
 def percentage_tonic_phasic (method = 'Umaer') -> pd.DataFrame: 
 
-
-    # --- Reminder before code is run ---
-
-    raise ValueError (f"Change DataFrame in 'detect_em' to so 'Unclassifed' and 'NonREM' have the same name ")
-
     # --- Define method and extract necessary columns ---
     if method == 'Umaer':
         df = classify_rem_epochs_Umaer()[['EpochType']].copy()
