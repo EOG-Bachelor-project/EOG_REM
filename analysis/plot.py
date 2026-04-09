@@ -239,7 +239,7 @@ def plot_eog_epochs(
     lprint(length=100, height=1, char="%")
 
     # ==== 1) Load CSV file ====
-    df = pd.read_csv(file)
+    df = pd.read_csv(file, low_memory=False)
     print(f"Columns in merged CSV: \n{df.columns.tolist()}")
     print(f"EpochType values: {df['EpochType'].value_counts().to_dict() if 'EpochType' in df.columns else 'NOT FOUND'}")
 
@@ -441,7 +441,7 @@ def plot_fullnight_overview(
     lprint(length=100, height=1, char="%")
     
     # --- 1) Load and validate ---
-    df = pd.read_csv(file)
+    df = pd.read_csv(file, low_memory=False)
     for col in [time_col, loc_col, roc_col, stage_col]:
         if col not in df.columns:
             raise ValueError(f"Merged CSV must contain '{col}' column.")
@@ -652,7 +652,7 @@ def plot_transition_epochs(
     lprint(length=100, height=1, char="%")
  
     # --- 1) Load and validate ---
-    df = pd.read_csv(file)
+    df = pd.read_csv(file, low_memory=False)
     for col in [time_col, loc_col, roc_col, stage_col]:
         if col not in df.columns:
             raise ValueError(f"Merged CSV must contain '{col}' column.")
@@ -835,7 +835,7 @@ def plot_transition_epochs(
 # =====================================================================
 if __name__ == "__main__":
     plot_eog_epochs(
-        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_4_a_contiguous_eog_merged_Umaer.csv",
+        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged_Umaer.csv",
         stage      = "REM",
         stage_col  = "stage",
         window_sec = 30.0,
@@ -845,7 +845,7 @@ if __name__ == "__main__":
     )
 
     plot_eog_epochs(
-        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_4_a_contiguous_eog_merged.csv",
+        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged.csv",
         stage      = "REM",
         stage_col  = "stage",
         window_sec = 30.0,
@@ -857,7 +857,7 @@ if __name__ == "__main__":
 
 
     plot_fullnight_overview(
-        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_4_a_contiguous_eog_merged_Umaer.csv",
+        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged_Umaer.csv",
         out_dir=None
     )
 

@@ -12,11 +12,11 @@ import pandas as pd
 # =====================================================================
 # Paths
 # =====================================================================
-EOG_FILE        = Path("C:/Users/AKLO0022/EOG_REM/eog_csv/DCSM_4_a_contiguous_eog.csv")
-GSSC_FILE       = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_4_a_gssc.csv")
-EVENTS_FILE     = Path("C:/Users/AKLO0022/EOG_REM/extracted_rems/DCSM_4_a_extracted_rems.csv")
-EM_FILE         = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_4_a_em.csv")
-SUBEPOCHS_FILE  = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_4_a_subepochs.csv")
+EOG_FILE        = Path("C:/Users/AKLO0022/EOG_REM/eog_csv/DCSM_3_a_contiguous_eog.csv")
+GSSC_FILE       = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_3_a_gssc.csv")
+EVENTS_FILE     = Path("C:/Users/AKLO0022/EOG_REM/extracted_rems/DCSM_3_a_extracted_rems.csv")
+EM_FILE         = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_3_a_em.csv")
+SUBEPOCHS_FILE  = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_3_a_subepochs.csv")
 
 
 OUTPUT_DIR  = Path("merged_csv_eog")
@@ -48,30 +48,32 @@ if __name__ == "__main__":
     print("Previewing input files...")
 
     eog_df = pd.read_csv(EOG_FILE)
-    print(f"\n[EOG] shape: {eog_df.shape}")
-    print(f"  columns: {list(eog_df.columns)}")
-    print(eog_df.head(3).to_string(index=False))
+    print(f"\n[EOG]" 
+          f"\nshape:   {eog_df.shape}"
+          f"\ncolumns: {list(eog_df.columns)}")
 
     gssc_df = pd.read_csv(GSSC_FILE)
-    print(f"\n[GSSC] shape: {gssc_df.shape}")
-    print(f"  columns: {list(gssc_df.columns)}")
-    print(gssc_df.head(3).to_string(index=False))
+    print(f"\n[GSSC]"
+          f"\nshape:   {gssc_df.shape}"
+          f"\ncolumns: {list(gssc_df.columns)}")
 
     events_df = pd.read_csv(EVENTS_FILE)
-    print(f"\n[Events] shape: {events_df.shape}")
-    print(f"  columns: {list(events_df.columns)}")
-    print(events_df.head(3).to_string(index=False))
+    print(f"\n[Events]" 
+          f"\nshape:   {events_df.shape}"
+          f"\ncolumns: {list(events_df.columns)}")
 
     em_df = pd.read_csv(EM_FILE)
-    print(f"\n[EM] shape: {em_df.shape}")
-    print(f"  columns: {list(em_df.columns)}")
-    print(em_df.head(3).to_string(index=False))
+    print(f"\n[EM]"
+          f"\nshape:   {em_df.shape}"
+          f"\ncolumns: {list(em_df.columns)}")
 
      
     if SUBEPOCHS_FILE.exists():
         subepoch_df = pd.read_csv(SUBEPOCHS_FILE)
-        print(f"\n[Subepochs] shape: {subepoch_df.shape} | columns: {list(subepoch_df.columns)}")
-        print(subepoch_df.head(3).to_string(index=False))
+        print(f"\n[Subepochs]"
+              f"\nshape:   {subepoch_df.shape}"
+              f"\ncolumns: {list(subepoch_df.columns)}"
+              )
  
 # =====================================================================
 # TEST A — default classifier (no subepochs_file)
@@ -89,20 +91,20 @@ try:
     )
  
     print("\nInspecting merged output (default)...")
-    print(f" Shape: {merged_df.shape}")
-    print(f" Columns: {list(merged_df.columns)}")
-    print(f"\n GSSC stages: {sorted(merged_df['stage'].dropna().unique())}")
+    print(f" Shape:             {merged_df.shape}")
+    print(f" Columns:           {list(merged_df.columns)}")
+    print(f"\n GSSC stages:       {sorted(merged_df['stage'].dropna().unique())}")
     print(f" REM event samples: {merged_df['is_rem_event'].sum():,}")
-    print(f" EM event samples: {merged_df['is_em_event'].sum():,}")
-    print(f" SEM samples: {(merged_df['EM_Type'] == 'SEM').sum():,}")
-    print(f" REM EM samples: {(merged_df['EM_Type'] == 'REM').sum():,}")
-    print(f" Phasic samples: {(merged_df['EpochType'] == 'Phasic').sum():,}")
-    print(f" Tonic samples: {(merged_df['EpochType'] == 'Tonic').sum():,}")
-    print(f" Time range: {merged_df['time_sec'].min():.2f}s — {merged_df['time_sec'].max():.2f}s")
+    print(f" EM event samples:  {merged_df['is_em_event'].sum():,}")
+    print(f" SEM samples:       {(merged_df['EM_Type'] == 'SEM').sum():,}")
+    print(f" REM EM samples:    {(merged_df['EM_Type'] == 'REM').sum():,}")
+    print(f" Phasic samples:    {(merged_df['EpochType'] == 'Phasic').sum():,}")
+    print(f" Tonic samples:     {(merged_df['EpochType'] == 'Tonic').sum():,}")
+    print(f" Time range:        {merged_df['time_sec'].min():.2f}[s] — {merged_df['time_sec'].max():.2f}[s]")
     nan_counts = merged_df.isna().sum()
     print(f"\n NaN counts per column:")
     for col, n in nan_counts[nan_counts > 0].items():
-        print(f" {col}: {n}")
+        print(f" {col:<25} {n}")
     print(f"\nDone. Saved to: {OUTPUT_FILE}")
     
 except Exception as e:
@@ -132,21 +134,21 @@ try:
     )
     
     print("\nInspecting merged output (Umaer)...")
-    print(f" Shape: {merged_df_umaer.shape}")
-    print(f" Columns: {list(merged_df_umaer.columns)}")
-    print(f"\n GSSC stages: {sorted(merged_df_umaer['stage'].dropna().unique())}")
-    print(f" REM event samples: {merged_df_umaer['is_rem_event'].sum():,}")
-    print(f" EM event samples: {merged_df_umaer['is_em_event'].sum():,}")
-    print(f" SEM samples: {(merged_df_umaer['EM_Type'] == 'SEM').sum():,}")
-    print(f" REM EM samples: {(merged_df_umaer['EM_Type'] == 'REM').sum():,}")
-    print(f" Phasic samples: {(merged_df_umaer['EpochType'] == 'Phasic').sum():,}")
-    print(f" Tonic samples: {(merged_df_umaer['EpochType'] == 'Tonic').sum():,}")
-    print(f" Unclassified samples: {(merged_df_umaer['EpochType'] == 'Unclassified').sum():,}")
-    print(f" Time range: {merged_df_umaer['time_sec'].min():.2f}s — {merged_df_umaer['time_sec'].max():.2f}s")
+    print(f" Shape:                 {merged_df_umaer.shape}")
+    print(f" Columns:               {list(merged_df_umaer.columns)}")
+    print(f"\n GSSC stages:           {sorted(merged_df_umaer['stage'].dropna().unique())}")
+    print(f" REM event samples:     {merged_df_umaer['is_rem_event'].sum():,}")
+    print(f" EM event samples:      {merged_df_umaer['is_em_event'].sum():,}")
+    print(f" SEM samples:           {(merged_df_umaer['EM_Type'] == 'SEM').sum():,}")
+    print(f" REM EM samples:        {(merged_df_umaer['EM_Type'] == 'REM').sum():,}")
+    print(f" Phasic samples:        {(merged_df_umaer['EpochType'] == 'Phasic').sum():,}")
+    print(f" Tonic samples:         {(merged_df_umaer['EpochType'] == 'Tonic').sum():,}")
+    print(f" Unclassified samples:  {(merged_df_umaer['EpochType'] == 'Unclassified').sum():,}")
+    print(f" Time range:            {merged_df_umaer['time_sec'].min():.2f}[s] — {merged_df_umaer['time_sec'].max():.2f}[s]")
     nan_counts = merged_df_umaer.isna().sum()
     print(f"\n NaN counts per column:")
     for col, n in nan_counts[nan_counts > 0].items():
-        print(f" {col}: {n}")
+        print(f" {col:<25} {n}")
     print(f"\nDone. Saved to: {OUTPUT_FILE_UMAER}")
     
 except Exception as e:

@@ -24,7 +24,7 @@ FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 def _load_and_validate(merged_file: Path) -> pd.DataFrame:
     """Load merged CSV and check required columns are present."""
     required = {"time_sec", "LOC", "ROC", "stage", "is_rem_event", "is_em_event", "EM_Type"}
-    df = pd.read_csv(merged_file)
+    df = pd.read_csv(merged_file, low_memory=False)
     missing = required - set(df.columns)
     if missing:
         raise ValueError(
@@ -128,14 +128,11 @@ def _rem_event_features(df: pd.DataFrame, fs: float) -> dict:
         return feats
     
     # ---- 3) Deduplicate to one row per event ----
-    # NOTE:
-    #       Uses event_Start to identify distinct events if available,
-    #       otherwise falls back to counting consecutive True blocks in is_rem_event.
-    if "event_Start" in rem_df.columns:
-        n_events   = int(rem_df["event_Start"].dropna().nunique())
+    if "event_Peak" in rem_df.columns:
+        n_events   = int(rem_df["event_Peak"].dropna().nunique())
         event_meta = (
-            rem_df[rem_df["event_Start"].notna()]
-            .drop_duplicates(subset="event_Start")
+            rem_df[rem_df["event_Peak"].notna()]
+            .drop_duplicates(subset="event_Peak")
         )
     else:
         is_event   = (rem_df["is_rem_event"] == True).astype(int)
@@ -223,13 +220,10 @@ def _em_classification_features(df: pd.DataFrame, fs: float) -> dict:
         return feats
     
     # ---- 3) Deduplicate to one row per EM event ----
-    # NOTE:
-    #       Uses em_Start to identify distinct events if available, 
-    #       otherwise falls back to all samples flagged as is_em_event == True.
-    if "em_Start" in rem_df.columns:
+    if "em_event_id" in rem_df.columns:
         em_events = (
-            rem_df[rem_df["em_Start"].notna()]
-            .drop_duplicates(subset="em_Start")
+            rem_df[rem_df["em_event_id"].notna()]
+            .drop_duplicates(subset="em_event_id")
         )
     else:
         em_events = rem_df[rem_df["is_em_event"] == True]

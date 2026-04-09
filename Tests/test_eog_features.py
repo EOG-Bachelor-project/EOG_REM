@@ -57,3 +57,16 @@ if __name__ == "__main__":
             v = feats_umaer.get(k)
             status = "OK" if v is not None and str(v) != "nan" else "NaN — check EpochType column"
             print(f"  {k:<45} {v}  [{status}]")
+    
+    # --- 5) Column name diagnostics ---
+    print("\n" + "=" * 60)
+    print("Column diagnostics:")
+    df = pd.read_csv(MERGED_FILE, low_memory=False)
+
+    event_cols = [c for c in df.columns if "event" in c.lower()]
+    em_cols    = [c for c in df.columns if c.startswith("emn_")]
+    print(f"\n  Event columns:  {event_cols}")
+    print(f"\n  EM columns:     {em_cols}")
+
+    print(f"\n   LOC stats:\n{df['LOC'].describe()}")
+    print(f"\n   ROC stats:\n{df['ROC'].describe()}")

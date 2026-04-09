@@ -19,8 +19,8 @@ from art import *
 # =====================================================================
 # Paths
 # =====================================================================
-edf_path        = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_4_a\contiguous.edf")
-lightstxt_path  = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_4_a\lights.txt")
+edf_path        = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_3_a\contiguous.edf")
+lightstxt_path  = Path("L:\Auditdata\RBD PD\PD-RBD Glostrup Database_ok\DCSM_3_a\lights.txt")
 
 # =====================================================================
 # Helpers
