@@ -12,8 +12,8 @@ import pandas as pd
 # =====================================================================
 # Paths
 # =====================================================================
-MERGED_FILE       = Path("C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged.csv")
-MERGED_FILE_UMAER = Path("C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged_Umaer.csv")
+MERGED_FILE       = Path("C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_4_a_contiguous_eog_merged.csv")
+MERGED_FILE_UMAER = Path("C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_4_a_contiguous_eog_merged_Umaer.csv")
 
 # =====================================================================
 # TEST
@@ -65,8 +65,8 @@ if __name__ == "__main__":
 
     event_cols = [c for c in df.columns if "event" in c.lower()]
     em_cols    = [c for c in df.columns if c.startswith("emn_")]
-    print(f"\n  Event columns:  {event_cols}")
-    print(f"\n  EM columns:     {em_cols}")
+    print(f"\nEvent columns:  {event_cols}")
+    print(f"\nEM columns:     {em_cols}")
 
-    print(f"\n   LOC stats:\n{df['LOC'].describe()}")
-    print(f"\n   ROC stats:\n{df['ROC'].describe()}")
+    print(f"\nLOC stats:\n{df['LOC'].describe()}")
+    print(f"\nROC stats:\n{df['ROC'].describe()}")

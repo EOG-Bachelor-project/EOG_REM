@@ -72,7 +72,7 @@ def _stage_distribution_features(df: pd.DataFrame, fs: float) -> dict:
         feats[f"{label}_duration_min"] = round(dur_min, 3)
         feats[f"{label}_fraction"]     = round(frac, 4)
  
-    print(f"    Stages — " + "  |  ".join([f"{s}: {round((df['stage']==s).sum()/n_total*100,1)}%" for s in stages]))
+    print(f"    Stages - " + "  |  ".join([f"{s}: {round((df['stage']==s).sum()/n_total*100,1)}%" for s in stages]))
     
 
     # ---- 3) Count distinct consecutive REM blocks ----
@@ -111,7 +111,7 @@ def _rem_event_features(df: pd.DataFrame, fs: float) -> dict:
     # ---- 1) Filter to REM sleep samples and compute duration ----
     rem_df = _rem_samples(df)
     rem_min = len(rem_df) / fs / 60.0
-    print(f"    REM duration: {rem_min:.2f} min  ({len(rem_df):,} samples)")
+    print(f"    REM duration: {rem_min:.2f} [min]  ({len(rem_df):,} samples)")
     
     feats: dict = {}
     
@@ -139,7 +139,7 @@ def _rem_event_features(df: pd.DataFrame, fs: float) -> dict:
         n_events   = int(((is_event.diff() == 1) | (is_event.iloc[:1] == 1)).sum())
         event_meta = pd.DataFrame()
 
-    print(f"    Distinct REM events: {n_events}  |  rate: {round(n_events / rem_min, 4) if rem_min > 0 else 'N/A'} /min")
+    print(f"    Distinct REM events: {n_events}  |  rate: {round(n_events / rem_min, 4) if rem_min > 0 else 'N/A'} [1/min]")
     
     # ---- 4) Compute event count and rate ----
     feats["rem_event_count"]        = n_events
@@ -244,7 +244,7 @@ def _em_classification_features(df: pd.DataFrame, fs: float) -> dict:
     feats["sem_fraction"]           = round(n_sem / n_total_em, 4) if n_total_em > 0 else np.nan
     feats["rem_em_fraction"]        = round(n_rem_em / n_total_em, 4) if n_total_em > 0 else np.nan
 
-    print(f"    Rates — SEM: {feats['sem_rate_per_min']} /min  |  REM EM: {feats['rem_em_rate_per_min']} /min  |  SEM fraction: {feats['sem_fraction']}")
+    print(f"    Rates — SEM: {feats['sem_rate_per_min']} [1/min]  |  REM EM: {feats['rem_em_rate_per_min']} [1/min]  |  SEM fraction: {feats['sem_fraction']}")
 
     # ---- 5) Compute mean duration per EM type ----
     for label, sub_df in [("sem", sem_df), ("rem_em", rem_em_df)]:
