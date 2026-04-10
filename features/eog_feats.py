@@ -277,6 +277,53 @@ def _em_classification_features(df: pd.DataFrame, fs: float) -> dict:
 #——————————————————————————————————————————————————————————————————————————————————————————————————————————
 #——————————————————————————————————————————————————————————————————————————————————————————————————————————
 
+def _em_stage_count_features(df: pd.DataFrame) -> dict:
+    """
+    Total EM counts broken down by sleep stage across the full recording.
+
+    Features
+    --------
+    `em_count_n1`     : Total EM count during N1 sleep.
+    `em_count_n2`     : Total EM count during N2 sleep.
+    `em_count_n3`     : Total EM count during N3 sleep.
+    `em_count_rem`    : Total EM count during REM sleep.
+    `em_count_wake`   : Total EM count during Wake.
+    """
+
+    feats: dict = {}
+
+    # ---- 1) Return NaN defaults if required columns are missing ----
+    if "Stage" not in df.columns or "EM_Type" not in df.columns:
+        print("    'Stage' or 'EM_Type' column missing — returning NaN defaults")
+        for k in ["em_count_n1", "em_count_n2", "em_count_n3", "em_count_rem", "em_count_wake"]:
+            feats[k] = np.nan
+        return feats
+
+    # ---- 2) Count EM rows per sleep stage ----
+    stage_col = df["Stage"]
+    stage_map = {
+        "em_count_n1":   stage_col.str.contains("N1",  na=False),
+        "em_count_n2":   stage_col.str.contains("N2",  na=False),
+        "em_count_n3":   stage_col.str.contains("N3",  na=False),
+        "em_count_rem":  stage_col.str.contains("REM", na=False),
+        "em_count_wake": stage_col.str.contains("W",   na=False),
+    }
+    for feat_key, mask in stage_map.items():
+        feats[feat_key] = int(mask.sum())
+
+    print(f"    Stage counts — N1: {feats['em_count_n1']}  |  N2: {feats['em_count_n2']}  |  "
+          f"N3: {feats['em_count_n3']}  |  REM: {feats['em_count_rem']}  |  Wake: {feats['em_count_wake']}")
+
+    # ---- 3) Sanity check — staged sum should equal total EM_Type entries ----
+    em_count_staged = sum(feats[k] for k in stage_map)
+    em_count_total  = int(df["EM_Type"].count())
+    print(f"    Sanity check — total EM_Type entries: {em_count_total}  |  staged sum: {em_count_staged}")
+
+    return feats
+
+#——————————————————————————————————————————————————————————————————————————————————————————————————————————
+#——————————————————————————————————————————————————————————————————————————————————————————————————————————
+
 def _phasic_tonic_features(df: pd.DataFrame) -> dict:
     """
     Features derived from Phasic / Tonic sub-epoch classification (EpochType column).
@@ -425,6 +472,9 @@ def extract_features(
  
     print(f"\n--- EM classification features ---")
     feats.update(_em_classification_features(df, fs))
+
+    print(f"\n--- EM stage count features ---")      
+    feats.update(_em_stage_count_features(df))        
  
     print(f"\n--- Phasic / Tonic features ---")
     feats.update(_phasic_tonic_features(df))
