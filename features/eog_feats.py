@@ -293,14 +293,14 @@ def _em_stage_count_features(df: pd.DataFrame) -> dict:
     feats: dict = {}
 
     # ---- 1) Return NaN defaults if required columns are missing ----
-    if "Stage" not in df.columns or "EM_Type" not in df.columns:
-        print("    'Stage' or 'EM_Type' column missing — returning NaN defaults")
+    if "stage" not in df.columns or "EM_Type" not in df.columns:
+        print("    'stage' or 'EM_Type' column missing — returning NaN defaults")
         for k in ["em_count_n1", "em_count_n2", "em_count_n3", "em_count_rem", "em_count_wake"]:
             feats[k] = np.nan
         return feats
 
     # ---- 2) Count EM rows per sleep stage ----
-    stage_col = df["Stage"]
+    stage_col = df["stage"]
     stage_map = {
         "em_count_n1":   stage_col.str.contains("N1",  na=False),
         "em_count_n2":   stage_col.str.contains("N2",  na=False),
@@ -311,12 +311,18 @@ def _em_stage_count_features(df: pd.DataFrame) -> dict:
     for feat_key, mask in stage_map.items():
         feats[feat_key] = int(mask.sum())
 
-    print(f"    Stage counts — N1: {feats['em_count_n1']}  |  N2: {feats['em_count_n2']}  |  "
-          f"N3: {feats['em_count_n3']}  |  REM: {feats['em_count_rem']}  |  Wake: {feats['em_count_wake']}")
+    em_count_total = int(df["EM_Type"].count())
+
+    print(f"    Stage counts — "
+          f"N1: {feats['em_count_n1']} ({round(feats['em_count_n1'] / em_count_total * 100, 1) if em_count_total > 0 else 'N/A'}%)  |  "
+          f"N2: {feats['em_count_n2']} ({round(feats['em_count_n2'] / em_count_total * 100, 1) if em_count_total > 0 else 'N/A'}%)  |  "
+          f"N3: {feats['em_count_n3']} ({round(feats['em_count_n3'] / em_count_total * 100, 1) if em_count_total > 0 else 'N/A'}%)  |  "
+          f"REM: {feats['em_count_rem']} ({round(feats['em_count_rem'] / em_count_total * 100, 1) if em_count_total > 0 else 'N/A'}%)  |  "
+          f"Wake: {feats['em_count_wake']} ({round(feats['em_count_wake'] / em_count_total * 100, 1) if em_count_total > 0 else 'N/A'}%)")
+
 
     # ---- 3) Sanity check — staged sum should equal total EM_Type entries ----
     em_count_staged = sum(feats[k] for k in stage_map)
-    em_count_total  = int(df["EM_Type"].count())
     print(f"    Sanity check — total EM_Type entries: {em_count_total}  |  staged sum: {em_count_staged}")
 
     return feats
