@@ -46,16 +46,12 @@ EPOCH_TYPE_COLORS = {
     "Tonic":   "#CCDDAA", 
 }
 
-# Default detection thresholds (µV) – shown as ±horizontal lines on signal axes
-THRESHOLDS = {
-    "Amp_Thresh_SEM": 50.0,   # SEM amplitude threshold
-    "amp_thresh_rem": 150.0,  # REM amplitude threshold
-}
+# Amplitude thresholds have been dropped — classification is duration-only.
+# But you can still pass custom thresholds to the plotting functions if you 
+# want to visualize reference lines for e.g. typical EM amplitudes.
+THRESHOLDS: dict = {}
 
-THRESHOLD_STYLES = {
-    "Amp_Thresh_SEM": dict(color="#5C5C5C", linestyle="--",  linewidth=1.0, alpha=0.8, label="SEM thresh (50 µV)"),
-    "amp_thresh_rem": dict(color="#242424", linestyle="-.", linewidth=1.0, alpha=0.8, label="REM thresh (150 µV)"),
-}
+THRESHOLD_STYLES: dict = {}
 
 # Numeric mapping for hypnogram y-axis
 STAGE_ORDER = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
@@ -111,7 +107,8 @@ def _draw_threshold_lines(ax, thresholds: dict | None = None):
     ax : matplotlib Axes
     thresholds : dict | None
         Mapping of threshold name → µV value.  If None, the module-level
-        THRESHOLDS dict is used.  Pass an empty dict {} to suppress lines.
+        THRESHOLDS dict is used (currently empty — amplitude thresholds dropped).
+        Pass an explicit dict to draw custom reference lines.
     """
     if thresholds is None:
         thresholds = THRESHOLDS
@@ -191,7 +188,7 @@ def plot_eog_epochs(
      - Stage background shading
      - Phasic / Tonic background shading (if EpochType column present)
      - SEM and REM overlays (if EM_Type / is_em_event columns present)
-     - ±Threshold horizontal lines
+     - ±Threshold horizontal lines (none by default — amplitude thresholds dropped)
 
     If `show-em` is True amd EM (eye movement) columns are present, detected eye movement periods are overlaid as shaded regions with a peak marker on all signal subplots. \\
     Epochs are derived from consecutive GSSC stage labels. Each unique run of the target stage is treated as one epoch, then cropped/padded to `window_sec`.
@@ -224,8 +221,8 @@ def plot_eog_epochs(
         If true, overlay detected EM events as shaded regions. Default is **True**.
     thresholds : dict | None
         Mapping of threshold name → µV value for horizontal lines.
-        Defaults to the module-level THRESHOLDS dict.
-        Pass {} to suppress all threshold lines.
+        Defaults to the module-level THRESHOLDS dict (empty — amplitude thresholds dropped).
+        Pass a custom dict to draw reference lines, or {} to suppress all lines.
  
     Returns
     -------
@@ -425,11 +422,11 @@ def plot_fullnight_overview(
     out_dir : Path | None
         If provided, saves the figure as a PNG. Otherwise displays interactively.
     show_em : bool
-        If True, overlay SEM/REM segments and Phasic/Tonic shadinbg. Default is **True**
+        If True, overlay SEM/REM segments and Phasic/Tonic shading. Default is **True**.
     thresholds : dict | None
         Mapping of threshold name → µV value for horizontal lines.
-        Defaults to the module-level THRESHOLDS dict.
-        Pass {} to suppress all threshold lines.
+        Defaults to the module-level THRESHOLDS dict (empty — amplitude thresholds dropped).
+        Pass a custom dict to draw reference lines, or {} to suppress all lines.
  
     Returns
     -------
@@ -843,15 +840,6 @@ if __name__ == "__main__":
         max_epochs = 20,
         out_dir    = None,
     )
-
-    plot_eog_epochs(
-        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged.csv",
-        stage      = "REM",
-        window_sec = 30.0,
-        max_epochs = 5,
-    )
-
-
 
     plot_fullnight_overview(
         file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged_Umaer.csv",
