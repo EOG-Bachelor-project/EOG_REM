@@ -43,7 +43,6 @@ def em_to_csv(
         # Umaer params (pased through to classify_rem_epochs_Umaer)
         use_Umaer : bool = False, 
         sub_epoch_len: float = 4.0,
-        min_separation: float = 8.0,
         phasic_dur_thresh:  float = 1.0,
 
         ) -> pd.DataFrame | tuple[pd.DataFrame, pd.DataFrame] | None:
@@ -57,7 +56,7 @@ def em_to_csv(
     - **False** (default): uses classify_rem_epochs(), and annotates each EM event with EpochIdx and EpochType. \\
                            Saves one CSV: ``{session_id}_em.csv``
     - **True**: uses classify_rem_epochs_Umaer(), and produces a sub-epoch DataFrame (one row per 4-second sub-epoch inside REM). \\
-            Saves two CSV's: ``{session_id}_em.csv`` and ``{session_id}_subepochs.csv``
+                Saves two CSV's: ``{session_id}_em.csv`` and ``{session_id}_subepochs.csv``
 
     Parameters
     ----------
@@ -103,8 +102,6 @@ def em_to_csv(
         Default is **False**.
     sub_epoch_len : float
         Length of sub-epochs to classify in seconds. Default is **4.0 [s]**.
-    min_separation : float
-        Minimum gap in seconds between any two kept sub-epochs. Default is **8.0 [s]**.
     phasic_dur_thresh : float
         Minimum total EM duration [s] within a sub-epoch required for Phasic classification.
         Default is **1.0 [s]**.
@@ -148,11 +145,6 @@ def em_to_csv(
             raise ValueError(
                 f"sub_epoch_len ({sub_epoch_len}) must divide evenly into psg_epoch_sec ({psg_epoch_sec}). "
                 f"Got remainder: {psg_epoch_sec % sub_epoch_len} [s]."
-            )
-        if min_separation < sub_epoch_len:
-            raise ValueError(
-                f"min_separation ({min_separation}) must be >= sub_epoch_len ({sub_epoch_len}). "
-                f"Otherwise adjacent sub-epochs can never both be kept."
             )
         if phasic_dur_thresh <= 0:
             raise ValueError(f"phasic_dur_thresh must be positive, but got: {phasic_dur_thresh}")
@@ -244,7 +236,6 @@ def em_to_csv(
             sf                 = sf,
             epoch_len          = int(psg_epoch_sec),
             sub_epoch_len      = sub_epoch_len,
-            min_separation     = min_separation,
             phasic_dur_thresh  = phasic_dur_thresh,
         )
     else:

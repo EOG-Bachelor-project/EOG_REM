@@ -12,11 +12,11 @@ import pandas as pd
 # =====================================================================
 # Paths
 # =====================================================================
-EOG_FILE        = Path("C:/Users/AKLO0022/EOG_REM/eog_csv/DCSM_1_a_contiguous_eog.csv")
-GSSC_FILE       = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_1_a_gssc.csv")
-EVENTS_FILE     = Path("C:/Users/AKLO0022/EOG_REM/extracted_rems/DCSM_1_a_extracted_rems.csv")
-EM_FILE         = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_1_a_em.csv")
-SUBEPOCHS_FILE  = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_1_a_subepochs.csv")
+EOG_FILE        = Path("C:/Users/AKLO0022/EOG_REM/eog_csv/DCSM_2_a_contiguous_eog.csv")
+GSSC_FILE       = Path("C:/Users/AKLO0022/EOG_REM/gssc_csv/DCSM_2_a_gssc.csv")
+EVENTS_FILE     = Path("C:/Users/AKLO0022/EOG_REM/extracted_rems/DCSM_2_a_extracted_rems.csv")
+EM_FILE         = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_2_a_em.csv")
+SUBEPOCHS_FILE  = Path("C:/Users/AKLO0022/EOG_REM/detected_ems/DCSM_2_a_subepochs.csv")
 
 
 OUTPUT_DIR  = Path("merged_csv_eog")
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         ("SUB-EPOCHS", SUBEPOCHS_FILE)
         ]:
         exists = path.exists()
-        print(f"  {label}: {path} -> {'OK' if exists else 'NOT FOUND'}")
+        print(f"  {label:<12}: {path} -> {'OK' if exists else 'NOT FOUND'}")
         if not exists:
             raise FileNotFoundError(f"{label} file not found: {path}")
 

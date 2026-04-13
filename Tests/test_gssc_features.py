@@ -12,8 +12,8 @@ import pandas as pd
 # =====================================================================
 # Paths
 # =====================================================================
-MERGED_FILE       = Path("C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged.csv")
-MERGED_FILE_UMAER = Path("C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_3_a_contiguous_eog_merged_Umaer.csv")
+MERGED_FILE       = Path("C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged.csv")
+MERGED_FILE_UMAER = Path("C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged_Umaer.csv")
 
 # =====================================================================
 # TEST
