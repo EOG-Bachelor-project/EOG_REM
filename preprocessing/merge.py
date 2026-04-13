@@ -68,7 +68,12 @@ def _merge_events_fast(
  
     events_df = events_df.copy().reset_index(drop=True)
     events_df["_event_id"] = events_df.index
- 
+
+    # Ensure merge columns are numeric (prevents dtype mismatch from mixed CSVs)
+    merged_df[time_col]    = pd.to_numeric(merged_df[time_col], errors="coerce")
+    events_df[start_col]   = pd.to_numeric(events_df[start_col], errors="coerce")
+    events_df[end_col]     = pd.to_numeric(events_df[end_col], errors="coerce")
+    
     # Sort for merge_asof
     merged_df     = merged_df.sort_values(time_col).reset_index(drop=True)
     events_sorted = events_df.sort_values(start_col).reset_index(drop=True)
