@@ -105,7 +105,7 @@ def extract_rems_from_edf(
     # We do this before staging and detection, so that staging/detection only operates on the sleep period.
     if lights_path is not None:
         lights_off, lights_on = parse_lights_txt(lights_path)
-        raw = raw.crop(tmin = lights_off, tmax = lights_on)
+        raw = raw.crop(tmin=lights_off, tmax=min(lights_on, raw.times[-1]))
         print(f"    Trimmed to sleep period: {lights_off:.1f} [s] - {lights_on:.1f} [s].") 
 
 

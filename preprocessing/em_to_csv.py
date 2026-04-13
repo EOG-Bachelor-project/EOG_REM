@@ -176,8 +176,8 @@ def em_to_csv(
     # --- 4) Crop to lights window ---
     lights_off = 0.0                                          # Default to 0 if no lights.txt provided, so times remain absolute
     if lights_path is not None: 
-        lights_off, lights_on = parse_lights_txt(lights_path) # Returns lights_off and lights_on in seconds
-        raw = raw.crop(tmin=lights_off, tmax=lights_on)       # Crop raw signal to the lights off/on times to focus on the sleep period
+        lights_off, lights_on = parse_lights_txt(lights_path)               # Returns lights_off and lights_on in seconds
+        raw = raw.crop(tmin=lights_off, tmax=min(lights_on, raw.times[-1])) # Crop raw signal to the lights off/on times to focus on the sleep period
         print(f"    Cropped to lights window: {lights_off:.1f} - {lights_on:.1f} [s]")
  
     # --- 5) Resample if needed ---
