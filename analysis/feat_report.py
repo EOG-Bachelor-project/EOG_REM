@@ -32,6 +32,19 @@ def collect_features(
     Run extract_features() and extract_gssc_features() on every merged CSV
     in a directory and join them into a single DataFrame.
 
+    Parameters
+    ----------
+    merged_dir : str or Path
+        Directory containing merged CSV files from the preprocessing pipeline.
+    fs : float, optional
+        Sampling frequency of the recordings (default 250 Hz). Used for feature extraction.
+    pattern : str, optional
+        Glob pattern to match merged CSV files (default "*_merged.csv"). Adjust if your files have a different naming convention.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame where each row corresponds to a subject and columns are extracted features from both EOG and GSSC.
     """
     merged_dir = Path(merged_dir)
     files = sorted(merged_dir.glob(pattern))
@@ -87,7 +100,24 @@ def _build_histogram_svg(
         width: int = 320, 
         height: int = 160
         ) -> str:
-    """Build a simple SVG histogram for a list of values."""
+    """
+    Build a simple SVG histogram for a list of values.
+
+    Parameters
+    ----------
+    values : list of float
+        The numeric values to plot in the histogram.
+    width : int, optional
+        Width of the SVG in pixels (default is **320**).
+    height : int, optional
+        Height of the SVG in pixels (default is **160**).
+    
+    Returns
+    -------
+    str
+        An SVG string representing the histogram. If there are fewer than 2 values, returns a placeholder SVG indicating insufficient data.
+    """
+  
     if not values or len(values) < 2:
         return (
             f'<svg width="{width}" height="{height}">'
@@ -148,7 +178,23 @@ def _build_boxplot_svg(
         width: int = 360, 
         height: int = 150
         ) -> str:
-    """Build a clean horizontal SVG boxplot with individual data points."""
+    """
+    Build a clean horizontal SVG boxplot with individual data points.
+
+    Parameters
+    ----------
+    values : list of float
+        The numeric values to plot in the boxplot.
+    width : int, optional
+        Width of the SVG in pixels (default is **360**).
+    height : int, optional
+        Height of the SVG in pixels (default is **150**).
+    
+    Returns
+    -------
+    str
+        An SVG string representing the boxplot. If there are fewer than 2 values, returns a placeholder SVG indicating insufficient data.
+    """
     if not values or len(values) < 2:
       return _svg_no_data(width, height)
  
@@ -356,7 +402,18 @@ def generate_report(
         output_path: Path, 
         title: str
         ) -> None:
-    """Generate a clean, self-contained HTML report."""
+    """
+    Generate a clean, self-contained HTML report.
+    
+    Parameters
+    ----------
+    combined_df : pd.DataFrame
+        DataFrame containing all extracted features for each subject.
+    output_path : Path
+        File path to save the generated HTML report.
+    title : str
+        Title to display in the report header.
+    """
 
     numeric_cols = [
         c for c in combined_df.columns
