@@ -14,7 +14,7 @@ from pathlib import Path    # For handling file paths
  
 from preprocessing.channel_standardization import build_rename_map
 from preprocessing.index_file import parse_lights_txt
-from analysis.detect_em import detect_em, classify_rem_epochs, classify_rem_epochs_Umaer
+from analysis.detect_em import detect_em, classify_rem_epochs_Umaer
 
 # =====================================================================
 # Constants

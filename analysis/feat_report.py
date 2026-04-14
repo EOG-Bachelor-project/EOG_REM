@@ -159,7 +159,7 @@ def _build_histogram_svg(
         y = pad_t + plot_h - bh
         parts.append(
             f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w - gap:.1f}" '
-            f'height="{bh:.1f}" fill="#4f8ef7" rx="2" opacity="0.85"/>'
+            f'height="{bh:.1f}" fill="#004D40" rx="2" opacity="0.85"/>'
             )
     
     # --- X-axis labels ---
