@@ -299,19 +299,27 @@ def _em_stage_count_features(df: pd.DataFrame) -> dict:
             feats[k] = np.nan
         return feats
 
-    # ---- 2) Count EM rows per sleep stage ----
-    stage_col = df["stage"]
+    # ---- 2) Deduplicate to one row per EM event ----
+    if "em_event_id" in df.columns:
+        em_events = df[df["em_event_id"].notna()].drop_duplicates(subset="em_event_id")
+    elif "em_is_peak" in df.columns:
+        em_events = df[df["em_is_peak"] == True]
+    else:
+        em_events = df[df["EM_Type"].notna()]
+
+    em_count_total = len(em_events)
+
+    # ---- 3) Count EM events per sleep stage ----
+    stage_col = em_events["stage"]
     stage_map = {
-        "em_count_n1":   stage_col.str.contains("N1",  na=False),
-        "em_count_n2":   stage_col.str.contains("N2",  na=False),
-        "em_count_n3":   stage_col.str.contains("N3",  na=False),
-        "em_count_rem":  stage_col.str.contains("REM", na=False),
-        "em_count_wake": stage_col.str.contains("W",   na=False),
+        "em_count_n1":   stage_col == "N1",
+        "em_count_n2":   stage_col == "N2",
+        "em_count_n3":   stage_col == "N3",
+        "em_count_rem":  stage_col == "REM",
+        "em_count_wake": stage_col == "W",
     }
     for feat_key, mask in stage_map.items():
         feats[feat_key] = int(mask.sum())
-
-    em_count_total = int(df["EM_Type"].count())
 
     print(f"    Stage counts — "
           f"N1: {feats['em_count_n1']} ({round(feats['em_count_n1'] / em_count_total * 100, 1) if em_count_total > 0 else 'N/A'}%)  |  "
@@ -320,10 +328,9 @@ def _em_stage_count_features(df: pd.DataFrame) -> dict:
           f"REM: {feats['em_count_rem']} ({round(feats['em_count_rem'] / em_count_total * 100, 1) if em_count_total > 0 else 'N/A'}%)  |  "
           f"Wake: {feats['em_count_wake']} ({round(feats['em_count_wake'] / em_count_total * 100, 1) if em_count_total > 0 else 'N/A'}%)")
 
-
-    # ---- 3) Sanity check — staged sum should equal total EM_Type entries ----
+    # ---- 4) Sanity check - staged sum should equal total EM events ----
     em_count_staged = sum(feats[k] for k in stage_map)
-    print(f"    Sanity check — total EM_Type entries: {em_count_total}  |  staged sum: {em_count_staged}")
+    print(f"    Sanity check - total EM events: {em_count_total}  |  staged sum: {em_count_staged}")
 
     return feats
 
