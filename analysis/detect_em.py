@@ -1,6 +1,8 @@
 # Filename: detect_em.py 
 # Authors: Adam Klovborg & Rasmus Kleffel
-# Description: Detect eye movements in EOG signals and classify them as Rapid Eye Movements (REMs) or Slow Eye Movements (SEMs) based on duration only.
+# Description: Detect eye movements in EOG signals and classify them as 
+#              Rapid Eye Movements (REMs) or Slow Eye Movements (SEMs) 
+#              based on duration only.
 
 # =====================================================================
 # Imports
@@ -141,130 +143,9 @@ def detect_em(
     return df
 
 # 2 ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-# 2 Classify REM epochs as Phasic or Tonic based on the number of REMs detected in each epoch.
+# 2 Classify REM sub-epochs as Phasic or Tonic based on total eye movement duration within each 4-second window. 
+# 2 Based on paper shared by co-supervisor Umaer.
 # 2 ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-# pass the dataframe from detect_em as input to this function
-def classify_rem_epochs(
-        df:               pd.DataFrame, 
-        hypno_int:        np.ndarray, 
-        epoch_sec:        float = 4,
-        psg_epoch_sec:    float = 30.0,
-        min_rapid:        int = 1,
-        ) -> pd.DataFrame:
-    """
-    Classifies REM epochs as Phasic or Tonic by analysing eye movement activity within each ``epoch_sec``-length window.
- 
-    Each epoch is split into two equal half-windows. Classification criteria:
- 
-    - **Phasic**: at least 1 qualifying REM candidate in *each* half-window.\\
-      A qualifying candidate satisfies:\\
-      ``MeanAbsValPeak ≥ amp_thresh_rem`` AND ``Duration < dur_thresh_rem``.\\
-    - **Tonic**: zero EMs detected in the epoch AND mean absolute amplitudebelow ``amp_thresh_tonic`` in both half-windows.\\
-    - **Unclassified**: EMs present but Phasic criteria not met.\\
-    - **Non-REM**: epoch does not fall inside a REM PSG epoch.
- 
-    - **Phasic REM** is characterized by bursts of rapid eye movements
-    - **Tonic REM** is characterized by a relative absence of rapid eye movements.
-
-    Phasic REM epochs are defined as those containing at least `min_rapid` REMs, while Tonic REM epochs contain fewer than `min_rapid` REMs.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame containing detected eye movement events with their characteristics and classifications.
-    hypno_int : np.ndarray
-        Hypnogram as an array of integers representing sleep stages (0: W, 1: N1, 2: N2, 3: N3, 4: REM).
-    epoch_sec : float, optional
-        Duration of each analysis epoch in seconds. Default is **4.0 [s]**.
-    psg_epoch_sec : float, optional
-        Duration of each PSG scoring epoch in seconds, 
-        used to determine which analysis epochs fall inside REM sleep. 
-        Default is **30.0 [s]**
-    min_rapid : int, optional
-        Minimum number of REMs required in each half-window for an epoch to be classified as Phasic. Default is **1**.
-
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame with an additional column 'EpochType' classifying each REM epoch as 'Phasic', 'Tonic', or 'Non-REM' based on the number of REMs detected in each epoch and the sleep stage indicated by the hypnogram.
-    """
-    # --- Validate inputs ---
-    required_cols = {'EM_Type', 'Peak', 'MeanAbsValPeak', 'Duration'}
-    missing = required_cols - set(df.columns)
-    if missing:
-        raise ValueError(
-            f"Input DataFrame must contain {missing}. "
-            "Run `detect_em` first."
-        )
-    if not isinstance(hypno_int, np.ndarray):
-        hypno_int = np.array(hypno_int)
-        print(f"Converted hypnogram to numpy array with shape: {hypno_int.shape}")
-    if not isinstance(min_rapid, int) or min_rapid < 1:
-        raise ValueError(f"min_rapid must be a positive integer. Got: {min_rapid}")
-    if epoch_sec <= 0:
-        raise ValueError(f"epoch_sec must be positive, got: {epoch_sec}")
- 
-    print(f"\nClassifying REM epochs | epoch_sec={epoch_sec} [s] | psg_epoch_sec={psg_epoch_sec} [s] | min_rapid={min_rapid}")
-
-    df = df.copy()      
-    half = epoch_sec / 2.0 # Half-window duration for Phasic classification criteria.
-
-    # --- 1) Assign each event to an epoch index ---
-    df['EpochIdx'] = (df['Peak'] // epoch_sec).astype(int)  
-    # NOTE:
-    #   The floor division operator (//) is used to determine which epoch each event belongs to, 
-    #   and the result is converted to an integer type for indexing purposes.
-
-    # --- 2) Determine which epoch indices fall inside REM sleep ---
-    # hypno_int is one value per 30-second PSG epoch.
-    # We convert those to epoch_sec-length indices by scaling.
-    psg_epoch_sec = psg_epoch_sec
-    rem_epoch_indices = set()
-    for psg_idx in np.where(hypno_int == 4)[0]:
-        t_start              = psg_idx * psg_epoch_sec
-        t_end                = (psg_idx + 1) * psg_epoch_sec
-        first_analysis_epoch = int(t_start // epoch_sec)
-        last_analysis_epoch  = int((t_end - 1e-9) // epoch_sec)  # - epsilon to avoid boundary overlap
-        for idx in range(first_analysis_epoch, last_analysis_epoch + 1):
-            rem_epoch_indices.add(idx)
-
-    print(f"    Total PSG epochs in hypnogram: {len(hypno_int)}")
-    print(f"    REM PSG epochs: {(hypno_int == 4).sum()}")
-    print(f"    Analysis epochs ({epoch_sec} [s]) inside REM: {len(rem_epoch_indices)}")
-
-    # --- 3) Flag qualifying Phasic candidates ---
-    # An EM qualifies as a Phasic candidate if it has high amplitude AND short duration
-    rem_counts = (
-        df[df['EM_Type'] == 'REM']  # Filter to REM events only
-        .groupby('EpochIdx')         # Group by epoch index
-        .size()                      # Count events per epoch
-        .to_dict()                   # Convert to dict for fast lookup
-    )
-
-    # --- 4) Classify each epoch ---
-    def epoch_type(row):
-        epoch_idx = row['EpochIdx']
-        if epoch_idx not in rem_epoch_indices:
-            return 'Unclassified'
-        n_rapid = rem_counts.get(epoch_idx, 0)
-        return 'Phasic' if n_rapid >= min_rapid else 'Tonic'
- 
-    df['EpochType'] = df.apply(epoch_type, axis=1)
-
-    # --- 5) Summary ---
-    counts = df.drop_duplicates('EpochIdx')['EpochType'].value_counts()
-    print(f"\nEpoch classification summary (one row per unique {epoch_sec} [s] epoch):\n{counts.to_string()}")
-
-    df = df.reset_index(drop=True)
-    return df
-
-
-# 3 ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-# 3 Classify REM sub-epochs as Phasic or Tonic based on total eye movement duration within each 4-second window. 
-# 3 Based on paper shared by co-supervisor Umaer.
-# 3 ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 def classify_rem_epochs_Umaer(
         df:                 pd.DataFrame,

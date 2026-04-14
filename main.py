@@ -7,9 +7,6 @@
 # Usage:
 #   python main.py <raw_root>                          # default batch_size=10
 #   python main.py <raw_root> --batch-size 5
-#
-# Example:
-#   python main.py "L:/Auditdata/RBD PD/PD-RBD Glostrup Database_ok" --batch-size 5
 
 # =====================================================================
 # Imports
@@ -125,11 +122,9 @@ def process_patient(rec) -> bool:
         print(f"\n{BOLD}[5/6] Detect & classify eye movements{RESET}")
         em_result = em_to_csv(
             edf_path=edf_path,
-            gssc_df=gssc_df,
             hypno_int=hypno_int,
             out_dir=EM_DIR,
             lights_path=lights_path,
-            use_Umaer=True,
         )
  
         # ── Stage 6: Merge into unified CSV ─────────────────────────
