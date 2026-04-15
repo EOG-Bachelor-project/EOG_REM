@@ -12,6 +12,7 @@ __pycache__/
 # Generated data
 local_csv_eog/
 *csv
+DCSM_*
 
 # Distribution / packaging
 .Python
