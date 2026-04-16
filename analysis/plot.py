@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.patches as mpatches
 from pathlib import Path
+from scipy.signal import welch
 from art import *
 
 # =====================================================================
@@ -31,7 +32,9 @@ STAGE_COLORS = {
 # Signal colours
 SIG_COLORS = {
     "LOC": "#d73027",
-    "ROC": "#4575b4"
+    "ROC": "#4575b4",
+    "EEG_LOC": "#772cef",
+    "EEG_ROC": "#74d1c5",
 }
 
 # EM type colours
@@ -55,6 +58,14 @@ THRESHOLD_STYLES: dict = {}
 
 # Numeric mapping for hypnogram y-axis
 STAGE_ORDER = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
+
+# EEG frequency bands
+EEG_BANDS = {
+    "δ": (0.5,  4.0),
+    "θ": (4.0,  8.0),
+    "α": (8.0, 13.0),
+    "β": (13.0, 30.0),
+}
 
 # =====================================================================
 # Helper functions
@@ -315,9 +326,9 @@ def plot_eog_epochs(
         ]
 
         # ==== 4) Build figure ====
-        fig, (ax_sig, ax_hyp) = plt.subplots(
-            2, 1, figsize=(15, 10), sharex=False, 
-            gridspec_kw={'hspace': 0.5, 'height_ratios': [5, 1]},
+        fig, (ax_sig, ax_eeg, ax_hyp) = plt.subplots(
+            3, 1, figsize=(15, 12), sharex=False, 
+            gridspec_kw={'hspace': 0.5, 'height_ratios': [3, 3, 1]},
         )
 
         # Title for the epoch
@@ -351,7 +362,16 @@ def plot_eog_epochs(
             fontsize=8, loc="center left", ncol=2,
             bbox_to_anchor=(1, 0.5), frameon=True,
         )
- 
+
+        # EEG panel
+        _shade_stages(ax_eeg, span_groups)
+        if has_epoch_type:
+            _shade_epoch_type(ax_eeg, epoch_df)
+
+        _plot_signal(ax_eeg, t, epoch_df["EEG_LOC"].values, SIG_COLORS["EEG_LOC"], label="EEG (LOC)", lw=0.9)
+        _plot_signal(ax_eeg, t, epoch_df["EEG_ROC"].values, SIG_COLORS["EEG_ROC"], label="EEG (ROC)", lw=0.9)
+        _format_signal_ax(ax_eeg, "Recovered EEG (LOC − cleaned, ROC − cleaned)", window_sec, epoch_sec)
+
         # ── Hypnogram panel ───────────────────────────────────────────
         for _, sp in span_groups.iterrows():
             ax_hyp.barh(
@@ -398,6 +418,8 @@ def plot_fullnight_overview(
         time_col:   str = "time_sec",
         loc_col:    str = "LOC",
         roc_col:    str = "ROC",
+        eeg_loc_col: str = "EEG_LOC",   
+        eeg_roc_col: str = "EEG_ROC",           
         stage_col:  str = "stage",
         out_dir:    Path | None = None,
         show_em:    bool = True,
@@ -417,6 +439,10 @@ def plot_fullnight_overview(
         Name of the LOC channel column. Default is 'LOC'.
     roc_col : str
         Name of the ROC channel column. Default is 'ROC'.
+    eeg_loc_col : str
+        Name of the recovered EEG column derived from LOC. Default is 'EEG_LOC'.
+    eeg_roc_col : str
+        Name of the recovered EEG column derived from ROC. Default is 'EEG_ROC'.
     stage_col : str
         Name of the sleep stage column. Default is 'stage'.
     out_dir : Path | None
@@ -443,6 +469,8 @@ def plot_fullnight_overview(
         if col not in df.columns:
             raise ValueError(f"Merged CSV must contain '{col}' column.")
  
+    has_eeg = eeg_loc_col in df.columns and eeg_roc_col in df.columns
+
     df = df.sort_values(by=time_col).reset_index(drop=True)
     
     has_em_type    = show_em and "EM_Type"     in df.columns
@@ -478,12 +506,21 @@ def plot_fullnight_overview(
     ]
  
     # --- 3) Build figure ---
-    fig, (ax_sig, ax_hyp) = plt.subplots(
-        2, 1,
-        figsize=(20, 9),
-        sharex=True,
-        gridspec_kw={"hspace": 0.5, "height_ratios": [5, 1]},
-    )
+    if has_eeg:
+        fig, (ax_sig, ax_eeg, ax_hyp) = plt.subplots(
+            3, 1,
+            figsize=(20, 12),
+            sharex=True,
+            gridspec_kw={"hspace": 0.5, "height_ratios": [4, 4, 1]},
+        )
+    else:
+        fig, (ax_sig, ax_hyp) = plt.subplots(
+            2, 1,
+            figsize=(20, 9),
+            sharex=True,
+            gridspec_kw={"hspace": 0.5, "height_ratios": [5, 1]},
+        )
+        ax_eeg = None
  
     fig.suptitle("Full-Night EOG Overview", fontsize=13, fontweight="bold")
  
@@ -551,6 +588,37 @@ def plot_fullnight_overview(
         bbox_to_anchor=(1, 0.5), frameon=True,
     )
     
+# ── EEG panel───────────────────────────────────────────────
+    if has_eeg:
+        eeg_loc_uv = df[eeg_loc_col].values
+        eeg_roc_uv = df[eeg_roc_col].values
+ 
+        for _, sp in span_groups.iterrows():
+            ax_eeg.axvspan(
+                sp["t_start_min"], sp["t_end_min"],
+                color=STAGE_COLORS.get(sp["stage"], "#cccccc"),
+                alpha=0.18, linewidth=0,
+            )
+ 
+        ax_eeg.plot(t_min, eeg_loc_uv, color=SIG_COLORS["EEG_LOC"], linewidth=0.35,
+                    label="EEG (LOC)", alpha=0.85, zorder=2)
+        ax_eeg.plot(t_min, eeg_roc_uv, color=SIG_COLORS["EEG_ROC"], linewidth=0.35,
+                    label="EEG (ROC)", alpha=0.85, zorder=2)
+ 
+        _draw_threshold_lines(ax_eeg, thresholds)
+        ax_eeg.set_title("Recovered EEG  (raw − cleaned)", fontsize=11)
+        ax_eeg.set_ylabel("Amplitude [µV]", fontsize=10)
+        ax_eeg.axhline(0, color="black", alpha=0.4, linewidth=0.5)
+        ax_eeg.grid(alpha=0.25, linestyle="--")
+        ax_eeg.tick_params(labelsize=8)
+ 
+        eeg_handles, _ = ax_eeg.get_legend_handles_labels()
+        ax_eeg.legend(
+            handles=eeg_handles,
+            fontsize=8, loc="center left", ncol=2,
+            bbox_to_anchor=(1, 0.5), frameon=True,
+        )
+
     # ── Hypnogram panel ───────────────────────────────────────────────
     for _, sp in span_groups.iterrows():
         ax_hyp.barh(
@@ -603,6 +671,8 @@ def plot_transition_epochs(
         time_col:       str = "time_sec",
         loc_col:        str = "LOC",
         roc_col:        str = "ROC",
+        eeg_loc_col:    str = "EEG_LOC",   
+        eeg_roc_col:    str = "EEG_ROC",   
         stage_col:      str = "stage",
         max_epochs:     int | None = None,
         out_dir:        Path | None = None,
@@ -633,6 +703,10 @@ def plot_transition_epochs(
         Name of the LOC channel column. Default is 'LOC'.
     roc_col : str
         Name of the ROC channel column. Default is 'ROC'.
+    eeg_loc_col : str
+        Name of the recovered EEG column derived from LOC. Default is 'EEG_LOC'.
+    eeg_roc_col : str
+        Name of the recovered EEG column derived from ROC. Default is 'EEG_ROC'.
     stage_col : str
         Name of the sleep stage column. Default is 'stage'.
     max_epochs : int | None
@@ -653,6 +727,8 @@ def plot_transition_epochs(
     for col in [time_col, loc_col, roc_col, stage_col]:
         if col not in df.columns:
             raise ValueError(f"Merged CSV must contain '{col}' column.")
+        
+    has_eeg = eeg_loc_col in df.columns and eeg_roc_col in df.columns
  
     df = df.sort_values(by=time_col).reset_index(drop=True)
     half_win = window_sec / 2
@@ -732,12 +808,20 @@ def plot_transition_epochs(
                 ax.axvline(-xb, color="#333333", linewidth=1.2, linestyle="--", alpha=0.85, zorder=1)
  
         # --- 6) Build figure ---
-        fig, axs = plt.subplots(
-            4, 1,
-            figsize=(15, 9),
-            sharex=True,
-            gridspec_kw={"hspace": 0.5, "height_ratios": [2, 2, 2, 1]},
-        )
+        if has_eeg:
+            fig, axs = plt.subplots(
+                5, 1,
+                figsize=(15, 11),
+                sharex=True,
+                gridspec_kw={"hspace": 0.5, "height_ratios": [2, 2, 2, 2, 1]},
+            )
+        else:
+            fig, axs = plt.subplots(
+                4, 1,
+                figsize=(15, 9),
+                sharex=True,
+                gridspec_kw={"hspace": 0.5, "height_ratios": [2, 2, 2, 1]},
+            )
  
         fig.suptitle(
             f"Transition {i+1}  |  {stage_from} → {stage_to}  |  t = {trans_time:.1f} s",
@@ -749,6 +833,9 @@ def plot_transition_epochs(
         for ax in axs[:3]:
             ax.axvline(0, color="black", linewidth=1.0, linestyle="--", alpha=0.7, label="Transition")
             draw_epoch_lines(ax)  # Add epoch boundary lines
+        if has_eeg:
+            axs[3].axvline(0, color="black", linewidth=1.0, linestyle="--", alpha=0.7, label="Transition")
+            draw_epoch_lines(axs[3])
  
         # Subplot 1: LOC
         axs[0].plot(t, epoch_df[loc_col].values, color=SIG_COLORS["LOC"], linewidth=0.8)
@@ -778,8 +865,20 @@ def plot_transition_epochs(
         axs[2].tick_params(labelsize=8)
         axs[2].legend(fontsize=8, loc="best")
         add_stage_shading(axs[2])
+
+        # Subplot 4: Recovered EEG (if available)
+        if has_eeg:
+            axs[3].plot(t, epoch_df[eeg_loc_col].values, color=SIG_COLORS["EEG_LOC"], linewidth=0.8, label="EEG (LOC)")
+            axs[3].plot(t, epoch_df[eeg_roc_col].values, color=SIG_COLORS["EEG_ROC"], linewidth=0.8, label="EEG (ROC)")
+            axs[3].set_title("Recovered EEG  (raw − cleaned)", fontsize=10)
+            axs[3].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
+            axs[3].axhline(0, color="black", alpha=0.5, linewidth=0.5)
+            axs[3].grid(alpha=0.3, linestyle="--")
+            axs[3].tick_params(labelsize=8)
+            axs[3].legend(fontsize=8, loc="best")
+            add_stage_shading(axs[3])
  
-        # Subplot 4: Hypnogram
+        # Subplot 4/5: Hypnogram
         for _, span in span_groups.iterrows():
             color = STAGE_COLORS.get(span["stage"], "#cccccc")
             y_val = STAGE_ORDER.get(span["stage"], -1)
@@ -825,7 +924,133 @@ def plot_transition_epochs(
             plt.close(fig)
  
     tprint("DONE")
+
+# 4 —————————————————————————————————————————————————————————————————————
+# 4 Function to plot EEG PSD per sleep stage
+# 4 —————————————————————————————————————————————————————————————————————
+def plot_eeg_psd(
+        file:        str | Path,
+        time_col:    str = "time_sec",
+        eeg_loc_col: str = "EEG_LOC",
+        eeg_roc_col: str = "EEG_ROC",
+        stage_col:   str = "stage",
+        fs:          float = 256.0,
+        nperseg_sec: float = 4.0,
+        min_sec:     float = 10.0,
+        out_dir:     Path | None = None,
+) -> None:
+    """
+    Compute and plot the Power Spectral Density (PSD) of the recovered EEG
+    signal for each sleep stage using Welch's method.
  
+    Two side-by-side panels are produced — one for EEG_LOC and one for
+    EEG_ROC — so the two derivations can be compared. Classical EEG
+    frequency bands (δ, θ, α, β) are shaded on both panels.
+ 
+    Parameters
+    ----------
+    file : str | Path
+        Path to the merged CSV containing recovered EEG columns and GSSC stage labels.
+    time_col : str
+        Name of the time column. Default is 'time_sec'.
+    eeg_loc_col : str
+        Name of the recovered EEG column derived from LOC. Default is 'EEG_LOC'.
+    eeg_roc_col : str
+        Name of the recovered EEG column derived from ROC. Default is 'EEG_ROC'.
+    stage_col : str
+        Name of the sleep stage column. Default is 'stage'.
+    fs : float
+        Sampling frequency in Hz. Default is 256 Hz.
+    nperseg_sec : float
+        Welch segment length in seconds. Default is 4.0 s.
+    min_sec : float
+        Minimum data required per stage to be included. Default is 10.0 s.
+    out_dir : Path | None
+        If provided, saves the figure as a PNG. Otherwise displays interactively.
+ 
+    Returns
+    -------
+    None
+    """
+    lprint(length=100, height=1, char="%")
+    print("PLOT  EEG  PSD  BY  STAGE")
+    lprint(length=100, height=1, char="%")
+ 
+    # --- 1) Load and validate ---
+    df = pd.read_csv(file, low_memory=False)
+    for col in [time_col, stage_col]:
+        if col not in df.columns:
+            raise ValueError(f"Merged CSV must contain '{col}' column.")
+ 
+    available_eeg_cols = [c for c in [eeg_loc_col, eeg_roc_col] if c in df.columns]
+    if not available_eeg_cols:
+        raise ValueError(
+            f"Neither '{eeg_loc_col}' nor '{eeg_roc_col}' found in the CSV."
+        )
+ 
+    df = df.sort_values(by=time_col).reset_index(drop=True)
+    nperseg    = int(nperseg_sec * fs)
+    min_samples = int(min_sec * fs)
+ 
+    # --- 2) Build figure ---
+    n_panels = len(available_eeg_cols)
+    fig, axes = plt.subplots(
+        1, n_panels,
+        figsize=(8 * n_panels, 6),
+        gridspec_kw={"wspace": 0.35},
+    )
+    if n_panels == 1:
+        axes = [axes]
+ 
+    panel_titles = {
+        eeg_loc_col: f"Recovered EEG — {eeg_loc_col}  (LOC − cleaned)",
+        eeg_roc_col: f"Recovered EEG — {eeg_roc_col}  (ROC − cleaned)",
+    }
+ 
+    for ax, col in zip(axes, available_eeg_cols):
+        # Band shading
+        for band_name, (b_lo, b_hi) in EEG_BANDS.items():
+            ax.axvspan(b_lo, b_hi, color="grey", alpha=0.07, linewidth=0, zorder=0)
+            ax.text(
+                (b_lo + b_hi) / 2, 1.0, band_name,
+                transform=ax.get_xaxis_transform(),
+                ha="center", va="bottom", fontsize=10, color="#555555",
+            )
+ 
+        # PSD per stage
+        for stage, color in STAGE_COLORS.items():
+            mask = df[stage_col] == stage
+            if mask.sum() < min_samples:
+                continue
+            sig = df.loc[mask, col].values
+            f, psd = welch(sig, fs=fs, nperseg=min(nperseg, len(sig)))
+            band_mask = (f >= 0.5) & (f <= 35.0)
+            ax.semilogy(f[band_mask], psd[band_mask], color=color, linewidth=1.8, label=stage, zorder=2)
+ 
+        ax.set_title(panel_titles.get(col, col), fontsize=11, pad=10)
+        ax.set_xlabel("Frequency [Hz]", fontsize=10)
+        ax.set_ylabel("PSD [µV² / Hz]", fontsize=10)
+        ax.set_xlim(0.5, 35.0)
+        ax.grid(alpha=0.3, linestyle="--")
+        ax.tick_params(labelsize=9)
+        ax.legend(title="Sleep stage", title_fontsize=9, fontsize=9, loc="upper right", frameon=True)
+ 
+    fig.suptitle("Recovered EEG — Power Spectral Density by Sleep Stage  (Welch)", fontsize=13, fontweight="bold")
+    fig.subplots_adjust(top=0.88)
+ 
+    # --- 3) Save or show ---
+    if out_dir is not None:
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        fname = out_dir / "eeg_psd_by_stage.png"
+        plt.savefig(fname, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved: {fname.name}")
+    else:
+        plt.show()
+        plt.close(fig)
+ 
+    tprint("DONE") 
  
 # =====================================================================
 # Test
@@ -853,3 +1078,12 @@ if __name__ == "__main__":
         window_sec  = 60,
         epoch_sec   = 4.0,
         )"""
+    
+    """plot_eeg_psd(
+        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged_Umaer.csv",
+        eeg_loc_col = "EEG_LOC",
+        eeg_roc_col = "EEG_ROC",
+        fs          = 256.0,
+        nperseg_sec = 4.0,
+        out_dir     = None,
+    )"""
