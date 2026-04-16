@@ -42,7 +42,7 @@ def rem_epoch_duration_features (df: pd.DataFrame , fs: float, plot: bool = Fals
     
     # --- Identify REM blocks ---
 
-    is_rem = (df["stage"]==["REM"]).astype(int)
+    is_rem = (df["stage"] == "REM").astype(int)
     epoch_ids = (is_rem.diff().fillna(0) != 0).cumsum()
     rem_blocks = df[is_rem == 1].groupby(epoch_ids).size()
     rem_duration_min = rem_blocks / fs / 60.0 
@@ -64,9 +64,9 @@ def rem_epoch_duration_features (df: pd.DataFrame , fs: float, plot: bool = Fals
     features["rem_epoch_min_duration_min"]  = round(float(rem_duration_min.min()),3)
     features["rem_epoch_max_duration_min"]  = round(float(rem_duration_min.max()),3)
 
-    print(f" REM epochs: {features["rem_epoch_count"]} \\ mean: {features["rem_epoch_mean_duration_min"]} min \\"
-          f" std: {features["rem_epoch_std_duration_min"]} \\ min: {features["rem_epoch_min_duration_min"]} \\ "
-          f" max : {features["rem_epoch_max_duration_min"]}")
+    print(f" REM epochs: {features['rem_epoch_count']} \\ mean: {features['rem_epoch_mean_duration_min']} min \\"
+          f" std: {features['rem_epoch_std_duration_min']} \\ min: {features['rem_epoch_min_duration_min']} \\ "
+          f" max : {features['rem_epoch_max_duration_min']}")
     
     # --- Optional Boxplot ---
 

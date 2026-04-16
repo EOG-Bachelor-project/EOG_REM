@@ -2,11 +2,15 @@
 # Authors: Adam Klovborg & Rasmus Kleffel
 # Description: Resume-friendly pipeline runner. Processes patients in configurable
 #              batch sizes, skipping those already processed (merged CSV exists).
-#              Run repeatedly until all patients are done.
+#              Also supports running feature extraction and HTML report steps
+#              on their own so you don't have to redo the slow preprocessing.
 #
 # Usage:
-#   python main.py <raw_root>                          # default batch_size=10
-#   python main.py <raw_root> --batch-size 5
+#   python main.py <raw_root>                     # same as before: process patients, batch=10
+#   python main.py <raw_root> --batch-size 5      # smaller batch
+#   python main.py extract                        # extract features from merged_csv_eog/
+#   python main.py report                         # regenerate HTML from cached features (fast)
+#   python main.py all <raw_root>                 # process + extract + report in one go
 
 # =====================================================================
 # Imports
@@ -14,6 +18,7 @@
 from __future__ import annotations  # for Python 3.10+ type hinting features
 
 import argparse                     # for command-line argument parsing
+import sys                          # for sys.exit
 import time                         # for measuring runtime  
 import traceback                    # for detailed error traces
 import numpy as np                  # for numerical operations
@@ -41,6 +46,9 @@ REPORTS_DIR  = Path("reports")
  
 for d in [EOG_DIR, GSSC_DIR, REMS_DIR, EM_DIR, MERGED_DIR, FEATURES_DIR, REPORTS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
+
+DEFAULT_FEATURE_CSV = FEATURES_DIR / "features.csv"
+DEFAULT_REPORT_HTML = REPORTS_DIR  / "features_report.html"
  
 # ANSI helpers
 BOLD  = "\033[1m"
@@ -69,31 +77,30 @@ def _is_processed(session_id: str) -> bool:
 def process_patient(rec) -> bool:
     """
     Run stages 1-6 for a single patient session.
- 
+
     Returns True if successful, False if an error occurred.
     """
-    session_id = rec.patient_id
-    edf_path   = rec.edf_path
+    session_id  = rec.patient_id
+    edf_path    = rec.edf_path
     lights_path = rec.txt_path
- 
+
     print(f"\n{'=' * 70}")
     print(f"  Processing: {BOLD}{session_id}{RESET}")
     print(f"{'=' * 70}")
     t0 = time.perf_counter()
- 
+
     try:
         # ── Stage 1: EDF → EOG CSV ──────────────────────────────────
         print(f"\n{BOLD}[1/6] EDF → EOG CSV{RESET}")
         edf_to_csv(edf_path, out_dir=EOG_DIR, lights_path=lights_path)
- 
+
         # ── Stage 2: GSSC sleep staging ─────────────────────────────
         print(f"\n{BOLD}[2/6] GSSC sleep staging{RESET}")
         gssc_df = GSSC_to_csv(edf_path, out_dir=GSSC_DIR, lights_path=lights_path)
- 
-        # Build hypno_int from GSSC output (needed by stages 3 & 5)
+
         stage_map = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
         hypno_int = gssc_df["stage"].map(stage_map).fillna(0).astype(int).values
- 
+
         # ── Stage 3: Extract REM events ─────────────────────────────
         print(f"\n{BOLD}[3/6] Extract REM events{RESET}")
         extract_rems_from_edf(
@@ -102,12 +109,12 @@ def process_patient(rec) -> bool:
             lights_path=lights_path,
             gssc_df=gssc_df,
         )
- 
+
         # ── Stage 4: Mask artefacts in EOG CSV ──────────────────────
         print(f"\n{BOLD}[4/6] Mask artefacts in EOG CSV{RESET}")
         eog_csv_path = EOG_DIR / f"{session_id}_{edf_path.stem}_eog.csv"
         eog_df = pd.read_csv(eog_csv_path)
- 
+
         artefact_mask = (
             (np.abs(eog_df["LOC"].values) > AMPLITUDE_THRESH_UV) |
             (np.abs(eog_df["ROC"].values) > AMPLITUDE_THRESH_UV)
@@ -117,26 +124,25 @@ def process_patient(rec) -> bool:
         eog_df.loc[artefact_mask, "ROC"] = np.nan
         eog_df.to_csv(eog_csv_path, index=False)
         print(f"    Artefact samples masked: {n_masked:,} / {len(eog_df):,}")
- 
+
         # ── Stage 5: Detect & classify eye movements ────────────────
         print(f"\n{BOLD}[5/6] Detect & classify eye movements{RESET}")
-        em_result = em_to_csv(
+        em_to_csv(
             edf_path=edf_path,
             hypno_int=hypno_int,
             out_dir=EM_DIR,
             lights_path=lights_path,
         )
- 
+
         # ── Stage 6: Merge into unified CSV ─────────────────────────
         print(f"\n{BOLD}[6/6] Merge into unified CSV{RESET}")
- 
         eog_file       = EOG_DIR  / f"{session_id}_{edf_path.stem}_eog.csv"
         gssc_file      = GSSC_DIR / f"{session_id}_gssc.csv"
         events_file    = REMS_DIR / f"{session_id}_extracted_rems.csv"
         em_file        = EM_DIR   / f"{session_id}_em.csv"
         subepochs_file = EM_DIR   / f"{session_id}_subepochs.csv"
         output_file    = MERGED_DIR / f"{session_id}_{edf_path.stem}_eog_merged.csv"
- 
+
         merge_all(
             eog_file=eog_file,
             gssc_file=gssc_file,
@@ -145,177 +151,166 @@ def process_patient(rec) -> bool:
             output_file=output_file,
             subepochs_file=subepochs_file,
         )
- 
+
         elapsed = time.perf_counter() - t0
         print(f"\n{GREEN}✓ {session_id} completed in {elapsed:.1f}s ({elapsed/60:.1f} min){RESET}")
         return True
- 
+
     except Exception as e:
         elapsed = time.perf_counter() - t0
         print(f"\n{RED}✗ {session_id} FAILED after {elapsed:.1f}s: {e}{RESET}")
         traceback.print_exc()
         return False
- 
- 
+
+
 # =====================================================================
-# Main — batch runner with resume logic
+# Step runners — each does one thing
+# =====================================================================
+def run_process(raw_root: Path, batch_size: int) -> None:
+    """Run the original resume-friendly patient batch processor."""
+    if not raw_root.is_dir():
+        print(f"Error: '{raw_root}' is not a directory.")
+        sys.exit(1)
+
+    sessions = index_sessions(raw_root)
+    todo = [s for s in sessions if not _is_processed(s.patient_id)]
+
+    print(f"\nTotal sessions found : {len(sessions)}")
+    print(f"Already processed    : {len(sessions) - len(todo)}")
+    print(f"To process this run  : {min(batch_size, len(todo))}")
+
+    if not todo:
+        print(f"\n{GREEN}All patients already processed.{RESET}\n")
+        return
+
+    ok = fail = 0
+    for rec in todo[:batch_size]:
+        if process_patient(rec):
+            ok += 1
+        else:
+            fail += 1
+
+    print(f"\n{BOLD}Batch done:{RESET}  {GREEN}{ok} ok{RESET}  |  {RED}{fail} failed{RESET}")
+
+
+def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path) -> None:
+    """Collect features from merged CSVs and cache to a single feature table."""
+    if not merged_dir.is_dir():
+        print(f"Error: '{merged_dir}' is not a directory.")
+        sys.exit(1)
+
+    combined = collect_features(merged_dir, fs=fs, pattern=pattern)
+    if combined.empty:
+        print("Error: No features extracted.")
+        sys.exit(1)
+
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    combined.to_csv(csv_path, index=False)
+    print(f"Feature CSV saved -> {csv_path}  ({combined.shape[0]} subjects, {combined.shape[1] - 1} features)")
+
+
+def run_report(csv_path: Path, output_path: Path, title: str | None) -> None:
+    """Render the HTML report from a cached feature CSV."""
+    if not csv_path.is_file():
+        print(f"Error: feature CSV '{csv_path}' not found. Run 'extract' first.")
+        sys.exit(1)
+
+    combined = pd.read_csv(csv_path)
+    print(f"\nLoaded cached features from {csv_path}  ({combined.shape[0]} subjects, {combined.shape[1] - 1} features)")
+
+    generate_report(combined, output_path, title=title or csv_path.stem)
+    print(f"HTML report saved -> {output_path}")
+    print(f"\nDone. Open {output_path} in your browser.\n")
+
+
+# =====================================================================
+# CLI
 # =====================================================================
 def main():
     parser = argparse.ArgumentParser(
-        description="EOG_REM pipeline — resume-friendly batch runner",
+        description="RBD pipeline runner — patient processing + feature extraction + HTML report.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Default (no subcommand) preserves the original behavior: process the next N
+unprocessed patients from <raw_root>. Use subcommands to skip straight to
+the parts you want.
+
+  python main.py /data/raw                    # process 10 patients (default)
+  python main.py /data/raw --batch-size 5     # process 5 patients
+  python main.py process /data/raw            # same as above, explicit
+  python main.py extract                      # extract features from merged_csv_eog/
+  python main.py report                       # regenerate HTML from cached features (fast)
+  python main.py all /data/raw                # process + extract + report in one go
+""",
     )
-    parser.add_argument(
-        "raw_root",
-        type=str,
-        help="Root directory containing patient session folders (e.g. DCSM_1_a, DCSM_2_a, ...)",
-    )
-    parser.add_argument(
-        "--batch-size", "-n",
-        type=int,
-        default=10,
-        help="Number of NEW patients to process before stopping (default: 10)",
-    )
-    parser.add_argument(
-        "--skip-features",
-        action="store_true",
-        default=False,
-        help="Skip the final feature extraction step",
-    )
-    parser.add_argument(
-        "--fs",
-        type=float,
-        default=250.0,
-        help="Sampling frequency in Hz for feature extraction (default: 250.0)",
-    )
- 
-    args = parser.parse_args()
-    raw_root   = Path(args.raw_root)
-    batch_size = args.batch_size
-    fs         = args.fs
- 
-    print(f"\n{'#' * 70}")
-    print(f"#  EOG_REM Pipeline Runner")
-    print(f"#  Root:       {raw_root}")
-    print(f"#  Batch size: {batch_size}")
-    print(f"#  Fs:         {fs} Hz")
-    print(f"{'#' * 70}")
- 
-    total_start = time.perf_counter()
- 
-    # ── 1) Index all sessions ────────────────────────────────────────
-    print(f"\n{BOLD}Indexing sessions...{RESET}")
-    records = index_sessions(
-        root_dir=raw_root,
-        edf=True,
-        csv=False,
-        txt=True,
-        strict=False,
-    )
-    print(f"Found {len(records)} sessions total")
- 
-    # ── 2) Filter to sessions with EDF files ─────────────────────────
-    records = [r for r in records if r.edf_path is not None]
-    print(f"Sessions with EDF files: {len(records)}")
- 
-    # ── 3) Check which are already processed ─────────────────────────
-    already_done = []
-    to_process   = []
- 
-    for rec in records:
-        if _is_processed(rec.patient_id):
-            already_done.append(rec.patient_id)
-        else:
-            to_process.append(rec)
- 
-    print(f"\n{BOLD}Status:{RESET}")
-    print(f"  Already processed: {len(already_done)}")
-    print(f"  Remaining:         {len(to_process)}")
-    print(f"  Will process:      {min(batch_size, len(to_process))}")
- 
-    if not to_process:
-        print(f"\n{GREEN}All sessions are already processed!{RESET}")
- 
-        # Still run feature extraction if requested
-        if not args.skip_features:
-            print(f"\n{BOLD}Running feature extraction on all merged CSVs...{RESET}")
-            combined = collect_features(
-                merged_dir=MERGED_DIR,
-                fs=fs,
-                pattern="*_merged.csv",
-            )
-            csv_path = FEATURES_DIR / "all_features.csv"
-            combined.to_csv(csv_path, index=False)
-            print(f"Feature CSV saved → {csv_path}")
- 
-            report_path = REPORTS_DIR / "all_features.html"
-            generate_report(combined, report_path, title="all_features")
-            print(f"HTML report saved → {report_path}")
- 
-        total_elapsed = time.perf_counter() - total_start
-        print(f"\nTotal runtime: {total_elapsed:.1f}s ({total_elapsed/60:.1f} min)")
-        return
- 
-    # ── 4) Process batch ─────────────────────────────────────────────
-    completed = 0
-    failed    = 0
- 
-    for rec in to_process:
-        if completed >= batch_size:
-            print(f"\n{BOLD}Batch limit ({batch_size}) reached — stopping.{RESET}")
-            break
- 
-        success = process_patient(rec)
-        if success:
-            completed += 1
-        else:
-            failed += 1
- 
-    # ── 5) Feature extraction ────────────────────────────────────────
-    if not args.skip_features and completed > 0:
-        print(f"\n{'=' * 70}")
-        print(f"{BOLD}Running feature extraction on all merged CSVs...{RESET}")
-        print(f"{'=' * 70}")
- 
-        pattern = "*_merged.csv"
- 
-        try:
-            combined = collect_features(
-                merged_dir=MERGED_DIR,
-                fs=fs,
-                pattern=pattern,
-            )
-            csv_path = FEATURES_DIR / "all_features.csv"
-            combined.to_csv(csv_path, index=False)
-            print(f"Feature CSV saved → {csv_path}")
- 
-            report_path = REPORTS_DIR / "all_features.html"
-            generate_report(combined, report_path, title="all_features")
-            print(f"HTML report saved → {report_path}")
- 
-            print(f"\n{GREEN}Features: {combined.shape[0]} subjects x {combined.shape[1]-1} features{RESET}")
-        except Exception as e:
-            print(f"\n{RED}Feature extraction failed: {e}{RESET}")
-            traceback.print_exc()
- 
-    # ── 6) Summary ───────────────────────────────────────────────────
-    total_elapsed = time.perf_counter() - total_start
-    remaining = len(to_process) - completed - failed
- 
-    print(f"\n{'#' * 70}")
-    print(f"#  {BOLD}Pipeline Summary{RESET}")
-    print(f"#  Processed:  {completed}")
-    print(f"#  Failed:     {failed}")
-    print(f"#  Remaining:  {remaining}")
-    print(f"#  Total time: {total_elapsed:.1f}s ({total_elapsed/60:.1f} min)")
-    print(f"{'#' * 70}")
- 
-    if remaining > 0:
-        print(f"\n  Run again to process the next batch of patients.")
- 
- 
+
+    sub = parser.add_subparsers(dest="mode")
+
+    # ---- process ----
+    p_proc = sub.add_parser("process", help="Run preprocessing stages 1-6 for pending patients.")
+    p_proc.add_argument("raw_root", type=str, help="Root directory with raw EDF/TXT recordings")
+    p_proc.add_argument("--batch-size", type=int, default=10, help="Patients per batch (default: 10)")
+
+    # ---- extract ----
+    p_ext = sub.add_parser("extract", help="Extract features from merged CSVs into a cached CSV.")
+    p_ext.add_argument("merged_dir", type=str, nargs="?", default=str(MERGED_DIR),
+                       help=f"Directory with merged CSVs (default: {MERGED_DIR})")
+    p_ext.add_argument("--fs", type=float, default=250.0, help="Sampling frequency [Hz] (default: 250)")
+    p_ext.add_argument("--pattern", type=str, default="*_merged.csv", help="Glob pattern (default: *_merged.csv)")
+    p_ext.add_argument("--csv", type=str, default=str(DEFAULT_FEATURE_CSV),
+                       help=f"Output feature CSV (default: {DEFAULT_FEATURE_CSV})")
+
+    # ---- report ----
+    p_rep = sub.add_parser("report", help="Generate HTML report from cached feature CSV.")
+    p_rep.add_argument("--csv", type=str, default=str(DEFAULT_FEATURE_CSV),
+                       help=f"Input feature CSV (default: {DEFAULT_FEATURE_CSV})")
+    p_rep.add_argument("--output", type=str, default=str(DEFAULT_REPORT_HTML),
+                       help=f"Output HTML path (default: {DEFAULT_REPORT_HTML})")
+    p_rep.add_argument("--title", type=str, default=None, help="Override report title")
+
+    # ---- all ----
+    p_all = sub.add_parser("all", help="process + extract + report in one step.")
+    p_all.add_argument("raw_root", type=str, help="Root directory with raw recordings")
+    p_all.add_argument("--batch-size", type=int, default=10, help="Patients per batch (default: 10)")
+    p_all.add_argument("--merged-dir", type=str, default=str(MERGED_DIR))
+    p_all.add_argument("--fs", type=float, default=250.0)
+    p_all.add_argument("--pattern", type=str, default="*_merged.csv")
+    p_all.add_argument("--csv", type=str, default=str(DEFAULT_FEATURE_CSV))
+    p_all.add_argument("--output", type=str, default=str(DEFAULT_REPORT_HTML))
+    p_all.add_argument("--title", type=str, default=None)
+
+    # ---- Back-compat: allow `python main.py <raw_root>` with no subcommand ----
+    # Argparse can't express "positional that isn't a subcommand", so we detect it manually.
+    argv = sys.argv[1:]
+    known_modes = {"process", "extract", "report", "all", "-h", "--help"}
+    if argv and argv[0] not in known_modes:
+        # Treat the old-style invocation as `process`
+        argv = ["process"] + argv
+
+    args = parser.parse_args(argv)
+
+    if args.mode is None:
+        parser.print_help()
+        sys.exit(1)
+
+    # ---- Dispatch ----
+    if args.mode == "process":
+        run_process(Path(args.raw_root), args.batch_size)
+
+    elif args.mode == "extract":
+        run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv))
+
+    elif args.mode == "report":
+        run_report(Path(args.csv), Path(args.output), args.title)
+
+    elif args.mode == "all":
+        run_process(Path(args.raw_root), args.batch_size)
+        run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv))
+        run_report(Path(args.csv), Path(args.output), args.title)
+
+
 # =====================================================================
 # Entry point
 # =====================================================================
 if __name__ == "__main__":
     main()
- 

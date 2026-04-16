@@ -322,18 +322,23 @@ def _build_boxplot_svg(
 # ---- Feature descriptions ----
 FEATURE_DESCRIPTIONS = {
     # Sleep structure
-    "total_recording_min":       "Total recording duration [minutes]",
-    "rem_duration_min":          "Total REM sleep duration [minutes]",
-    "rem_fraction":              "Fraction of recording spent in REM",
-    "w_duration_min":            "Wake duration [minutes]",
-    "w_fraction":                "Fraction of recording spent awake",
-    "n1_duration_min":           "N1 (light sleep) duration [minutes]",
-    "n1_fraction":               "Fraction of recording in N1",
-    "n2_duration_min":           "N2 (medium sleep) duration [minutes]",
-    "n2_fraction":               "Fraction of recording in N2",
-    "n3_duration_min":           "N3 (deep sleep) duration [minutes]",
-    "n3_fraction":               "Fraction of recording in N3",
-    "n_rem_epochs":              "Number of distinct REM episodes across the night",
+    "total_recording_min":         "Total recording duration [minutes]",
+    "rem_duration_min":            "Total REM sleep duration [minutes]",
+    "rem_fraction":                "Fraction of recording spent in REM",
+    "w_duration_min":              "Wake duration [minutes]",
+    "w_fraction":                  "Fraction of recording spent awake",
+    "n1_duration_min":             "N1 (light sleep) duration [minutes]",
+    "n1_fraction":                 "Fraction of recording in N1",
+    "n2_duration_min":             "N2 (medium sleep) duration [minutes]",
+    "n2_fraction":                 "Fraction of recording in N2",
+    "n3_duration_min":             "N3 (deep sleep) duration [minutes]",
+    "n3_fraction":                 "Fraction of recording in N3",
+    "n_rem_epochs":                "Number of distinct REM episodes across the night",
+    "rem_epoch_count":             "Number of distinct REM epochs",
+    "rem_epoch_mean_duration_min": "Mean REM epoch duration [minutes]",
+    "rem_epoch_std_duration_min":  "Std of REM epoch durations [minutes]",
+    "rem_epoch_min_duration_min":  "Shortest REM epoch duration [minutes]",
+    "rem_epoch_max_duration_min":  "Longest REM epoch duration [minutes]",
 
     # EOG amplitude
     "rem_loc_mean_abs_uv":       "Mean |LOC| amplitude during REM [uV]",
@@ -398,9 +403,14 @@ FEATURE_DESCRIPTIONS = {
 # Feature grouping for the cheat sheet
 FEATURE_GROUPS = [
     ("Sleep Structure",     ["total_recording_min", "rem_duration_min", "rem_fraction",
-                             "w_duration_min", "w_fraction", "n1_duration_min", "n1_fraction",
-                             "n2_duration_min", "n2_fraction", "n3_duration_min", "n3_fraction",
-                             "n_rem_epochs"]),
+                             "w_duration_min", "w_fraction", 
+                             "n1_duration_min", "n1_fraction",
+                             "n2_duration_min", "n2_fraction", 
+                             "n3_duration_min", "n3_fraction",
+                             "n_rem_epochs",
+                             "rem_epoch_count", "rem_epoch_mean_duration_min",
+                             "rem_epoch_std_duration_min", "rem_epoch_min_duration_min",
+                             "rem_epoch_max_duration_min"]),
 
     ("EOG Amplitude (REM)", ["rem_loc_mean_abs_uv", "rem_roc_mean_abs_uv",
                              "rem_loc_std_uv", "rem_roc_std_uv",
