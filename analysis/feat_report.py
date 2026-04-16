@@ -88,48 +88,45 @@ def collect_features(
 # =====================================================================
 # 2)  HTML REPORT  
 # =====================================================================
-def _svg_no_data(width: int = 360, height: int = 150) -> str:
+def _svg_no_data(width: int = 520, height: int = 240) -> str:
     return (
         f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">'
-        f'<text x="50%" y="50%" text-anchor="middle" fill="#aaa" font-size="12">'
-        f'Not enough data</text></svg>'
-        )
+        f'<text x="50%" y="50%" text-anchor="middle" fill="#94A3B8" font-size="13" '
+        f'font-style="italic">Not enough data</text></svg>'
+    )
 
 def _build_histogram_svg(
-        values: list[float], 
-        width: int = 320, 
-        height: int = 160
+        values: list[float],
+        x_label: str = "Value",
+        width: int = 520,
+        height: int = 280,
         ) -> str:
     """
-    Build a simple SVG histogram for a list of values.
+    Build a warm-paper styled SVG histogram with labeled axes.
 
     Parameters
     ----------
     values : list of float
-        The numeric values to plot in the histogram.
-    width : int, optional
-        Width of the SVG in pixels (default is **320**).
-    height : int, optional
-        Height of the SVG in pixels (default is **160**).
-    
+        Numeric values to plot.
+    x_label : str
+        Label for the X-axis (feature description + units).
+    width, height : int
+        SVG dimensions in pixels.
+
     Returns
     -------
     str
-        An SVG string representing the histogram. If there are fewer than 2 values, returns a placeholder SVG indicating insufficient data.
+        SVG markup.
     """
-  
     if not values or len(values) < 2:
-        return (
-            f'<svg width="{width}" height="{height}">'
-            f'<text x="50%" y="50%" text-anchor="middle" fill="#999" font-size="12">'
-            f'Not enough data</text></svg>'
-        )
+        return _svg_no_data(width, height)
 
     n_bins = min(20, max(5, len(values) // 3))
     counts, edges = np.histogram(values, bins=n_bins)
     max_count = max(counts) if max(counts) > 0 else 1
 
-    pad_l, pad_r, pad_t, pad_b = 40, 12, 12, 28
+    # Padding reserves room for axis titles
+    pad_l, pad_r, pad_t, pad_b = 58, 22, 22, 58
     plot_w = width - pad_l - pad_r
     plot_h = height - pad_t - pad_b
     bar_w = plot_w / n_bins
@@ -137,20 +134,19 @@ def _build_histogram_svg(
 
     parts = []
 
-    # --- Y-axis gridlines + labels ---
-    for i in range(4):
-        frac = i/3
+    # --- Horizontal gridlines + Y-axis tick labels ---
+    for i in range(5):
+        frac = i / 4
         y = pad_t + plot_h * (1 - frac)
         val = int(max_count * frac)
         parts.append(
             f'<line x1="{pad_l}" y1="{y:.1f}" x2="{width - pad_r}" y2="{y:.1f}" '
-            f'stroke="#edf2f7" stroke-width="1"/>'
+            f'stroke="#F5EDD8" stroke-width="1"/>'
         )
         parts.append(
-            f'<text x="{pad_l - 6}" y="{y + 3:.1f}" font-size="9" fill="#a0aec0" '
+            f'<text x="{pad_l - 8}" y="{y + 4:.1f}" font-size="11" fill="#94A3B8" '
             f'text-anchor="end">{val}</text>'
-            )
-
+        )
 
     # --- Bars ---
     for i, c in enumerate(counts):
@@ -159,45 +155,71 @@ def _build_histogram_svg(
         y = pad_t + plot_h - bh
         parts.append(
             f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w - gap:.1f}" '
-            f'height="{bh:.1f}" fill="#004D40" rx="2" opacity="0.85"/>'
-            )
-    
-    # --- X-axis labels ---
+            f'height="{bh:.1f}" fill="#0E7490" rx="2"/>'
+        )
+
+    # --- Axis lines ---
+    y_axis = pad_t + plot_h
+    parts.append(
+        f'<line x1="{pad_l}" y1="{y_axis:.1f}" x2="{width - pad_r}" y2="{y_axis:.1f}" '
+        f'stroke="#1C2A3A" stroke-width="1.2"/>'
+    )
+    parts.append(
+        f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{y_axis:.1f}" '
+        f'stroke="#1C2A3A" stroke-width="1.2"/>'
+    )
+
+    # --- X-axis tick labels (min, mid, max) ---
     vmin, vmax = edges[0], edges[-1]
     vmid = (vmin + vmax) / 2
-    ly = height - 4
+    tick_y = y_axis + 14
+    parts.append(f'<text x="{pad_l}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="start">{vmin:.3g}</text>')
+    parts.append(f'<text x="{pad_l + plot_w / 2}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="middle">{vmid:.3g}</text>')
+    parts.append(f'<text x="{width - pad_r}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="end">{vmax:.3g}</text>')
 
-    parts.append(f'<text x="{pad_l}" y="{ly}" font-size="9" fill="#a0aec0" text-anchor="start">{vmin:.3g}</text>')
-    parts.append(f'<text x="{pad_l + plot_w / 2}" y="{ly}" font-size="9" fill="#a0aec0" text-anchor="middle">{vmid:.3g}</text>')
-    parts.append(f'<text x="{width - pad_r}" y="{ly}" font-size="9" fill="#a0aec0" text-anchor="end">{vmax:.3g}</text>')
- 
+    # --- X-axis title ---
+    parts.append(
+        f'<text x="{pad_l + plot_w / 2}" y="{height - 10}" font-size="12" '
+        f'fill="#1C2A3A" text-anchor="middle" font-weight="600">{x_label}</text>'
+    )
+
+    # --- Y-axis title ---
+    y_title_x = 16
+    y_title_y = pad_t + plot_h / 2
+    parts.append(
+        f'<text x="{y_title_x}" y="{y_title_y}" font-size="12" fill="#1C2A3A" '
+        f'text-anchor="middle" font-weight="600" '
+        f'transform="rotate(-90, {y_title_x}, {y_title_y})">Count (subjects)</text>'
+    )
+
     return f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
 
 def _build_boxplot_svg(
-        values: list[float], 
-        width: int = 360, 
-        height: int = 150
+        values: list[float],
+        x_label: str = "Value",
+        width: int = 520,
+        height: int = 260,
         ) -> str:
     """
-    Build a clean horizontal SVG boxplot with individual data points.
+    Build a SVG boxplot with jittered data points and outliers highlighted.
 
     Parameters
     ----------
     values : list of float
-        The numeric values to plot in the boxplot.
-    width : int, optional
-        Width of the SVG in pixels (default is **360**).
-    height : int, optional
-        Height of the SVG in pixels (default is **150**).
+        Numeric values to plot.
+    x_label : str
+        Label for the X-axis (feature description + units).
+    width, height : int
+        SVG dimensions in pixels.
     
     Returns
     -------
     str
-        An SVG string representing the boxplot. If there are fewer than 2 values, returns a placeholder SVG indicating insufficient data.
+        SVG markup for a boxplot with jittered data points and outliers highlighted.
     """
     if not values or len(values) < 2:
-      return _svg_no_data(width, height)
- 
+        return _svg_no_data(width, height)
+
     arr = np.array(values)
     q1, med, q3 = np.percentile(arr, [25, 50, 75])
     iqr = q3 - q1
@@ -207,16 +229,16 @@ def _build_boxplot_svg(
 
     vmin, vmax = arr.min(), arr.max()
     if vmin == vmax:
-      vmin -= 0.5
-      vmax += 0.5
-  
-    pad_l, pad_r, pad_t, pad_b = 12, 12, 20, 28
+        vmin -= 0.5
+        vmax += 0.5
+
+    pad_l, pad_r, pad_t, pad_b = 28, 28, 38, 58
     plot_w = width - pad_l - pad_r
     plot_h = height - pad_t - pad_b
 
     def xpos(v):
-      return pad_l + (v - vmin) / (vmax - vmin) * plot_w
- 
+        return pad_l + (v - vmin) / (vmax - vmin) * plot_w
+
     box_top = pad_t + plot_h * 0.25
     box_bot = pad_t + plot_h * 0.75
     box_mid = pad_t + plot_h * 0.5
@@ -224,63 +246,76 @@ def _build_boxplot_svg(
 
     parts = []
 
-    # Whisker line
+    # --- Whisker line ---
     parts.append(
         f'<line x1="{xpos(whisker_lo):.1f}" y1="{box_mid:.1f}" '
-        f'x2="{xpos(whisker_hi):.1f}" y2="{box_mid:.1f}" stroke="#718096" stroke-width="1.5"/>'
-        )
-    
-    # Whisker caps
+        f'x2="{xpos(whisker_hi):.1f}" y2="{box_mid:.1f}" stroke="#64748B" stroke-width="1.5"/>'
+    )
+
+    # --- Whisker caps ---
     for wv in [whisker_lo, whisker_hi]:
-      x = xpos(wv)
-      parts.append(
-          f'<line x1="{x:.1f}" y1="{box_top + 6:.1f}" x2="{x:.1f}" y2="{box_bot - 6:.1f}" '
-          f'stroke="#718096" stroke-width="1.5"/>'
-          )
- 
-    # IQR box
+        x = xpos(wv)
+        parts.append(
+            f'<line x1="{x:.1f}" y1="{box_top + 10:.1f}" x2="{x:.1f}" y2="{box_bot - 10:.1f}" '
+            f'stroke="#64748B" stroke-width="1.5"/>'
+        )
+
+    # --- IQR box (ocean palette) ---
     bx = xpos(q1)
     bw = xpos(q3) - xpos(q1)
     parts.append(
         f'<rect x="{bx:.1f}" y="{box_top:.1f}" width="{bw:.1f}" height="{box_h:.1f}" '
-        f'fill="#ebf4ff" stroke="#4f8ef7" stroke-width="1.5" rx="3"/>'
-        )
- 
-    # Median line
+        f'fill="#CFFAFE" stroke="#0E7490" stroke-width="2" rx="3"/>'
+    )
+
+    # --- Median line (coral accent) ---
     mx = xpos(med)
     parts.append(
         f'<line x1="{mx:.1f}" y1="{box_top:.1f}" x2="{mx:.1f}" y2="{box_bot:.1f}" '
-        f'stroke="#e53e3e" stroke-width="2"/>'
-        )
- 
-    # Individual data points (jittered)
-    rng = np.random.RandomState(42)
-    jitter = rng.uniform(-plot_h * 0.12, plot_h * 0.12, size=len(arr))
-    for i, v in enumerate(arr):
-      cx = xpos(v)
-      cy = box_mid + jitter[i]
-      parts.append(
-          f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="2.5" fill="#4f8ef7" opacity="0.4"/>'
-          )
- 
-    # Outliers
-    for v in outliers:
-      cx = xpos(v)
-      parts.append(
-          f'<circle cx="{cx:.1f}" cy="{box_mid:.1f}" r="3" fill="none" stroke="#e53e3e" stroke-width="1.2"/>'
-          )
- 
-    # X-axis labels
-    ly = height - 4
-    vmid_label = (vmin + vmax) / 2
-    parts.append(f'<text x="{pad_l}" y="{ly}" font-size="9" fill="#a0aec0" text-anchor="start">{vmin:.3g}</text>')
-    parts.append(f'<text x="{pad_l + plot_w / 2}" y="{ly}" font-size="9" fill="#a0aec0" text-anchor="middle">{vmid_label:.3g}</text>')
-    parts.append(f'<text x="{width - pad_r}" y="{ly}" font-size="9" fill="#a0aec0" text-anchor="end">{vmax:.3g}</text>')
+        f'stroke="#F43F5E" stroke-width="2.5"/>'
+    )
 
-    # Stat labels at top
-    parts.append(f'<text x="{xpos(q1):.1f}" y="{pad_t - 4}" font-size="8" fill="#718096" text-anchor="middle">Q1={q1:.2g}</text>')
-    parts.append(f'<text x="{xpos(med):.1f}" y="{pad_t - 4}" font-size="8" fill="#e53e3e" text-anchor="middle">med={med:.2g}</text>')
-    parts.append(f'<text x="{xpos(q3):.1f}" y="{pad_t - 4}" font-size="8" fill="#718096" text-anchor="middle">Q3={q3:.2g}</text>')
+    # --- Jittered data points ---
+    rng = np.random.RandomState(42)
+    jitter = rng.uniform(-plot_h * 0.15, plot_h * 0.15, size=len(arr))
+    for i, v in enumerate(arr):
+        cx = xpos(v)
+        cy = box_mid + jitter[i]
+        parts.append(
+            f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="3" fill="#0E7490" opacity="0.55"/>'
+        )
+
+    # --- Outliers ---
+    for v in outliers:
+        cx = xpos(v)
+        parts.append(
+            f'<circle cx="{cx:.1f}" cy="{box_mid:.1f}" r="3.5" fill="none" stroke="#F43F5E" stroke-width="1.6"/>'
+        )
+
+    # --- X-axis line ---
+    y_axis = pad_t + plot_h
+    parts.append(
+        f'<line x1="{pad_l}" y1="{y_axis:.1f}" x2="{width - pad_r}" y2="{y_axis:.1f}" '
+        f'stroke="#1C2A3A" stroke-width="1.2"/>'
+    )
+
+    # --- X-axis tick labels ---
+    tick_y = y_axis + 14
+    vmid_label = (vmin + vmax) / 2
+    parts.append(f'<text x="{pad_l}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="start">{vmin:.3g}</text>')
+    parts.append(f'<text x="{pad_l + plot_w / 2}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="middle">{vmid_label:.3g}</text>')
+    parts.append(f'<text x="{width - pad_r}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="end">{vmax:.3g}</text>')
+
+    # --- Stat labels at top ---
+    parts.append(f'<text x="{xpos(q1):.1f}" y="{pad_t - 6}" font-size="10" fill="#64748B" text-anchor="middle">Q1={q1:.2g}</text>')
+    parts.append(f'<text x="{xpos(med):.1f}" y="{pad_t - 6}" font-size="10" fill="#F43F5E" text-anchor="middle" font-weight="700">med={med:.2g}</text>')
+    parts.append(f'<text x="{xpos(q3):.1f}" y="{pad_t - 6}" font-size="10" fill="#64748B" text-anchor="middle">Q3={q3:.2g}</text>')
+
+    # --- X-axis title ---  
+    parts.append(
+        f'<text x="{pad_l + plot_w / 2}" y="{height - 10}" font-size="12" '
+        f'fill="#1C2A3A" text-anchor="middle" font-weight="600">{x_label}</text>'
+    )
 
     return f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
 
@@ -398,13 +433,13 @@ FEATURE_GROUPS = [
 
 
 def generate_report(
-        combined_df: pd.DataFrame, 
-        output_path: Path, 
-        title: str
-        ) -> None:
+        combined_df: pd.DataFrame,
+        output_path: Path,
+        title: str,
+) -> None:
     """
-    Generate a clean, self-contained HTML report.
-    
+    Generate a warm-paper themed, self-contained HTML feature report.
+
     Parameters
     ----------
     combined_df : pd.DataFrame
@@ -425,7 +460,7 @@ def generate_report(
     nan_total = int(combined_df[numeric_cols].isna().sum().sum())
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    # ---- Build summary stats table ----
+    # ---- Summary stats table ----
     stats = combined_df[numeric_cols].describe().T.round(4)
     stats["nan_count"] = combined_df[numeric_cols].isna().sum().values
 
@@ -446,7 +481,7 @@ def generate_report(
             f"</tr>"
         )
 
-    # ---- Build cheat sheet table ----
+    # ---- Cheat sheet ----
     cheat_rows = []
     seen = set()
     for group_name, group_cols in FEATURE_GROUPS:
@@ -459,7 +494,6 @@ def generate_report(
             cheat_rows.append(f'<tr><td><code>{c}</code></td><td>{desc}</td></tr>')
             seen.add(c)
 
-    # Catch any features not in the predefined groups
     ungrouped = [c for c in numeric_cols if c not in seen]
     if ungrouped:
         cheat_rows.append('<tr class="group-header"><td colspan="2">Other</td></tr>')
@@ -467,19 +501,23 @@ def generate_report(
             desc = FEATURE_DESCRIPTIONS.get(c, "—")
             cheat_rows.append(f'<tr><td><code>{c}</code></td><td>{desc}</td></tr>')
 
-    # ---- Build plot cards ----
+    # ---- Plot cards ----
     plot_cards = []
     for col in numeric_cols:
         vals = combined_df[col].dropna().tolist()
-        hist_svg = _build_histogram_svg(vals)
-        box_svg = _build_boxplot_svg(vals)
+        x_label = FEATURE_DESCRIPTIONS.get(col, col)
+        hist_svg = _build_histogram_svg(vals, x_label=x_label)
+        box_svg = _build_boxplot_svg(vals, x_label=x_label)
         m = np.mean(vals) if vals else float("nan")
         s = np.std(vals) if vals else float("nan")
         med = np.median(vals) if vals else float("nan")
         plot_cards.append(
             f'<div class="plot-card">'
-            f'  <div class="plot-title">{col}</div>'
-            f'  <div class="plot-stats">mean: {m:.4g} &nbsp;|&nbsp; median: {med:.4g} &nbsp;|&nbsp; std: {s:.4g} &nbsp;|&nbsp; n: {len(vals)}</div>'
+            f'  <div class="plot-header">'
+            f'    <div class="plot-title">{col}</div>'
+            f'    <div class="plot-n">n = {len(vals)}</div>'
+            f'  </div>'
+            f'  <div class="plot-stats">mean {m:.4g} &nbsp;·&nbsp; median {med:.4g} &nbsp;·&nbsp; std {s:.4g}</div>'
             f'  <div class="svg-hist">{hist_svg}</div>'
             f'  <div class="svg-box" style="display:none">{box_svg}</div>'
             f'</div>'
@@ -492,152 +530,309 @@ def generate_report(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Feature Report — {title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
-    background: #f8f9fb; 
-    color: #2d3748;
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    font-size: 14px; 
+    background: #FBF8F1;
+    color: #1C2A3A;
+    font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+    font-size: 14px;
     line-height: 1.6;
-    max-width: 1200px;
-    margin: 0 auto; 
-    padding: 20px;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 28px 22px;
   }}
+
+  /* ---- Header ---- */
   header {{
-    background: #fff; 
-    border: 1px solid #e2e8f0; 
-    border-radius: 12px;
-    padding: 32px 36px 24px; 
-    margin-bottom: 20px;
+    background: #fff;
+    border: 1px solid #F0E9D7;
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 18px;
+    position: relative;
+    overflow: hidden;
   }}
-  header h1 {{ font-size: 22px; font-weight: 700; color: #1a365d; margin-bottom: 4px; }}
-  header .subtitle {{ color: #718096; font-size: 13px; margin-bottom: 16px; }}
-  .meta {{ display: flex; gap: 32px; }}
-  .meta-item {{ display: flex; flex-direction: column; }}
-  .meta-item .val {{ font-size: 28px; font-weight: 700; color: #2d3748; }}
-  .meta-item .lbl {{ font-size: 11px; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }}
+  header::before {{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #0E7490 0%, #14B8A6 50%, #F59E0B 100%);
+  }}
+  .header-top {{
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+  }}
+  header .eyebrow {{
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #0E7490;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }}
+  header h1 {{
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 28px;
+    font-weight: 500;
+    color: #1C2A3A;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }}
+  header .subtitle {{
+    color: #6B7C8E;
+    font-size: 13px;
+  }}
+  header .date {{
+    text-align: right;
+    font-size: 11px;
+    color: #94A3B8;
+    white-space: nowrap;
+    padding-top: 4px;
+    line-height: 1.4;
+  }}
+  .meta {{
+    display: flex;
+    gap: 36px;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px dashed #E5DDC8;
+  }}
+  .meta-item .val {{
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 32px;
+    font-weight: 500;
+    line-height: 1;
+    color: #0E7490;
+  }}
+  .meta-item.nan .val {{ color: #C2410C; }}
+  .meta-item .lbl {{
+    font-size: 10px;
+    color: #8899A8;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-top: 6px;
+    font-weight: 600;
+  }}
+
+  /* ---- Cards ---- */
   .card {{
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
-    padding: 28px 32px; margin-bottom: 20px;
+    background: #fff;
+    border: 1px solid #F0E9D7;
+    border-radius: 14px;
+    padding: 26px 30px;
+    margin-bottom: 18px;
   }}
   .card h2 {{
-    font-size: 15px; 
-    font-weight: 700; 
-    color: #2b6cb0; 
-    text-transform: uppercase;
-    letter-spacing: 0.06em; 
-    margin-bottom: 16px; 
-    padding-bottom: 8px;
-    border-bottom: 2px solid #ebf4ff;
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 20px;
+    font-weight: 500;
+    color: #1C2A3A;
+    letter-spacing: -0.01em;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #E5DDC8;
   }}
-  .stats-table {{ width: 100%; border-collapse: collapse; font-size: 12px; overflow-x: auto; display: block; }}
+
+  /* ---- Stats table ---- */
+  .stats-table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    display: block;
+    overflow-x: auto;
+  }}
   .stats-table th {{
-    text-align: left; 
-    padding: 8px 10px; 
-    background: #f7fafc; 
-    color: #718096;
-    font-weight: 600; 
-    font-size: 11px; 
-    text-transform: uppercase; 
-    letter-spacing: 0.05em;
-    border-bottom: 2px solid #e2e8f0; 
-    position: sticky; top: 0;
-  }}
-  .stats-table td {{ padding: 6px 10px; border-bottom: 1px solid #edf2f7; }}
-  .stats-table tr:hover td {{ background: #f7fafc; }}
-  .nan-badge {{
-    background: #fed7d7; 
-    color: #c53030; 
+    text-align: left;
+    padding: 9px 12px;
+    background: #FBF8F1;
+    color: #6B7C8E;
+    font-weight: 600;
     font-size: 10px;
-    padding: 1px 6px; 
-    border-radius: 3px; 
-    font-weight: 600; 
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 2px solid #E5DDC8;
+    position: sticky;
+    top: 0;
+  }}
+  .stats-table td {{
+    padding: 7px 12px;
+    border-bottom: 1px solid #F5EDD8;
+  }}
+  .stats-table tr:hover td {{ background: #FDFAF3; }}
+  .nan-badge {{
+    background: #FEF2F2;
+    color: #B91C1C;
+    font-size: 10px;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-weight: 600;
     margin-left: 6px;
+    border: 1px solid #FECACA;
   }}
 
-  /* ---- PLot grid ---- */
-  .plot-grid {{ 
-    display: grid; 
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
-    gap: 12px; 
-  }}
-
-  .plot-card {{ 
-    background: #fff; 
-    border: 1px solid #e2e8f0;
-    border-radius: 10px; 
-    padding: 14px 16px;
-    display: flex; 
-    flex-direction: column;
-  }}
-  .plot-title {{ 
-    font-size: 11px; 
-    font-weight: 700; 
-    color: #2d3748; 
-    margin-bottom: 2px; 
-    word-break: break-all;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis; 
-  }}
-  .plot-stats {{ font-size: 11px; color: #a0aec0; margin-bottom: 8px; }}
-  .plot-card svg {{ width: 100%; height: auto; }}
-
-  .cheat-table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-  .cheat-table td {{ padding: 6px 10px; border-bottom: 1px solid #edf2f7; vertical-align: top; }}
-  .cheat-table code {{ background: #edf2f7; padding: 1px 5px; border-radius: 3px; font-size: 12px; color: #2b6cb0; }}
-  .cheat-table .group-header td {{
-    background: #ebf8ff; font-weight: 700; color: #2c5282; font-size: 12px;
-    text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 10px 6px;
-    border-bottom: 2px solid #bee3f8;
-  }}
-
-  /* ---- Controls bar ---- */
+  /* ---- Controls ---- */
   .controls {{
     display: flex;
     align-items: center;
     gap: 14px;
-    margin-bottom: 16px;
+    margin-bottom: 18px;
     flex-wrap: wrap;
   }}
   .search-bar {{
-    background: #fff; border: 1px solid #e2e8f0; color: #2d3748;
-    padding: 8px 14px; font-size: 13px; border-radius: 8px; width: 300px;
-    outline: none; margin-bottom: 16px;
+    background: #FBF8F1;
+    border: 1px solid #E5DDC8;
+    color: #1C2A3A;
+    padding: 9px 14px;
+    font-size: 13px;
+    border-radius: 8px;
+    width: 300px;
+    outline: none;
+    font-family: inherit;
   }}
-  .search-bar:focus {{ border-color: #4299e1; box-shadow: 0 0 0 3px rgba(66,153,225,0.15); }}
-
-  .toggle-btn{{
-    padding: 6px 16px;
+  .search-bar::placeholder {{ color: #94A3B8; }}
+  .search-bar:focus {{
+    border-color: #0E7490;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.12);
+  }}
+  .toggle-group {{
+    display: inline-flex;
+    background: #FBF8F1;
+    border: 1px solid #E5DDC8;
+    border-radius: 8px;
+    padding: 3px;
+  }}
+  .toggle-btn {{
+    padding: 6px 14px;
     font-size: 12px;
     font-weight: 600;
-    border: 1px solid #e2e8f0;
+    border: none;
     border-radius: 6px;
     cursor: pointer;
-    background: #fff;
-    color: #718096;
+    background: transparent;
+    color: #6B7C8E;
     transition: all 0.15s;
+    font-family: inherit;
   }}
-  toggle-btn.active {{
-    background: #4f8ef7;
+  .toggle-btn.active {{
+    background: #0E7490;
     color: #fff;
-    border-color: #4f8ef7;
   }}
-  .toggle-btn:hover:not(.active) {{ background: #f7fafc; }}
+  .toggle-btn:hover:not(.active) {{ color: #1C2A3A; }}
 
-  footer {{ padding: 20px 0; color: #a0aec0; font-size: 11px; text-align: center; }}
+  /* ---- Plot grid ---- */
+  .plot-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+    gap: 18px;
+  }}
+  .plot-card {{
+    background: #fff;
+    border: 1px solid #F0E9D7;
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+  }}
+  .plot-header {{
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }}
+  .plot-title {{
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 15px;
+    font-weight: 500;
+    color: #1C2A3A;
+    word-break: break-all;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }}
+  .plot-n {{
+    font-size: 11px;
+    color: #94A3B8;
+    font-style: italic;
+    white-space: nowrap;
+    margin-left: 10px;
+  }}
+  .plot-stats {{
+    font-size: 11px;
+    color: #6B7C8E;
+    margin-bottom: 10px;
+    font-style: italic;
+  }}
+  .plot-card svg {{ width: 100%; height: auto; }}
+
+  /* ---- Cheat sheet ---- */
+  .cheat-table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }}
+  .cheat-table td {{
+    padding: 7px 12px;
+    border-bottom: 1px solid #F5EDD8;
+    vertical-align: top;
+  }}
+  .cheat-table code {{
+    background: #F0FDFA;
+    color: #0E7490;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: 'SF Mono', Consolas, Monaco, monospace;
+  }}
+  .cheat-table .group-header td {{
+    background: #F0FDFA;
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    color: #0E7490;
+    font-size: 14px;
+    letter-spacing: 0;
+    padding: 12px 12px 8px;
+    border-bottom: 1px solid #CFFAFE;
+    border-top: 1px solid #CFFAFE;
+  }}
+  .cheat-description {{
+    color: #6B7C8E;
+    font-size: 13px;
+    margin-bottom: 14px;
+    font-style: italic;
+  }}
+
+  footer {{
+    padding: 24px 0 8px;
+    color: #94A3B8;
+    font-size: 11px;
+    text-align: center;
+    font-style: italic;
+  }}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Feature Report — {title}</h1>
-  <p class="subtitle">EOG + GSSC features extracted from merged PSG recordings &nbsp;·&nbsp; {timestamp}</p>
+  <div class="header-top">
+    <div>
+      <div class="eyebrow">RBD · Feature Extraction</div>
+      <h1>{title}</h1>
+      <p class="subtitle">EOG + GSSC features extracted from merged PSG recordings</p>
+    </div>
+    <div class="date">{timestamp}</div>
+  </div>
   <div class="meta">
-    <div class="meta-item"><span class="val">{n_subjects}</span><span class="lbl">Subjects</span></div>
-    <div class="meta-item"><span class="val">{n_features}</span><span class="lbl">Features</span></div>
-    <div class="meta-item"><span class="val">{nan_total}</span><span class="lbl">NaN values</span></div>
+    <div class="meta-item"><div class="val">{n_subjects}</div><div class="lbl">Subjects</div></div>
+    <div class="meta-item"><div class="val">{n_features}</div><div class="lbl">Features</div></div>
+    <div class="meta-item nan"><div class="val">{nan_total}</div><div class="lbl">NaN values</div></div>
   </div>
 </header>
 
@@ -655,10 +850,12 @@ def generate_report(
 
 <div class="card">
   <h2>Feature Distributions</h2>
-  <div class ="controls">
+  <div class="controls">
     <input type="text" class="search-bar" id="searchInput" placeholder="Search features..." oninput="filterPlots()">
-    <button class="toggle-btn active" id="btnHist" onclick="setPlotType('hist')">"Histogram"</button>
-    <button class="toggle-btn" id="btnBox" onclick="setPlotType('box')">"Boxplot"</button>
+    <div class="toggle-group">
+      <button class="toggle-btn active" id="btnHist" onclick="setPlotType('hist')">Histogram</button>
+      <button class="toggle-btn" id="btnBox" onclick="setPlotType('box')">Boxplot</button>
+    </div>
   </div>
   <div class="plot-grid" id="plotGrid">
     {"".join(plot_cards)}
@@ -667,19 +864,16 @@ def generate_report(
 
 <div class="card">
   <h2>Features</h2>
-  <p style="color:#718096; font-size:13px; margin-bottom:14px;">What each feature means - grouped by category.</p>
+  <p class="cheat-description">What each feature means — grouped by category.</p>
   <table class="cheat-table">
     {"".join(cheat_rows)}
   </table>
 </div>
 
-<footer>Generated by simple_feat_report.py &nbsp;·&nbsp; {timestamp}</footer>
+<footer>Generated by feat_report.py &nbsp;·&nbsp; {timestamp}</footer>
 
 <script>
-let currentPlot = 'hist';
-
 function setPlotType(type) {{
-  currentPlot = type;
   document.getElementById('btnHist').classList.toggle('active', type === 'hist');
   document.getElementById('btnBox').classList.toggle('active', type === 'box');
   document.querySelectorAll('.plot-card').forEach(card => {{
