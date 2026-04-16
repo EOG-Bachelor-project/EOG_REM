@@ -92,6 +92,54 @@ def _stage_distribution_features(df: pd.DataFrame, fs: float) -> dict:
 #——————————————————————————————————————————————————————————————————————————————————————————————————————————
 #——————————————————————————————————————————————————————————————————————————————————————————————————————————
 
+def _rem_epoch_duration_features(df: pd.DataFrame, fs: float) -> dict:
+    """
+    Duration statistics for each individual REM epoch (consecutive REM blocks).
+
+    Features
+    --------
+    `rem_epoch_count`             : Number of distinct REM epochs.
+    `rem_epoch_mean_duration_min` : Mean REM epoch duration [minutes].
+    `rem_epoch_std_duration_min`  : Std of REM epoch durations [minutes].
+    `rem_epoch_min_duration_min`  : Shortest REM epoch duration [minutes].
+    `rem_epoch_max_duration_min`  : Longest REM epoch duration [minutes].
+    """
+
+    # ---- 1) Identify consecutive REM blocks ----
+    is_rem = (df["stage"] == "REM").astype(int)
+    epoch_ids = (is_rem.diff().fillna(0) != 0).cumsum()
+    rem_blocks = df[is_rem == 1].groupby(epoch_ids).size()
+    rem_duration_min = rem_blocks / fs / 60.0
+
+    feats: dict = {}
+
+    # ---- 2) Return NaN defaults if no REM found ----
+    if rem_duration_min.empty:
+        print("    No REM epochs found — returning NaN defaults")
+        for k in ["rem_epoch_count", "rem_epoch_mean_duration_min",
+                  "rem_epoch_std_duration_min", "rem_epoch_min_duration_min",
+                  "rem_epoch_max_duration_min"]:
+            feats[k] = np.nan
+        return feats
+
+    # ---- 3) Compute duration statistics ----
+    feats["rem_epoch_count"]             = int(len(rem_duration_min))
+    feats["rem_epoch_mean_duration_min"] = round(float(rem_duration_min.mean()), 3)
+    feats["rem_epoch_std_duration_min"]  = round(float(rem_duration_min.std()), 3)
+    feats["rem_epoch_min_duration_min"]  = round(float(rem_duration_min.min()), 3)
+    feats["rem_epoch_max_duration_min"]  = round(float(rem_duration_min.max()), 3)
+
+    print(f"    REM epochs: {feats['rem_epoch_count']}  |  "
+          f"mean: {feats['rem_epoch_mean_duration_min']} [min]  |  "
+          f"std: {feats['rem_epoch_std_duration_min']}  |  "
+          f"min: {feats['rem_epoch_min_duration_min']}  |  "
+          f"max: {feats['rem_epoch_max_duration_min']}")
+
+    return feats
+
+#——————————————————————————————————————————————————————————————————————————————————————————————————————————
+#——————————————————————————————————————————————————————————————————————————————————————————————————————————
+
 def _rem_event_features(df: pd.DataFrame, fs: float) -> dict:
     """
     Features derived from detected REM eye movement events (extract_rems_n.py output), computed only over samples scored as REM sleep.
@@ -479,6 +527,12 @@ def extract_features(
  
     print(f"\n--- Stage distribution ---")
     feats.update(_stage_distribution_features(df, fs))
+
+    print(f"\n--- REM epoch duration ---")         
+    feats.update(_rem_epoch_duration_features(df, fs)) 
+
+    print(f"\n--- REM event features ---")
+    feats.update(_rem_event_features(df, fs))
  
     print(f"\n--- REM event features ---")
     feats.update(_rem_event_features(df, fs))
