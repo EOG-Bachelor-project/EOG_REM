@@ -187,7 +187,6 @@ def process_patient(rec) -> bool:
         roc_clean = result._data_filt[1]
         eeg_to_csv(
             edf_path=edf_path,
-            hypno_int=hypno_int,
             loc=loc,
             roc=roc,
             loc_clean=loc_clean,
