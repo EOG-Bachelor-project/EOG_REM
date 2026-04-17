@@ -174,24 +174,60 @@ def run_process(raw_root: Path, batch_size: int) -> None:
 
     sessions = index_sessions(raw_root)
     todo = [s for s in sessions if not _is_processed(s.patient_id)]
+    n_already = len(sessions) - len(todo)
 
-    print(f"\nTotal sessions found : {len(sessions)}")
-    print(f"Already processed    : {len(sessions) - len(todo)}")
-    print(f"To process this run  : {min(batch_size, len(todo))}")
+    print(f"\n{'='*70}")
+    print(f"    {BOLD}Pipeline Run{RESET}")
+    print(f"    Total sessions found : {len(sessions)}")
+    print(f"    Already processed    : {n_already}")
+    print(f"    Remaning             : {len(todo)}")
+    print(f"    Target successes     : {batch_size}")
+    print(f"\n{'='*70}")
 
     if not todo:
         print(f"\n{GREEN}All patients already processed.{RESET}\n")
         return
 
+    t_start = time.perf_counter()
     ok = fail = 0
-    for rec in todo[:batch_size]:
+    failed_ids = []
+
+    for rec in todo:
         if process_patient(rec):
             ok += 1
         else:
             fail += 1
+            failed_ids.append(rec.patient_id)
+        
+        if ok >= batch_size:
+            break
+    
+    elapsed = time.perf_counter() - t_start
+    remaining = len(todo) - ok - fail
 
-    print(f"\n{BOLD}Batch done:{RESET}  {GREEN}{ok} ok{RESET}  |  {RED}{fail} failed{RESET}")
+    print(f"\n{'='*70}")
+    print(f"    {BOLD}Run Summary{RESET}")
+    print(f"\n{'='*70}")
+    print(f"    {GREEN}Successful         : {ok}{RESET}")
+    print(f"    {RED}FAILED        : {ok}{RESET}")
+    print(f"    Attempted     : {ok + fail}")
+    print(f"    Still pending : {remaining}")
+    print(f"    Total time    : {elapsed:.1f}s ({elapsed / 60:.1f} min)")
+    
+    if ok > 0:
+        avg = elapsed / ok
+        print(f"    Avg per success: {avg:.1f}s ({avg / 60:.1f} min)")
 
+    if failed_ids:
+        print(f"\n    {RED}Failed sessions:{RESET}")
+        for sid in failed_ids:
+            print(f"    - {sid}")
+    
+    if remaining > 0:
+        print(f"\n  Run again to process next batch.")
+    else:
+        print(f"\n   {GREEN}All patients processed!{RESET}")
+    print(f"\n{'='*70}")
 
 def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path) -> None:
     """Collect features from merged CSVs and cache to a single feature table."""
