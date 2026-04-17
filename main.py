@@ -70,6 +70,38 @@ def _is_processed(session_id: str) -> bool:
     merged_path = MERGED_DIR / f"{session_id}_contiguous_eog_merged.csv"
     return merged_path.exists()
  
+def _wait_for_file(path: Path, timeout: float = 10.0, interval: float = 0.5) -> Path:
+    """
+    Wait for a file to appear on disk. Useful when a previous stage
+    just wrote it but the OS hasn't flushed/synced yet.
+
+    Parameters
+    ----------
+    path : Path
+        Expected file path.
+    timeout : float
+        Max seconds to wait before raising FileNotFoundError.
+        **Default is 10**.
+    interval : float
+        Seconds between checks.
+        **Default is 0.5**.
+
+    Returns
+    -------
+    Path
+        The same path, once it exists.
+    """
+    elapsed = 0.0
+    while not path.exists():
+        if elapsed >= timeout:
+            raise FileNotFoundError(
+                f"File not found after {timeout}s: {path}\n"
+                f"  (directory contents: {[p.name for p in path.parent.iterdir()] if path.parent.exists() else 'parent dir missing'})"
+            )
+        time.sleep(interval)
+        elapsed += interval
+
+    return path
  
 # =====================================================================
 # Core — process one patient through the full pipeline
@@ -112,7 +144,9 @@ def process_patient(rec) -> bool:
 
         # ── Stage 4: Mask artefacts in EOG CSV ──────────────────────
         print(f"\n{BOLD}[4/6] Mask artefacts in EOG CSV{RESET}")
-        eog_csv_path = EOG_DIR / f"{session_id}_{edf_path.stem}_eog.csv"
+        eog_csv_path = _wait_for_file(
+            EOG_DIR / f"{session_id}_{edf_path.stem}_eog.csv"
+        )
         eog_df = pd.read_csv(eog_csv_path)
 
         artefact_mask = (
@@ -136,12 +170,13 @@ def process_patient(rec) -> bool:
 
         # ── Stage 6: Merge into unified CSV ─────────────────────────
         print(f"\n{BOLD}[6/6] Merge into unified CSV{RESET}")
-        eog_file       = EOG_DIR  / f"{session_id}_{edf_path.stem}_eog.csv"
-        gssc_file      = GSSC_DIR / f"{session_id}_gssc.csv"
-        events_file    = REMS_DIR / f"{session_id}_extracted_rems.csv"
-        em_file        = EM_DIR   / f"{session_id}_em.csv"
-        subepochs_file = EM_DIR   / f"{session_id}_subepochs.csv"
+        eog_file       = _wait_for_file(EOG_DIR  / f"{session_id}_{edf_path.stem}_eog.csv")
+        gssc_file      = _wait_for_file(GSSC_DIR / f"{session_id}_gssc.csv")
+        events_file    = _wait_for_file(REMS_DIR / f"{session_id}_extracted_rems.csv")
+        em_file        = _wait_for_file(EM_DIR   / f"{session_id}_em.csv")
+        subepochs_file = EM_DIR / f"{session_id}_subepochs.csv"                             # optional, don't wait
         output_file    = MERGED_DIR / f"{session_id}_{edf_path.stem}_eog_merged.csv"
+
 
         merge_all(
             eog_file=eog_file,
@@ -172,15 +207,16 @@ def run_process(raw_root: Path, batch_size: int) -> None:
         print(f"Error: '{raw_root}' is not a directory.")
         sys.exit(1)
 
-    sessions = index_sessions(raw_root)
-    todo = [s for s in sessions if not _is_processed(s.patient_id)]
-    n_already = len(sessions) - len(todo)
+    sessions = index_sessions(raw_root)                             # find all sessions with EDF+TXT
+    todo = [s for s in sessions if not _is_processed(s.patient_id)] # filter out already processed sessions
+    n_already = len(sessions) - len(todo)                           # count how many are already done   
 
+    # --- Run summary before starting ---
     print(f"\n{'='*70}")
     print(f"    {BOLD}Pipeline Run{RESET}")
     print(f"    Total sessions found : {len(sessions)}")
     print(f"    Already processed    : {n_already}")
-    print(f"    Remaning             : {len(todo)}")
+    print(f"    Remaining            : {len(todo)}")
     print(f"    Target successes     : {batch_size}")
     print(f"\n{'='*70}")
 
@@ -205,11 +241,12 @@ def run_process(raw_root: Path, batch_size: int) -> None:
     elapsed = time.perf_counter() - t_start
     remaining = len(todo) - ok - fail
 
-    print(f"\n{'='*70}")
+    # --- Run summary after completion ---
+    print(f"\n{'='*70}")    
     print(f"    {BOLD}Run Summary{RESET}")
     print(f"\n{'='*70}")
     print(f"    {GREEN}Successful         : {ok}{RESET}")
-    print(f"    {RED}FAILED        : {ok}{RESET}")
+    print(f"    {RED}FAILED        : {fail}{RESET}")
     print(f"    Attempted     : {ok + fail}")
     print(f"    Still pending : {remaining}")
     print(f"    Total time    : {elapsed:.1f}s ({elapsed / 60:.1f} min)")
