@@ -11,6 +11,26 @@
 #   python main.py extract                        # extract features from merged_csv_eog/
 #   python main.py report                         # regenerate HTML from cached features (fast)
 #   python main.py all <raw_root>                 # process + extract + report in one go
+#
+# Re-running specific stages:
+#   The pipeline skips any stage whose output file already exists.
+#   To re-run a specific stage, delete its output files and the merged CSV,
+#   then run again. Examples:
+#
+# Re-run only EEG extraction + merge (stages 6-7):
+#   rm eeg_csv/*_eeg.csv merged_csv_eog/*_merged.csv
+#   python main.py <raw_root> --batch-size 9999
+#
+# Re-run only merge (stage 7):
+#   rm merged_csv_eog/*_merged.csv
+#   python main.py <raw_root> --batch-size 9999
+#
+# Re-run everything from scratch:
+#   rm eog_csv/* gssc_csv/* extracted_rems/* detected_ems/* eeg_csv/* merged_csv_eog/*
+#   python main.py <raw_root> --batch-size 9999
+#
+# Note: the merged CSV must always be deleted, because _is_processed()
+#       checks for it to decide whether a patient needs processing at all.
 
 # =====================================================================
 # Imports
@@ -44,12 +64,12 @@ GSSC_DIR     = Path("gssc_csv")
 REMS_DIR     = Path("extracted_rems")
 EM_DIR       = Path("detected_ems")
 MERGED_DIR   = Path("merged_csv_eog")
-MERGED_DIR_b   = Path("merged_csv_eog_backup")
+MERGED_DIR_b = Path("merged_csv_eog_backup")
 FEATURES_DIR = Path("features_csv")
 REPORTS_DIR  = Path("reports")
 EEG_DIR      = Path("eeg_csv")
  
-for d in [EOG_DIR, GSSC_DIR, REMS_DIR, EM_DIR, MERGED_DIR, FEATURES_DIR, REPORTS_DIR,EEG_DIR]:
+for d in [EOG_DIR, GSSC_DIR, REMS_DIR, EM_DIR, MERGED_DIR, FEATURES_DIR, REPORTS_DIR, EEG_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_FEATURE_CSV = FEATURES_DIR / "features.csv"
@@ -65,7 +85,7 @@ AMPLITUDE_THRESH_UV = 300.0  # artefact masking threshold [µV]
  
  
 # =====================================================================
-# Helper — check if a patient has already been processed
+# Helper — check which stages have already been completed
 # =====================================================================
 def _is_processed(session_id: str) -> bool:
     """
@@ -74,6 +94,23 @@ def _is_processed(session_id: str) -> bool:
     """
     merged_path = MERGED_DIR / f"{session_id}_contiguous_eog_merged.csv"
     return merged_path.exists()
+
+
+def _check_existing_outputs(session_id: str, edf_stem: str) -> dict[str, bool]:
+    """
+    Check which intermediate output files already exist for a session.
+
+    Returns a dict mapping stage names to True (output exists) or False.
+    """
+    return {
+        "eog":       (EOG_DIR  / f"{session_id}_{edf_stem}_eog.csv").exists(),
+        "gssc":      (GSSC_DIR / f"{session_id}_gssc.csv").exists(),
+        "rems":      (REMS_DIR / f"{session_id}_extracted_rems.csv").exists(),
+        "em":        (EM_DIR   / f"{session_id}_em.csv").exists(),
+        "subepochs": (EM_DIR   / f"{session_id}_subepochs.csv").exists(),
+        "eeg":       (EEG_DIR  / f"{session_id}_eeg.csv").exists(),
+    }
+
  
 def _wait_for_file(path: Path, timeout: float = 10.0, interval: float = 0.5) -> Path:
     """
@@ -113,7 +150,8 @@ def _wait_for_file(path: Path, timeout: float = 10.0, interval: float = 0.5) -> 
 # =====================================================================
 def process_patient(rec) -> bool:
     """
-    Run stages 1-7 for a single patient session.
+    Run stages 1-7 for a single patient session, skipping any stage
+    whose output file already exists on disk.
 
     Returns True if successful, False if an error occurred.
     """
@@ -127,32 +165,65 @@ def process_patient(rec) -> bool:
     t0 = time.perf_counter()
 
     try:
-        # ── Load EDF once ───────────────────────────────────────────
-        raw = mne.io.read_raw_edf
-        rename_map = build_rename_map(raw.ch_names)
-        if rename_map:
-            raw.rename_channels(rename_map)
+        # ── Check which outputs already exist ───────────────────────
+        existing = _check_existing_outputs(session_id, edf_path.stem)
+
+        skip_summary = [f"{name}: {'EXISTS' if exists else 'missing'}"
+                        for name, exists in existing.items()]
+        print(f"  Intermediate files: {', '.join(skip_summary)}")
+
+        # Stages that need the EDF: 1 (eog), 2 (gssc), 3 (rems), 5 (em), 6 (eeg)
+        needs_edf = (
+            not existing["eog"]  or
+            not existing["gssc"] or
+            not existing["rems"] or
+            not existing["em"]   or
+            not existing["eeg"]
+        )
+
+        # ── Load EDF once (only if at least one stage needs it) ─────
+        raw = None
+        if needs_edf:
+            print(f"\n{BOLD}Loading EDF + renaming channels{RESET}")
+            raw = mne.io.read_raw_edf(edf_path, preload=False, verbose=False)
+            rename_map = build_rename_map(raw.ch_names)
+            if rename_map:
+                raw.rename_channels(rename_map)
+            print(f"    sfreq: {raw.info['sfreq']} Hz  |  channels: {len(raw.ch_names)}")
+        else:
+            print(f"\n  All intermediate files exist — skipping EDF load.")
 
         # ── Stage 1: EDF → EOG CSV ──────────────────────────────────
-        print(f"\n{BOLD}[1/7] EDF → EOG CSV{RESET}")
-        edf_to_csv(edf_path, raw=raw, out_dir=EOG_DIR, lights_path=lights_path)
+        if existing["eog"]:
+            print(f"\n{BOLD}[1/7] EDF → EOG CSV — SKIPPED (already exists){RESET}")
+        else:
+            print(f"\n{BOLD}[1/7] EDF → EOG CSV{RESET}")
+            edf_to_csv(edf_path, raw=raw, out_dir=EOG_DIR, lights_path=lights_path)
 
         # ── Stage 2: GSSC sleep staging ─────────────────────────────
-        print(f"\n{BOLD}[2/7] GSSC sleep staging{RESET}")
-        gssc_df = GSSC_to_csv(edf_path, raw=raw, out_dir=GSSC_DIR, lights_path=lights_path)
+        if existing["gssc"]:
+            print(f"\n{BOLD}[2/7] GSSC sleep staging — SKIPPED (already exists){RESET}")
+            gssc_df = pd.read_csv(GSSC_DIR / f"{session_id}_gssc.csv")
+        else:
+            print(f"\n{BOLD}[2/7] GSSC sleep staging{RESET}")
+            gssc_df = GSSC_to_csv(edf_path, raw=raw, out_dir=GSSC_DIR, lights_path=lights_path)
 
         stage_map = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
         hypno_int = gssc_df["stage"].map(stage_map).fillna(0).astype(int).values
 
         # ── Stage 3: Extract REM events ─────────────────────────────
-        print(f"\n{BOLD}[3/7] Extract REM events{RESET}")
-        df, loc, roc, result =extract_rems_from_edf(
-            edf_path=edf_path,
-            raw=raw,
-            out_dir=REMS_DIR,
-            lights_path=lights_path,
-            gssc_df=gssc_df,
-        )
+        if existing["rems"]:
+            print(f"\n{BOLD}[3/7] Extract REM events — SKIPPED (already exists){RESET}")
+            df, loc, roc, result = None, None, None, None
+        else:
+            print(f"\n{BOLD}[3/7] Extract REM events{RESET}")
+            df, loc, roc, result = extract_rems_from_edf(
+                edf_path=edf_path,
+                raw=raw,
+                out_dir=REMS_DIR,
+                lights_path=lights_path,
+                gssc_df=gssc_df,
+            )
 
         # ── Stage 4: Mask artefacts in EOG CSV ──────────────────────
         print(f"\n{BOLD}[4/7] Mask artefacts in EOG CSV{RESET}")
@@ -172,28 +243,44 @@ def process_patient(rec) -> bool:
         print(f"    Artefact samples masked: {n_masked:,} / {len(eog_df):,}")
 
         # ── Stage 5: Detect & classify eye movements ────────────────
-        print(f"\n{BOLD}[5/7] Detect & classify eye movements{RESET}")
-        em_to_csv(
-            edf_path=edf_path,
-            raw=raw,
-            hypno_int=hypno_int,
-            out_dir=EM_DIR,
-            lights_path=lights_path,
-        )
+        if existing["em"]:
+            print(f"\n{BOLD}[5/7] Detect & classify eye movements — SKIPPED (already exists){RESET}")
+        else:
+            print(f"\n{BOLD}[5/7] Detect & classify eye movements{RESET}")
+            em_to_csv(
+                edf_path=edf_path,
+                raw=raw,
+                hypno_int=hypno_int,
+                out_dir=EM_DIR,
+                lights_path=lights_path,
+            )
 
-        # ── Stage 6: Extract EEG signals ────────────────────────────────
-        print(f"\n{BOLD}[6/7] Extract EEG signals{RESET}")
-        loc_clean = result._data_filt[0]
-        roc_clean = result._data_filt[1]
-        eeg_to_csv(
-            edf_path=edf_path,
-            loc=loc,
-            roc=roc,
-            loc_clean=loc_clean,
-            roc_clean=roc_clean,
-            out_dir=EEG_DIR,
-            lights_path=lights_path,
-        )
+        # ── Stage 6: Extract EEG signals ────────────────────────────
+        if existing["eeg"]:
+            print(f"\n{BOLD}[6/7] Extract EEG signals — SKIPPED (already exists){RESET}")
+        else:
+            print(f"\n{BOLD}[6/7] Extract EEG signals{RESET}")
+            # If stage 3 was skipped, we need to re-run it to get loc/roc/result
+            if result is None:
+                print("    Re-running stage 3 to get filtered signals for EEG extraction...")
+                df, loc, roc, result = extract_rems_from_edf(
+                    edf_path=edf_path,
+                    raw=raw,
+                    out_dir=REMS_DIR,
+                    lights_path=lights_path,
+                    gssc_df=gssc_df,
+                )
+            loc_clean = result._data_filt[0]
+            roc_clean = result._data_filt[1]
+            eeg_to_csv(
+                edf_path=edf_path,
+                loc=loc,
+                roc=roc,
+                loc_clean=loc_clean,
+                roc_clean=roc_clean,
+                out_dir=EEG_DIR,
+                lights_path=lights_path,
+            )
 
         # ── Stage 7: Merge into unified CSV ─────────────────────────
         print(f"\n{BOLD}[7/7] Merge into unified CSV{RESET}")
@@ -201,7 +288,7 @@ def process_patient(rec) -> bool:
         gssc_file      = _wait_for_file(GSSC_DIR / f"{session_id}_gssc.csv")
         events_file    = _wait_for_file(REMS_DIR / f"{session_id}_extracted_rems.csv")
         em_file        = _wait_for_file(EM_DIR   / f"{session_id}_em.csv")
-        eeg_file = _wait_for_file(EEG_DIR / f"{session_id}_eeg.csv")
+        eeg_file       = _wait_for_file(EEG_DIR  / f"{session_id}_eeg.csv")
         subepochs_file = EM_DIR / f"{session_id}_subepochs.csv"                             # optional, don't wait
         output_file    = MERGED_DIR / f"{session_id}_{edf_path.stem}_eog_merged.csv"
 
@@ -382,11 +469,9 @@ the parts you want.
     p_all.add_argument("--title", type=str, default=None)
 
     # ---- Back-compat: allow `python main.py <raw_root>` with no subcommand ----
-    # Argparse can't express "positional that isn't a subcommand", so we detect it manually.
     argv = sys.argv[1:]
     known_modes = {"process", "extract", "report", "all", "-h", "--help"}
     if argv and argv[0] not in known_modes:
-        # Treat the old-style invocation as `process`
         argv = ["process"] + argv
 
     args = parser.parse_args(argv)
