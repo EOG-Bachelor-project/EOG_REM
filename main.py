@@ -180,11 +180,11 @@ def process_patient(rec) -> bool:
             out_dir=EM_DIR,
             lights_path=lights_path,
         )
-        
+
         # ── Stage 6: Extract EEG signals ────────────────────────────────
         print(f"\n{BOLD}[6/7] Extract EEG signals{RESET}")
-        loc_clean = result.data_filt[0]
-        roc_clean = result.data_filt[1]
+        loc_clean = result._data_filt[0]
+        roc_clean = result._data_filt[1]
         eeg_to_csv(
             edf_path=edf_path,
             hypno_int=hypno_int,
