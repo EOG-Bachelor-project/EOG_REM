@@ -419,10 +419,8 @@ def _phasic_tonic_features(df: pd.DataFrame) -> dict:
         subepoch_df = rem_df.drop_duplicates(subset="em_SubEpochStart")
     else:
         subepoch_df = rem_df[rem_df["EpochType"].notna()].copy()
-        subepoch_df = subepoch_df[
-            subepoch_df["EpochType"] != subepoch_df["EpochType"].shift()
-        ]
-
+        subepoch_df["_epoch_bin"] = (subepoch_df["time_sec"] // 4).astype(int)
+        subepoch_df = subepoch_df.drop_duplicates(subset="_epoch_bin")
     print(f"    Sub-epochs found: {len(subepoch_df):,}  |  types: {subepoch_df['EpochType'].value_counts().to_dict()}")
 
     # ---- 4) Compute counts and fractions ----
