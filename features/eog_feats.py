@@ -534,9 +534,6 @@ def extract_features(
     print(f"\n--- REM event features ---")
     feats.update(_rem_event_features(df, fs))
  
-    print(f"\n--- REM event features ---")
-    feats.update(_rem_event_features(df, fs))
- 
     print(f"\n--- EM classification features ---")
     feats.update(_em_classification_features(df, fs))
 
