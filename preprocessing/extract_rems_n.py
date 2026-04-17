@@ -190,4 +190,4 @@ def extract_rems_from_edf(
     df.to_csv(out_path, index=False)
 
     print(f"Saved: {out_path}")
-    return df
+    return df, loc, roc, result  

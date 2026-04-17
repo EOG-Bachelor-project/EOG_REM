@@ -1,19 +1,17 @@
 # Filename: eeg_to_csv.py
 # Authors: Adam Klovborg & Rasmus Kleffel
-# Description: Loads an EDF file, extracts EEG signals from LOC and ROC using
-#              the DTCWT-based method in eeg_signals_from_eog, and saves the result as CSV.
-#              Mirrors the structure of em_to_csv.
+# Description: Extracts EEG signals from pre-processed LOC and ROC signals
+#              using the DTCWT-based method in eeg_signals_from_eog, and saves
+#              the result as CSV. Signals are passed directly from extract_rems_from_edf
+#              to avoid redundant preprocessing.
 
 # =====================================================================
 # Imports
 # =====================================================================
-import mne
 import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from preprocessing.channel_standardization import build_rename_map
-from preprocessing.index_file import parse_lights_txt
 from Tests.test_eeg_signals_from_eog import eeg_signals_from_eog
 
 # =====================================================================
@@ -27,131 +25,88 @@ EEG_DIR.mkdir(parents=True, exist_ok=True)
 # =====================================================================
 def eeg_to_csv(
         edf_path:      Path,
-        hypno_int:     np.ndarray,
+        loc:           np.ndarray,
+        roc:           np.ndarray,
+        loc_clean:     np.ndarray,
+        roc_clean:     np.ndarray,
         out_dir:       Path = EEG_DIR,
         lights_path:   Path | None = None,
         method:        str = "subtract",
-        fs_target:     int = 128,
-        pre_load:      bool = False,
-        psg_epoch_sec: float = 30.0,
+        fs:            int = 128,
 ) -> pd.DataFrame | None:
     """
-    Load one EDF file, extract EEG signals from LOC and ROC using the
-    DTCWT-based method, and save the result as CSV.
+    Extract EEG signals from pre-processed LOC and ROC signals and save as CSV.
+
+    Signals are passed directly from extract_rems_from_edf — no reloading,
+    resampling, or trimming is performed here as these steps are already
+    done upstream.
 
     Parameters
     ----------
     edf_path : Path
-        Path to the EDF file.
-    hypno_int : np.ndarray
-        Integer hypnogram from GSSC staging (one value per 30 s epoch).
+        Path to the EDF file. Used only to derive session_id and output filename.
+    loc : np.ndarray
+        Raw LOC signal in µV, already resampled and trimmed (from extract_rems_from_edf).
+    roc : np.ndarray
+        Raw ROC signal in µV, already resampled and trimmed (from extract_rems_from_edf).
+    loc_clean : np.ndarray
+        EOG-filtered LOC signal in µV (result.data_filt[0] from detect_rem_jaec).
+    roc_clean : np.ndarray
+        EOG-filtered ROC signal in µV (result.data_filt[1] from detect_rem_jaec).
     out_dir : Path
         Directory where the output CSV will be saved. Default is **'extracted_eeg/'**.
     lights_path : Path | None
-        Optional path to lights.txt. If provided, signal is cropped to the
-        sleep period before extraction.
+        Optional path to lights.txt. Used only to derive the time offset for
+        the time_sec column. Default is **None**.
     method : str
         Method passed to eeg_signals_from_eog. Either 'subtract' or 'mask'.
         Default is **'subtract'**.
-    fs_target : int
-        Target sampling rate in Hz. Signal is resampled if needed. Default is **128 Hz**.
-    pre_load : bool
-        If True, mne.io.read_raw_edf(preload=True). Default is **False**.
-    psg_epoch_sec : float
-        Duration of each PSG scoring epoch in seconds. Default is **30.0 [s]**.
-        Must match the epoch length used to build hypno_int.
+    fs : int
+        Sampling rate of the signals in Hz. Default is **128 Hz**.
 
     Returns
     -------
     pd.DataFrame | None
         DataFrame with columns ``time_sec``, ``EEG_LOC``, ``EEG_ROC``,
         saved as ``{session_id}_eeg.csv``.
-        Returns None if required channels are missing or signal is too short.
+        Returns None if signal is empty.
     """
-    if not isinstance(hypno_int, np.ndarray):
-        raise ValueError(f"hypno_int must be a numpy array, but got type: {type(hypno_int)}")
-    if fs_target <= 0:
-        raise ValueError(f"fs_target must be a positive integer, but got: {fs_target}")
+    # --- Validate inputs ---
+    if not isinstance(loc, np.ndarray) or not isinstance(roc, np.ndarray):
+        raise ValueError("loc and roc must be numpy arrays.")
+    if len(loc) == 0 or len(roc) == 0:
+        print(f"Skipping {edf_path.parent.name} — empty signal.")
+        return None
+    if fs <= 0:
+        raise ValueError(f"fs must be a positive integer, but got: {fs}")
 
     print(f"\nProcessing: {edf_path}")
 
     session_id = edf_path.parent.name
 
-    # --- 1) Load EDF ---
-    raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
-    print(f" Loaded raw: {raw}")
-    print(f" Preload was set to: {pre_load}")
-    print(f" sfreq: {raw.info['sfreq']} [Hz] | n_channels: {len(raw.ch_names)} | duration: {raw.n_times / raw.info['sfreq']:.1f} [s]")
+    print(f"    LOC range: {loc.min():.1f} to {loc.max():.1f} [µV]  |  length: {len(loc)} samples")
+    print(f"    ROC range: {roc.min():.1f} to {roc.max():.1f} [µV]  |  length: {len(roc)} samples")
 
-    # --- 2) Rename channels ---
-    rename_map = build_rename_map(raw.ch_names)
-    if rename_map:
-        raw.rename_channels(rename_map)
-    print(f"Rename map: {rename_map}")
-
-    # --- 3) Check required channels ---
-    missing = [ch for ch in ["LOC", "ROC"] if ch not in raw.ch_names]
-    if missing:
-        print(f"Skipping {session_id} — missing channels: {missing}")
-        return None
-
-    raw.set_channel_types({"LOC": "eog", "ROC": "eog"})
-
-    # --- 4) Crop to lights window ---
+    # --- 1) Get lights_off offset for time vector ---
     lights_off = 0.0
     if lights_path is not None:
-        lights_off, lights_on = parse_lights_txt(lights_path)
-        raw = raw.crop(tmin=lights_off, tmax=min(lights_on, raw.times[-1]))
-        print(f"    Cropped to lights window: {lights_off:.1f} - {lights_on:.1f} [s]")
+        from preprocessing.index_file import parse_lights_txt
+        lights_off, _ = parse_lights_txt(lights_path)
+        print(f"    Lights off offset: {lights_off:.1f} [s]")
 
-    # --- 5) Resample if needed ---
-    sf = raw.info["sfreq"]
-    if sf != fs_target:
-        print(f"\nResampling {sf} [Hz] to {fs_target} [Hz]")
-        raw = raw.copy().resample(fs_target)
-        sf  = fs_target
-
-    # --- 6) Filter ---
-    raw.filter(0.1, 30, picks=["LOC", "ROC"])
-
-    # --- 7) Extract signals in µV ---
-    loc_uv = raw.get_data(picks=["LOC"])[0] * 1e6
-    roc_uv = raw.get_data(picks=["ROC"])[0] * 1e6
-    print(f"    \nLOC range: {loc_uv.min():.1f} to {loc_uv.max():.1f} [µV]")
-    print(f"    ROC range: {roc_uv.min():.1f} to {roc_uv.max():.1f} [µV]")
-
-    # --- 8) Build upsampled hypnogram ---
-    samples_per_epoch = int(sf * psg_epoch_sec)
-    hypno_up          = np.repeat(hypno_int, samples_per_epoch)
-    print(f"\nUpsampled hypnogram to match signal length: {len(hypno_up)} samples")
-
-    # --- 9) Trim to match lengths and multiple of 2^14 (required by dtcwt) ---
-    factor = 2 ** 14
-    trim = (min(len(loc_uv), len(hypno_up)) // factor) * factor
-    print(f"    len(loc_uv) = {len(loc_uv)} | len(hypno_up) = {len(hypno_up)} | factor={factor}")
-    print(f"    trim = {trim}")
-    if trim == 0:
-        print(f" Skipping {session_id} — signal too short for dtcwt")
-        return None
-
-    loc_uv   = loc_uv[:trim]
-    roc_uv   = roc_uv[:trim]
-    hypno_up = hypno_up[:trim]
-    print(f"Signal length after trim: {trim} samples = {trim/sf:.1f} [s]")
-
-    # --- 10) Extract EEG signals ---
+    # --- 2) Extract EEG signals ---
     print(f"\nExtracting EEG signals using method='{method}'...")
-    loc_eeg, roc_eeg = eeg_signals_from_eog(loc_uv, roc_uv, hypno_up, method=method)
+    loc_eeg, roc_eeg = eeg_signals_from_eog(loc, roc, loc_clean, roc_clean, method=method)
 
-    # --- 11) Build time vector and DataFrame ---
-    time_sec = (np.arange(trim) / sf) + lights_off
+    # --- 3) Build time vector and DataFrame ---
+    time_sec = (np.arange(len(loc)) / fs) + lights_off
     eeg_df   = pd.DataFrame({
         "time_sec": time_sec,
         "EEG_LOC":  loc_eeg,
         "EEG_ROC":  roc_eeg,
     })
 
-    # --- 12) Save ---
+    # --- 4) Save ---
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{session_id}_eeg.csv"
     eeg_df.to_csv(out_path, index=False)

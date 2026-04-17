@@ -9,13 +9,20 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from extract_rems import detect_rem_jaec 
+from preprocessing.extract_rems_n import extract_rems_from_edf
 import numpy as np
 import dtcwt
+from pathlib import Path
 
 
+# =====================================================================
+# Constants
+# =====================================================================
+EXTRACT_REMS_DIR = Path("extracted_rems")
+EXTRACT_REMS_DIR.mkdir(parents=True, exist_ok=True)
 
-def eeg_signals_from_eog(loc: np.ndarray, roc:np.ndarray, hypno_up: np.ndarray, method: str = 'subtract')-> tuple[np.ndarray, np.ndarray]:
+
+def eeg_signals_from_eog(loc: np.ndarray, roc:np.ndarray,loc_clean: np.ndarray, roc_clean: np.ndarray, method: str = 'subtract')-> tuple[np.ndarray, np.ndarray]:
 
     """
     Extract EEG signals by removing EOG activity from LOC and ROC signals.
@@ -26,8 +33,10 @@ def eeg_signals_from_eog(loc: np.ndarray, roc:np.ndarray, hypno_up: np.ndarray, 
         Raw LOC signal in µV.
     roc : np.ndarray
         Raw ROC signal in µV.
-    hypno_up : np.ndarray
-        Hypnogram upsampled to the signal sampling rate.
+    loc_clean : np.ndarray
+        EOG-filtered LOC signal in µV.
+    roc_clean : np.ndarray
+        EOG-filtered ROC signal in µV.
     method : Literal['subtract', 'mask'], optional
         Method used to extract EEG signal.
         - 'subtract' : Subtracts the EOG-filtered signal from the raw signal.
@@ -57,11 +66,6 @@ def eeg_signals_from_eog(loc: np.ndarray, roc:np.ndarray, hypno_up: np.ndarray, 
 
 
     if method == 'subtract':
-
-        result = detect_rem_jaec(loc, roc, hypno_up, method = 'ssc_threshold')
-
-        loc_clean = result.data_filt[0]
-        roc_clean = result.data_filt[1]
 
         loc_eeg = loc - loc_clean
         roc_eeg = roc - roc_clean
