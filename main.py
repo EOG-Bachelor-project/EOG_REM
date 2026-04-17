@@ -32,6 +32,7 @@ from preprocessing.extract_rems_n import extract_rems_from_edf
 from preprocessing.em_to_csv import em_to_csv
 from preprocessing.merge import merge_all
 from analysis.feat_report import collect_features, generate_report
+from preprocessing.eeg_to_csv import eeg_to_csv
 
 # =====================================================================
 # Constants — output directories
@@ -43,8 +44,9 @@ EM_DIR       = Path("detected_ems")
 MERGED_DIR   = Path("merged_csv_eog")
 FEATURES_DIR = Path("features_csv")
 REPORTS_DIR  = Path("reports")
+EEG_DIR      = Path("eeg_csv")
  
-for d in [EOG_DIR, GSSC_DIR, REMS_DIR, EM_DIR, MERGED_DIR, FEATURES_DIR, REPORTS_DIR]:
+for d in [EOG_DIR, GSSC_DIR, REMS_DIR, EM_DIR, MERGED_DIR, FEATURES_DIR, REPORTS_DIR,EEG_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_FEATURE_CSV = FEATURES_DIR / "features.csv"
@@ -108,7 +110,7 @@ def _wait_for_file(path: Path, timeout: float = 10.0, interval: float = 0.5) -> 
 # =====================================================================
 def process_patient(rec) -> bool:
     """
-    Run stages 1-6 for a single patient session.
+    Run stages 1-7 for a single patient session.
 
     Returns True if successful, False if an error occurred.
     """
@@ -123,18 +125,18 @@ def process_patient(rec) -> bool:
 
     try:
         # ── Stage 1: EDF → EOG CSV ──────────────────────────────────
-        print(f"\n{BOLD}[1/6] EDF → EOG CSV{RESET}")
+        print(f"\n{BOLD}[1/7] EDF → EOG CSV{RESET}")
         edf_to_csv(edf_path, out_dir=EOG_DIR, lights_path=lights_path)
 
         # ── Stage 2: GSSC sleep staging ─────────────────────────────
-        print(f"\n{BOLD}[2/6] GSSC sleep staging{RESET}")
+        print(f"\n{BOLD}[2/7] GSSC sleep staging{RESET}")
         gssc_df = GSSC_to_csv(edf_path, out_dir=GSSC_DIR, lights_path=lights_path)
 
         stage_map = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
         hypno_int = gssc_df["stage"].map(stage_map).fillna(0).astype(int).values
 
         # ── Stage 3: Extract REM events ─────────────────────────────
-        print(f"\n{BOLD}[3/6] Extract REM events{RESET}")
+        print(f"\n{BOLD}[3/7] Extract REM events{RESET}")
         extract_rems_from_edf(
             edf_path=edf_path,
             out_dir=REMS_DIR,
@@ -143,7 +145,7 @@ def process_patient(rec) -> bool:
         )
 
         # ── Stage 4: Mask artefacts in EOG CSV ──────────────────────
-        print(f"\n{BOLD}[4/6] Mask artefacts in EOG CSV{RESET}")
+        print(f"\n{BOLD}[4/7] Mask artefacts in EOG CSV{RESET}")
         eog_csv_path = _wait_for_file(
             EOG_DIR / f"{session_id}_{edf_path.stem}_eog.csv"
         )
@@ -160,20 +162,29 @@ def process_patient(rec) -> bool:
         print(f"    Artefact samples masked: {n_masked:,} / {len(eog_df):,}")
 
         # ── Stage 5: Detect & classify eye movements ────────────────
-        print(f"\n{BOLD}[5/6] Detect & classify eye movements{RESET}")
+        print(f"\n{BOLD}[5/7] Detect & classify eye movements{RESET}")
         em_to_csv(
             edf_path=edf_path,
             hypno_int=hypno_int,
             out_dir=EM_DIR,
             lights_path=lights_path,
         )
+        # ── Stage 6: Extract EEG signals ────────────────────────────────
+        print(f"\n{BOLD}[6/7] Extract EEG signals{RESET}")
+        eeg_to_csv(
+            edf_path=edf_path,
+            hypno_int=hypno_int,
+            out_dir=EEG_DIR,
+            lights_path=lights_path,
+        )
 
-        # ── Stage 6: Merge into unified CSV ─────────────────────────
-        print(f"\n{BOLD}[6/6] Merge into unified CSV{RESET}")
+        # ── Stage 7: Merge into unified CSV ─────────────────────────
+        print(f"\n{BOLD}[7/7] Merge into unified CSV{RESET}")
         eog_file       = _wait_for_file(EOG_DIR  / f"{session_id}_{edf_path.stem}_eog.csv")
         gssc_file      = _wait_for_file(GSSC_DIR / f"{session_id}_gssc.csv")
         events_file    = _wait_for_file(REMS_DIR / f"{session_id}_extracted_rems.csv")
         em_file        = _wait_for_file(EM_DIR   / f"{session_id}_em.csv")
+        eeg_file = _wait_for_file(EEG_DIR / f"{session_id}_eeg.csv")
         subepochs_file = EM_DIR / f"{session_id}_subepochs.csv"                             # optional, don't wait
         output_file    = MERGED_DIR / f"{session_id}_{edf_path.stem}_eog_merged.csv"
 
@@ -185,6 +196,7 @@ def process_patient(rec) -> bool:
             em_file=em_file,
             output_file=output_file,
             subepochs_file=subepochs_file,
+            eeg_file=eeg_file,
         )
 
         elapsed = time.perf_counter() - t0
@@ -320,7 +332,7 @@ the parts you want.
     sub = parser.add_subparsers(dest="mode")
 
     # ---- process ----
-    p_proc = sub.add_parser("process", help="Run preprocessing stages 1-6 for pending patients.")
+    p_proc = sub.add_parser("process", help="Run preprocessing stages 1-7 for pending patients.")
     p_proc.add_argument("raw_root", type=str, help="Root directory with raw EDF/TXT recordings")
     p_proc.add_argument("--batch-size", type=int, default=10, help="Patients per batch (default: 10)")
 
