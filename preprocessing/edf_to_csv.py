@@ -37,6 +37,7 @@ FS_TARGET = 250  # Hz
 # 1 —————————————————————————————————————————————————————————————————————
 def edf_to_csv(
     edf_path:    Path,
+    raw:         mne.io.Raw | None = None,
     pre_load:    bool = False,
     out_dir:     Path = OUT_DIR,
     lights_path: Path | None = None,
@@ -49,6 +50,11 @@ def edf_to_csv(
     ----------
     edf_path : Path
         The path to the input EDF file.
+    raw : mne.io.Raw | None
+        Pre-loaded MNE Raw obeject with channels already renamed. 
+        If provided, the EDF is not re-read from disk and ``pre_load`` is ignored. \\
+        A copy is made internally so the caller's object is not mutated. \\
+        Default is **None** (load from from ``edf_path``).
     pre_load : bool
         If True mne.io.read_raw_edf(preload = True). \\
         If False mne.io.read_raw_edf(preload = False). \\
@@ -69,29 +75,31 @@ def edf_to_csv(
     print(f"\nProcessing: {edf_path}")
 
     # --- 1) Load EDF ---
-    raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
-    print(" Loaded raw:", raw)
-    print(" preload was set to:", pre_load)
-    print(" sfreq:", raw.info["sfreq"],"[Hz]")
+    if raw is None:
+        raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
+        print(" Loaded raw:", raw)
+        print(" preload was set to:", pre_load)
+        print(" sfreq:", raw.info["sfreq"],"[Hz]")
 
-    # --- 2) Rename EOG channels ---
-    rename_map = build_rename_map(raw.ch_names)
-    print("\nRename map:", rename_map)
+        rename_map = build_rename_map(raw.ch_names)
+        print("\nRename map:", rename_map)
 
-    if rename_map:
-        raw.rename_channels(rename_map)
+        if rename_map:
+            raw.rename_channels(rename_map)
+    else:
+        raw = raw.copy()
 
-    # --- 3) Check if both LOC and ROC channels are present after renaming ---
+    # --- 2) Check if both LOC and ROC channels are present after renaming ---
     missing = [ch for ch in ["LOC", "ROC"] if ch not in raw.ch_names]
     if missing:
         print(f"Skipping {edf_path.name} - missing channels: {missing}")
         return
     
-    # --- 4) Pick only LOC and ROC before loading data ---
+    # --- 3) Pick only LOC and ROC before loading data ---
     # This prevents OOM errors on files with many channels at high sampling rates
     raw.pick(["LOC", "ROC"])
     
-    # --- 5) Resample to target frequency if needed ---
+    # --- 4) Resample to target frequency if needed ---
     sf = raw.info["sfreq"]
     if not raw.preload:
         raw.load_data()
@@ -99,11 +107,11 @@ def edf_to_csv(
         print(f"\nResampling from {sf} [Hz] to {fs_target} [Hz].")
         raw = raw.resample(fs_target)
 
-    # --- 6) Extract data for LOC and ROC channels ---
+    # --- 5) Extract data for LOC and ROC channels ---
     loc = raw.get_data(picks=["LOC"])[0] * 1e6 # Convert V to µV
     roc = raw.get_data(picks=["ROC"])[0] * 1e6 # Convert V to µV
     
-    # --- 6.a) Mask artefact samples on continuous signal ---
+    # --- 5.a) Mask artefact samples on continuous signal ---
     ARTEFACT_THRESH_UV = 300.0  # µV
 
     artefact_mask = (np.abs(loc) > ARTEFACT_THRESH_UV) | (np.abs(roc) > ARTEFACT_THRESH_UV)
@@ -118,7 +126,7 @@ def edf_to_csv(
     print(f"    Artefact samples masked: {n_masked:,} / {n_total:,} "
           f"({n_masked / n_total:.2%}) — threshold: {ARTEFACT_THRESH_UV:.0f} µV")
 
-    # --- 6.b) Unit sanity check (on clean signal) ---
+    # --- 5.b) Unit sanity check (on clean signal) ---
     loc_max = float(np.abs(loc).max())
     roc_max = float(np.abs(roc).max())
     print(f"    LOC range after conversion: {np.nanmin(loc):.2f} to {np.nanmax(loc):.2f} [µV]")
@@ -137,20 +145,20 @@ def edf_to_csv(
             f"EDF may already store values in µV — check physical_dimension in header."
         )
 
-    # --- 7) Create a DataFrame with time and EOG channels (signals in µV) ---
+    # --- 6) Create a DataFrame with time and EOG channels (signals in µV) ---
     df = pd.DataFrame({
         "time_sec": raw.times,
         "LOC": loc,   # µV
         "ROC": roc,   # µV
     })
 
-    # --- 8) Trim to lights-off/lights-on window
+    # --- 7) Trim to lights-off/lights-on window
     if lights_path is not None:
         lights_off, lights_on = parse_lights_txt(lights_path)
         df = df[(df["time_sec"] >= lights_off) & (df["time_sec"] <= lights_on)].reset_index(drop=True)
         print(f"    Trimmed to sleep period: {len(df)} samples remaining.")
 
-    # --- 9) Save to CSV ---
+    # --- 8) Save to CSV ---
     patient_id = edf_path.parent.name
     out_path = out_dir / f"{patient_id}_{edf_path.stem}_eog.csv"
 

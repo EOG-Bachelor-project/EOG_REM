@@ -23,6 +23,7 @@ import time                         # for measuring runtime
 import traceback                    # for detailed error traces
 import numpy as np                  # for numerical operations
 import pandas as pd                 # for data manipulation
+import mne                          # for loading EDF files and handling raw EEG/EOG data
 from pathlib import Path            # for filesystem paths
 
 from preprocessing.index_file import index_sessions
@@ -31,8 +32,9 @@ from preprocessing.GSSC_to_csv import GSSC_to_csv
 from preprocessing.extract_rems_n import extract_rems_from_edf
 from preprocessing.em_to_csv import em_to_csv
 from preprocessing.merge import merge_all
-from analysis.feat_report import collect_features, generate_report
+from preprocessing.channel_standardization import build_rename_map
 from preprocessing.eeg_to_csv import eeg_to_csv
+from analysis.feat_report import collect_features, generate_report
 
 # =====================================================================
 # Constants — output directories
@@ -42,6 +44,7 @@ GSSC_DIR     = Path("gssc_csv")
 REMS_DIR     = Path("extracted_rems")
 EM_DIR       = Path("detected_ems")
 MERGED_DIR   = Path("merged_csv_eog")
+MERGED_DIR_b   = Path("merged_csv_eog_backup")
 FEATURES_DIR = Path("features_csv")
 REPORTS_DIR  = Path("reports")
 EEG_DIR      = Path("eeg_csv")
@@ -124,13 +127,19 @@ def process_patient(rec) -> bool:
     t0 = time.perf_counter()
 
     try:
+        # ── Load EDF once ───────────────────────────────────────────
+        raw = mne.io.read_raw_edf
+        rename_map = build_rename_map(raw.ch_names)
+        if rename_map:
+            raw.rename_channels(rename_map)
+
         # ── Stage 1: EDF → EOG CSV ──────────────────────────────────
         print(f"\n{BOLD}[1/7] EDF → EOG CSV{RESET}")
-        edf_to_csv(edf_path, out_dir=EOG_DIR, lights_path=lights_path)
+        edf_to_csv(edf_path, raw=raw, out_dir=EOG_DIR, lights_path=lights_path)
 
         # ── Stage 2: GSSC sleep staging ─────────────────────────────
         print(f"\n{BOLD}[2/7] GSSC sleep staging{RESET}")
-        gssc_df = GSSC_to_csv(edf_path, out_dir=GSSC_DIR, lights_path=lights_path)
+        gssc_df = GSSC_to_csv(edf_path, raw=raw, out_dir=GSSC_DIR, lights_path=lights_path)
 
         stage_map = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
         hypno_int = gssc_df["stage"].map(stage_map).fillna(0).astype(int).values
@@ -139,6 +148,7 @@ def process_patient(rec) -> bool:
         print(f"\n{BOLD}[3/7] Extract REM events{RESET}")
         extract_rems_from_edf(
             edf_path=edf_path,
+            raw=raw,
             out_dir=REMS_DIR,
             lights_path=lights_path,
             gssc_df=gssc_df,
@@ -165,6 +175,7 @@ def process_patient(rec) -> bool:
         print(f"\n{BOLD}[5/7] Detect & classify eye movements{RESET}")
         em_to_csv(
             edf_path=edf_path,
+            raw=raw,
             hypno_int=hypno_int,
             out_dir=EM_DIR,
             lights_path=lights_path,
@@ -338,8 +349,8 @@ the parts you want.
 
     # ---- extract ----
     p_ext = sub.add_parser("extract", help="Extract features from merged CSVs into a cached CSV.")
-    p_ext.add_argument("merged_dir", type=str, nargs="?", default=str(MERGED_DIR),
-                       help=f"Directory with merged CSVs (default: {MERGED_DIR})")
+    p_ext.add_argument("merged_dir", type=str, nargs="?", default=str(MERGED_DIR_b),
+                       help=f"Directory with merged CSVs (default: {MERGED_DIR_b})")
     p_ext.add_argument("--fs", type=float, default=250.0, help="Sampling frequency [Hz] (default: 250)")
     p_ext.add_argument("--pattern", type=str, default="*_merged.csv", help="Glob pattern (default: *_merged.csv)")
     p_ext.add_argument("--csv", type=str, default=str(DEFAULT_FEATURE_CSV),

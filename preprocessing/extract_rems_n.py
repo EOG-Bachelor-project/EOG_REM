@@ -31,6 +31,7 @@ EXTRACT_REMS_DIR.mkdir(parents=True, exist_ok=True)
 # =====================================================================
 def extract_rems_from_edf(
         edf_path:    Path, 
+        raw:         mne.io.Raw | None = None,
         pre_load:    bool = False,
         out_dir:     Path = EXTRACT_REMS_DIR,
         lights_path: Path | None = None,
@@ -44,6 +45,11 @@ def extract_rems_from_edf(
     ----------
     edf_path : Path
         The path to the input EDF file.
+    raw : mne.io.Raw | None
+        Pre-loaded MNE Raw obeject with channels already renamed. 
+        If provided, the EDF is not re-read from disk and ``pre_load`` is ignored. \\
+        A copy is made internally so the caller's object is not mutated. \\
+        Default is **None** (load from from ``edf_path``).
     pre_load : bool
         If True mne.io.read_raw_edf(preload = True). \\
         If False mne.io.read_raw_edf(preload = False). \\
@@ -80,17 +86,19 @@ def extract_rems_from_edf(
     session_id = edf_path.parent.name
 
     # --- Load EDF ---
-    raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
-    print(" Loaded raw:", raw)
-    print(" preload was set to:", pre_load)
-    print(" sfreq:", raw.info["sfreq"],"[Hz]")
+    if raw is None:
+        raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
+        print(" Loaded raw:", raw)
+        print(" preload was set to:", pre_load)
+        print(" sfreq:", raw.info["sfreq"],"[Hz]")
 
-    # --- Rename channels for standardization ---
-    rename_map = build_rename_map(raw.ch_names)
-    print("\nRename map:", rename_map)
+        rename_map = build_rename_map(raw.ch_names)
+        print("\nRename map:", rename_map)
 
-    if rename_map:
-        raw.rename_channels(rename_map)
+        if rename_map:
+            raw.rename_channels(rename_map)
+    else:
+        raw = raw.copy()
     
     # --- Check required channels ---
     missing = [ch for ch in ["LOC", "ROC"] if ch not in raw.ch_names]

@@ -28,6 +28,7 @@ EM_DIR.mkdir(parents=True, exist_ok=True)
 def em_to_csv(
         edf_path:         Path,
         hypno_int:        np.ndarray,
+        raw:              mne.io.Raw | None = None,
         out_dir:          Path = EM_DIR,
         lights_path:      Path | None = None,
         Dur_Thresh_SEM:   float = 0.5,
@@ -56,6 +57,11 @@ def em_to_csv(
     hypno_int : np.ndarray
         Integer hypnogram from GSSC staging (one value per 30 s epoch). \\
         Used by classify_rem_epochs_Umaer to determine Phasic/Tonic.
+    raw : mne.io.Raw | None
+        Pre-loaded MNE Raw obeject with channels already renamed. 
+        If provided, the EDF is not re-read from disk and ``pre_load`` is ignored. \\
+        A copy is made internally so the caller's object is not mutated. \\
+        Default is **None** (load from from ``edf_path``).
     out_dir : Path
         Directory where the output CSV will be saved. Default is **'detected_ems/'**.
     lights_path : Path | None
@@ -107,20 +113,23 @@ def em_to_csv(
     print(f"\nProcessing: {edf_path}")
  
     session_id = edf_path.parent.name
- 
+   
     # --- 1) Load EDF ---
-    raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
-    print(f" Loaded raw: {raw}")
-    print(f" Preload was set to: {pre_load}")
-    print(f" sfreq: {raw.info['sfreq']} [Hz] | n_channels: {len(raw.ch_names)} | duration: {raw.n_times / raw.info['sfreq']:.1f} [s]")
+    if raw is None:
+        raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
+        print(" Loaded raw:", raw)
+        print(" preload was set to:", pre_load)
+        print(" sfreq:", raw.info["sfreq"],"[Hz]")
+
+        rename_map = build_rename_map(raw.ch_names)
+        print("\nRename map:", rename_map)
+
+        if rename_map:
+            raw.rename_channels(rename_map)
+    else:
+        raw = raw.copy()
  
-    # --- 2) Rename channels ---
-    rename_map = build_rename_map(raw.ch_names)
-    if rename_map:
-        raw.rename_channels(rename_map)
-    print(f"Rename map: {rename_map}")
- 
-    # --- 3) Check required channels ---
+    # --- 2) Check required channels ---
     missing = [ch for ch in ["LOC", "ROC"] if ch not in raw.ch_names]
     if missing:
         print(f"Skipping {session_id} — missing channels: {missing}")
@@ -128,36 +137,36 @@ def em_to_csv(
  
     raw.set_channel_types({"LOC": "eog", "ROC": "eog"})
  
-    # --- 4) Crop to lights window ---
+    # --- 3) Crop to lights window ---
     lights_off = 0.0                                                        # Default to 0 if no lights.txt provided, so times remain absolute
     if lights_path is not None: 
         lights_off, lights_on = parse_lights_txt(lights_path)               # Returns lights_off and lights_on in seconds
         raw = raw.crop(tmin=lights_off, tmax=min(lights_on, raw.times[-1])) # Crop raw signal to the lights off/on times to focus on the sleep period
         print(f"    Cropped to lights window: {lights_off:.1f} - {lights_on:.1f} [s]")
  
-    # --- 5) Resample if needed ---
+    # ---4) Resample if needed ---
     sf = raw.info["sfreq"]  
     if sf != fs_target:
         print(f"\nResampling {sf} [Hz] to {fs_target} [Hz]")
         raw = raw.copy().resample(fs_target)
         sf  = fs_target
  
-    # --- 6) Filter ---
+    # --- 5) Filter ---
     raw.filter(0.1, 30, picks=["LOC", "ROC"])
  
-    # --- 7) Extract signals in µV ---
+    # --- 6) Extract signals in µV ---
     # detect_rem_jaec expects µV — raw.get_data() returns volts so we convert
     loc_uv = raw.get_data(picks=["LOC"])[0] * 1e6
     roc_uv = raw.get_data(picks=["ROC"])[0] * 1e6
     print(f"    \nLOC range: {loc_uv.min():.1f} to {loc_uv.max():.1f} [µV]")
     print(f"    ROC range: {roc_uv.min():.1f} to {roc_uv.max():.1f} [µV]")
  
-    # --- 8) Build upsampled hypnogram ---
+    # --- 7) Build upsampled hypnogram ---
     samples_per_epoch = int(sf * psg_epoch_sec)
     hypno_up          = np.repeat(hypno_int, samples_per_epoch)
     print(f"\nUpsampled hypnogram to match signal length: {len(hypno_up)} samples")
  
-    # --- 9) Trim to match lengths and multiple of 2^14 (required by dtcwt) ---
+    # --- 8) Trim to match lengths and multiple of 2^14 (required by dtcwt) ---
     factor = 2 ** 14
     trim = (min(len(loc_uv), len(hypno_up)) // factor) * factor
     print(f"    len(loc_uv) = {len(loc_uv)} | len(hypno_up) = {len(hypno_up)} | factor={factor}")
@@ -171,7 +180,7 @@ def em_to_csv(
     hypno_up = hypno_up[:trim]
     print(f"Signal length after trim: {trim} samples = {trim/sf:.1f} [s]")
  
-    # --- 10) Detect eye movements ---
+    # --- 9) Detect eye movements ---
     em_df = detect_em(
         loc            = loc_uv,
         roc            = roc_uv,
@@ -180,7 +189,7 @@ def em_to_csv(
         Dur_Thresh_SEM = Dur_Thresh_SEM,
     )
  
-    # --- 11) Classify Phasic / Tonic ---
+    # --- 10) Classify Phasic / Tonic ---
     print(f"\nRunning classify_rem_epochs_Umaer...")
     subepoch_df = classify_rem_epochs_Umaer(
         df                 = em_df,
@@ -193,7 +202,7 @@ def em_to_csv(
         phasic_dur_thresh  = phasic_dur_thresh,
     )
  
-    # --- 12) Offset times to absolute time reference ---
+    # --- 11) Offset times to absolute time reference ---
     if lights_path is not None:
         print(f"\nOffsetting EM times by lights_off = {lights_off:.1f} [s]")
         for col in ["Start", "Peak", "End"]:
@@ -203,7 +212,7 @@ def em_to_csv(
             if col in subepoch_df.columns:
                 subepoch_df[col] = subepoch_df[col] + lights_off
  
-    # --- 13) Save ---
+    # --- 12) Save ---
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{session_id}_em.csv"
     em_df.to_csv(out_path, index=False)
