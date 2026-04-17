@@ -95,6 +95,20 @@ def eeg_to_csv(
         print(f"    Lights off offset: {lights_off:.1f} [s]")
 
     # --- 2) Extract EEG signals ---
+    def _interp_nans(arr: np.ndarray) -> np.ndarray:
+        arr = arr.copy().astype(float)
+        nans = np.isnan(arr)
+        if nans.any():
+            idx = np.arange(len(arr))
+            arr[nans] = np.interp(idx[nans], idx[~nans], arr[~nans])
+        return arr
+
+    loc_clean = _interp_nans(loc_clean)
+    roc_clean = _interp_nans(roc_clean)
+
+    print(f"    loc_clean NaNs after interp: {np.isnan(loc_clean).sum()}")
+    print(f"    roc_clean NaNs after interp: {np.isnan(roc_clean).sum()}")
+
     print(f"\nExtracting EEG signals using method='{method}'...")
     loc_eeg, roc_eeg = eeg_signals_from_eog(loc, roc, loc_clean, roc_clean, method=method)
 

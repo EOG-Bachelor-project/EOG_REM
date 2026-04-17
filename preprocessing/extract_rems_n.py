@@ -169,6 +169,10 @@ def extract_rems_from_edf(
     # --- Rem detection ---
     result = detect_rem_jaec(loc, roc, hypno_up, method = 'ssc_threshold')
 
+    # --- Extract cleaned signals before artefact detection ---
+    loc_clean = result._data_filt[0]
+    roc_clean = result._data_filt[1]
+
     # --- Create dataframe to retrun results ---
     df = result.summary()
 
@@ -200,4 +204,4 @@ def extract_rems_from_edf(
     df.to_csv(out_path, index=False)
 
     print(f"Saved: {out_path}")
-    return df, loc, roc, result  
+    return df, loc, roc, loc_clean, roc_clean
