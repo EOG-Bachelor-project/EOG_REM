@@ -1,6 +1,6 @@
 # Filename: feat_report.py
 # Authors: Adam Klovborg & Rasmus Kleffel
-# Description: Collects EOG and GSSC features from all merged CSVs and generates
+# Description: Collects EOG, EEG and GSSC features from all merged CSVs and generates
 #              an HTML report with distribution plots per feature.
 
 
@@ -10,6 +10,7 @@
 from __future__ import annotations
 import sys
 import argparse
+from importlib_metadata import files
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -17,6 +18,7 @@ from datetime import datetime
 
 from features.eog_feats import extract_features
 from features.gssc_feats import extract_gssc_features
+from features.eeg_feats import extract_eeg_features
 
 
 # =====================================================================
@@ -29,7 +31,7 @@ def collect_features(
     pattern: str = "*_merged.csv",
 ) -> pd.DataFrame:
     """
-    Run extract_features() and extract_gssc_features() on every merged CSV
+    Run extract_features(), extract_gssc_features() and extract_eeg_features() on every merged CSV
     in a directory and join them into a single DataFrame.
 
     Parameters
@@ -78,8 +80,21 @@ def collect_features(
     gssc_df = pd.DataFrame(gssc_rows)
     print(f"GSSC features: {gssc_df.shape[0]} subjects | {gssc_df.shape[1] - 1} features")
 
+    # ---- EEG features ----
+    eeg_rows = []
+    for f in files:
+      try:
+        row = extract_eeg_features(f, fs=fs)
+        eeg_rows.append(row)
+      except Exception as e:
+        print(f"  [SKIP EEG] {f.name} — {e}")
+
+    eeg_df = pd.DataFrame(eeg_rows)
+    print(f"EEG features: {eeg_df.shape[0]} subjects | {eeg_df.shape[1] - 1} features")
+
     # ---- Join on subject_id ----
     combined = pd.merge(eog_df, gssc_df, on="subject_id", how="outer", suffixes=("_eog", "_gssc"))
+    combined = pd.merge(combined, eeg_df, on="subject_id", how="outer")
     print(f"Combined: {combined.shape[0]} subjects | {combined.shape[1] - 1} features\n")
 
     return combined
@@ -398,6 +413,15 @@ FEATURE_DESCRIPTIONS = {
     "rem_fragmentation_index":   "REM-to-nonREM transitions per hour — higher = more fragmented",
     "rem_w_transition_frac":     "Fraction of REM exits going directly to Wake — elevated in RBD",
     "amount_of_rem":             "Fraction of ALL samples where prob_rem > 0.5 (Cesari definition)",
+
+    # EEG features
+    "eeg_loc__rem__delta":        "EEG (LOC) delta power during REM [µV²/Hz]",
+  "eeg_loc__rem__theta":        "EEG (LOC) theta power during REM [µV²/Hz]",
+  "eeg_loc__rem__alpha":        "EEG (LOC) alpha power during REM [µV²/Hz]",
+  "eeg_loc__rem__beta":         "EEG (LOC) beta power during REM [µV²/Hz]",
+  "eeg_loc__rem__total":        "EEG (LOC) total band power during REM [µV²/Hz]",
+  "eeg_loc__rem__theta_ratio":  "EEG (LOC) theta / total power ratio during REM",
+  "eeg_roc__rem__delta":        "EEG (ROC) delta power during REM [µV²/Hz]",
 }
 
 # Feature grouping for the cheat sheet
@@ -439,6 +463,13 @@ FEATURE_GROUPS = [
 
     ("REM Stability",       ["rem_stability_index", "rem_fragmentation_index",
                              "rem_w_transition_frac", "amount_of_rem"]),
+
+    ("EEG Band Power (REM)", ["eeg_loc__rem__delta", "eeg_loc__rem__theta",
+                              "eeg_loc__rem__alpha", "eeg_loc__rem__beta",
+                              "eeg_loc__rem__total", "eeg_loc__rem__theta_ratio",
+                              "eeg_roc__rem__delta", "eeg_roc__rem__theta",
+                              "eeg_roc__rem__alpha", "eeg_roc__rem__beta",
+                              "eeg_roc__rem__total", "eeg_roc__rem__theta_ratio",]),
 ]
 
 
@@ -835,7 +866,7 @@ def generate_report(
     <div>
       <div class="eyebrow">RBD · Feature Extraction</div>
       <h1>{title}</h1>
-      <p class="subtitle">EOG + GSSC features extracted from merged PSG recordings</p>
+      <p class="subtitle">EOG + GSSC + EEG features extracted from merged PSG recordings</p>
     </div>
     <div class="date">{timestamp}</div>
   </div>
