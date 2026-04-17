@@ -13,6 +13,8 @@ __pycache__/
 local_csv_eog/
 *csv
 DCSM_*
+*.xlsx
+*.HTML
 
 # Distribution / packaging
 .Python
