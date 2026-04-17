@@ -146,7 +146,7 @@ def process_patient(rec) -> bool:
 
         # ── Stage 3: Extract REM events ─────────────────────────────
         print(f"\n{BOLD}[3/7] Extract REM events{RESET}")
-        extract_rems_from_edf(
+        df, loc, roc, result =extract_rems_from_edf(
             edf_path=edf_path,
             raw=raw,
             out_dir=REMS_DIR,
@@ -180,11 +180,18 @@ def process_patient(rec) -> bool:
             out_dir=EM_DIR,
             lights_path=lights_path,
         )
+        
         # ── Stage 6: Extract EEG signals ────────────────────────────────
         print(f"\n{BOLD}[6/7] Extract EEG signals{RESET}")
+        loc_clean = result.data_filt[0]
+        roc_clean = result.data_filt[1]
         eeg_to_csv(
             edf_path=edf_path,
             hypno_int=hypno_int,
+            loc=loc,
+            roc=roc,
+            loc_clean=loc_clean,
+            roc_clean=roc_clean,
             out_dir=EEG_DIR,
             lights_path=lights_path,
         )
