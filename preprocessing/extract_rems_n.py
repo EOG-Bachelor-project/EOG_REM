@@ -5,6 +5,8 @@
 # =====================================================================
 # Imports
 # =====================================================================
+from unittest import result
+
 import mne 
 import numpy as np
 import sys
@@ -166,6 +168,11 @@ def extract_rems_from_edf(
 
     # --- Rem detection ---
     result = detect_rem_jaec(loc, roc, hypno_up, method = 'ssc_threshold')
+    print("\n" + "=" * 60)
+    print("DEBUG — detect_rem_jaec result object")
+    print(f"  type : {type(result)}")
+    print(f"  attrs: {dir(result)}")
+    print("=" * 60 + "\n")
 
     # --- Create dataframe to retrun results ---
     df = result.summary()
