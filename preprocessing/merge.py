@@ -120,7 +120,7 @@ def _merge_events_fast(
     return merged_df
 
 # —————————————————————————————————————————————————————————————————————————————————————————————————
-# MAIN MERGE FUNCTION - combine EOG, GSSC, and REM events into a single DataFrame and save as CSV
+# MAIN MERGE FUNCTION - combine EOG, GSSC, EEG, and REM events into a single DataFrame and save as CSV
 # —————————————————————————————————————————————————————————————————————————————————————————————————
 def merge_all(
         eog_file:           str | Path,
@@ -129,6 +129,7 @@ def merge_all(
         em_file:            str | Path,
         output_file:        str | Path,
         subepochs_file:     str | Path,
+        eeg_file:           str | Path,
         time_col:           str = "time_sec",
         loc_col:            str = "LOC",
         roc_col:            str = "ROC",
@@ -160,6 +161,8 @@ def merge_all(
     subepochs_file : str | Path
         Path to sub-epoch CSV produced by classify_rem_epochs_Umaer, containing
         columns ['SubEpochStart', 'SubEpochEnd', 'EpochType'].
+    eeg_file : str | Path
+        Path to EEG CSV file with columns ['EEG_LOC', 'EEG_ROC'].
     time_col : str
         Name of time column in the EOG CSV. Default is 'time_sec'.
     loc_col : str 
@@ -189,13 +192,17 @@ def merge_all(
             `event_event_id`      — which REM event \\
             `event_is_peak`       — bool, sample is the REM event peak \\
             `event_{col}`         — all other columns from events_file
- 
+
         From EM classifications (em_to_csv): \\
             `is_em_event`         — bool, sample is inside a detected EM \\
             `em_event_id`         — which EM event \\
             `em_is_peak`          — bool, sample is the EM peak \\
             `EM_Type`             — 'SEM' or 'REM' (top-level shortcut) \\
             `em_{col}`            — all other columns from em_file
+
+        From EEG (eeg_to_csv): \\
+                `EEG_LOC`  — EEG signal extracted from LOC channel [µV] \\
+                `EEG_ROC`  — EEG signal extracted from ROC channel [µV]
  
         From sub-epoch classification (classify_rem_epochs_Umaer): \\
             `EpochType`           — 'Phasic' or 'Tonic'
@@ -206,10 +213,11 @@ def merge_all(
     events_file    = Path(events_file)
     output_file    = Path(output_file)
     subepochs_file = Path(subepochs_file)
+    eeg_file       = Path(eeg_file)
  
 
     # --- Validate input files ---
-    for file in [eog_file, gssc_file, events_file, em_file, subepochs_file]:
+    for file in [eog_file, gssc_file, events_file, em_file, subepochs_file, eeg_file]:
         if not Path(file).is_file():
             raise FileNotFoundError(f"File not found: {file}") 
 
@@ -311,8 +319,25 @@ def merge_all(
     print(f"    Sub-epochs - Phasic: {counts.get('Phasic', 0)} | "
           f"Tonic: {counts.get('Tonic', 0)} | "
           f"Unclassified: {counts.get('Unclassified', 0)}")
+    
+    # --- 7) Merge EEG signals ---
+    print("\nMerging EEG signals...")
+    eeg_df = pd.read_csv(eeg_file)
+    for col in ["EEG_LOC", "EEG_ROC"]:
+        if col not in eeg_df.columns:
+            raise ValueError(f"EEG CSV must contain '{col}'. Found: {list(eeg_df.columns)}")
+    print(f"    {len(eeg_df):,} EEG samples loaded")
 
-    # --- 7) Save ---
+    merged_df = pd.merge_asof(
+        merged_df.sort_values(time_col),
+        eeg_df[[time_col, "EEG_LOC", "EEG_ROC"]].sort_values(time_col),
+        on=time_col,
+        direction="nearest",
+        tolerance=1/128,  # Assumes fs target is 128 Hz  
+    )
+    print(f"    Merged shape after EEG join: {merged_df.shape}")
+
+    # --- 8) Save ---
     output_file.parent.mkdir(parents=True, exist_ok=True)
     merged_df.to_csv(output_file, index=False)
 
