@@ -102,10 +102,14 @@ def eeg_to_csv(
             idx = np.arange(len(arr))
             arr[nans] = np.interp(idx[nans], idx[~nans], arr[~nans])
         return arr
-
+    
+    loc       = _interp_nans(loc)
+    roc       = _interp_nans(roc)
     loc_clean = _interp_nans(loc_clean)
     roc_clean = _interp_nans(roc_clean)
 
+    print(f"    loc NaNs after interp:       {np.isnan(loc).sum()}")
+    print(f"    roc NaNs after interp:       {np.isnan(roc).sum()}")
     print(f"    loc_clean NaNs after interp: {np.isnan(loc_clean).sum()}")
     print(f"    roc_clean NaNs after interp: {np.isnan(roc_clean).sum()}")
 
