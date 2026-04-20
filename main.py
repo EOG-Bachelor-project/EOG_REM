@@ -144,16 +144,72 @@ def _wait_for_file(path: Path, timeout: float = 10.0, interval: float = 0.5) -> 
         elapsed += interval
 
     return path
+
+
+def _compress_intermediates(session_id: str, edf_stem: str) -> float:
+    """
+    Gzip intermediate CSV files for a session after a successful merge.
+    Compressed files are saved as .csv.gz and the uncompressed .csv is removed.
+
+    If a stage needs to be re-run later, pandas reads .csv.gz transparently —
+    but _check_existing_outputs looks for .csv, so the stage will re-run
+    and produce a fresh .csv automatically.
+
+    Returns the total disk space freed in MB.
+    """
+    import gzip
+    import shutil
+
+    intermediate_files = [
+        EOG_DIR  / f"{session_id}_{edf_stem}_eog.csv",
+        GSSC_DIR / f"{session_id}_gssc.csv",
+        REMS_DIR / f"{session_id}_extracted_rems.csv",
+        EM_DIR   / f"{session_id}_em.csv",
+        EM_DIR   / f"{session_id}_subepochs.csv",
+        EEG_DIR  / f"{session_id}_eeg.csv",
+    ]
+
+    freed_bytes = 0
+    for f in intermediate_files:
+        if f.exists():
+            size_before = f.stat().st_size
+            gz_path = f.with_suffix(".csv.gz")
+
+            with open(f, "rb") as f_in:
+                with gzip.open(gz_path, "wb", compresslevel=6) as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+
+            size_after = gz_path.stat().st_size
+            saved = size_before - size_after
+            freed_bytes += saved
+            f.unlink()  # remove original .csv, keep .csv.gz
+            print(f"    📦 {f.name}: {size_before / (1024**2):.1f} MB → {size_after / (1024**2):.1f} MB ({saved / (1024**2):.1f} MB saved)")
+
+    freed_mb = freed_bytes / (1024 ** 2)
+    print(f"    ✓ Freed {freed_mb:.1f} MB for {session_id}")
+    return freed_mb
+
  
 # =====================================================================
 # Core — process one patient through the full pipeline
 # =====================================================================
-def process_patient(rec) -> bool:
+def process_patient(rec, cleanup: bool = True) -> bool:
     """
     Run stages 1-7 for a single patient session, skipping any stage
     whose output file already exists on disk.
 
-    Returns True if successful, False if an error occurred.
+    Parameters
+    ----------
+    rec : SessionRecord
+        A record containing patient_id, edf_path, and txt_path.
+    cleanup : bool
+        Whether to compress intermediate CSVs after merging to save disk space.
+        **Default is True** (intermediates are deleted after merging).
+    
+    Returns
+    -------
+    bool
+        True if processing succeeded, False if an error occurred.
     """
     session_id  = rec.patient_id
     edf_path    = rec.edf_path
@@ -303,6 +359,13 @@ def process_patient(rec) -> bool:
             eeg_file=eeg_file,
         )
 
+        # ── Cleanup: compress intermediate CSVs to free disk space ────
+        if cleanup:
+            print(f"\n{BOLD}[Cleanup] Compressing intermediate CSVs{RESET}")
+            _compress_intermediates(session_id, edf_path.stem)
+        else:
+            print(f"\n  Intermediates kept uncompressed (--keep-intermediates was set)")
+
         elapsed = time.perf_counter() - t0
         print(f"\n{GREEN}✓ {session_id} completed in {elapsed:.1f}s ({elapsed/60:.1f} min){RESET}")
         return True
@@ -317,7 +380,7 @@ def process_patient(rec) -> bool:
 # =====================================================================
 # Step runners — each does one thing
 # =====================================================================
-def run_process(raw_root: Path, batch_size: int) -> None:
+def run_process(raw_root: Path, batch_size: int, cleanup: bool = True) -> None:
     """Run the original resume-friendly patient batch processor."""
     if not raw_root.is_dir():
         print(f"Error: '{raw_root}' is not a directory.")
@@ -345,7 +408,7 @@ def run_process(raw_root: Path, batch_size: int) -> None:
     failed_ids = []
 
     for rec in todo:
-        if process_patient(rec):
+        if process_patient(rec, cleanup=cleanup):
             ok += 1
         else:
             fail += 1
@@ -420,17 +483,17 @@ def main():
         description="RBD pipeline runner — patient processing + feature extraction + HTML report.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Default (no subcommand) preserves the original behavior: process the next N
-unprocessed patients from <raw_root>. Use subcommands to skip straight to
-the parts you want.
+        Default (no subcommand) preserves the original behavior: process the next N
+        unprocessed patients from <raw_root>. Use subcommands to skip straight to
+        the parts you want.
 
-  python main.py /data/raw                    # process 10 patients (default)
-  python main.py /data/raw --batch-size 5     # process 5 patients
-  python main.py process /data/raw            # same as above, explicit
-  python main.py extract                      # extract features from merged_csv_eog/
-  python main.py report                       # regenerate HTML from cached features (fast)
-  python main.py all /data/raw                # process + extract + report in one go
-""",
+        python main.py /data/raw                    # process 10 patients (default)
+        python main.py /data/raw --batch-size 5     # process 5 patients
+        python main.py process /data/raw            # same as above, explicit
+        python main.py extract                      # extract features from merged_csv_eog/
+        python main.py report                       # regenerate HTML from cached features (fast)
+        python main.py all /data/raw                # process + extract + report in one go
+        """,
     )
 
     sub = parser.add_subparsers(dest="mode")
@@ -439,6 +502,8 @@ the parts you want.
     p_proc = sub.add_parser("process", help="Run preprocessing stages 1-7 for pending patients.")
     p_proc.add_argument("raw_root", type=str, help="Root directory with raw EDF/TXT recordings")
     p_proc.add_argument("--batch-size", type=int, default=10, help="Patients per batch (default: 10)")
+    p_proc.add_argument("--keep-intermediates", action="store_true",
+                        help="Keep intermediate CSVs after merging (default: delete to save disk space)")
 
     # ---- extract ----
     p_ext = sub.add_parser("extract", help="Extract features from merged CSVs into a cached CSV.")
@@ -461,6 +526,8 @@ the parts you want.
     p_all = sub.add_parser("all", help="process + extract + report in one step.")
     p_all.add_argument("raw_root", type=str, help="Root directory with raw recordings")
     p_all.add_argument("--batch-size", type=int, default=10, help="Patients per batch (default: 10)")
+    p_all.add_argument("--keep-intermediates", action="store_true",
+                       help="Keep intermediate CSVs after merging (default: delete to save disk space)")
     p_all.add_argument("--merged-dir", type=str, default=str(MERGED_DIR))
     p_all.add_argument("--fs", type=float, default=250.0)
     p_all.add_argument("--pattern", type=str, default="*_merged.csv")
@@ -468,9 +535,13 @@ the parts you want.
     p_all.add_argument("--output", type=str, default=str(DEFAULT_REPORT_HTML))
     p_all.add_argument("--title", type=str, default=None)
 
+    # ---- cleanup ----
+    p_clean = sub.add_parser("cleanup", help="Delete intermediate CSVs for already-merged sessions to free disk space.")
+    p_clean.add_argument("--dry-run", action="store_true", help="Show what would be deleted without deleting")
+
     # ---- Back-compat: allow `python main.py <raw_root>` with no subcommand ----
     argv = sys.argv[1:]
-    known_modes = {"process", "extract", "report", "all", "-h", "--help"}
+    known_modes = {"process", "extract", "report", "all", "cleanup", "-h", "--help"}
     if argv and argv[0] not in known_modes:
         argv = ["process"] + argv
 
@@ -482,7 +553,7 @@ the parts you want.
 
     # ---- Dispatch ----
     if args.mode == "process":
-        run_process(Path(args.raw_root), args.batch_size)
+        run_process(Path(args.raw_root), args.batch_size, cleanup=not args.keep_intermediates)
 
     elif args.mode == "extract":
         run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv))
@@ -491,9 +562,58 @@ the parts you want.
         run_report(Path(args.csv), Path(args.output), args.title)
 
     elif args.mode == "all":
-        run_process(Path(args.raw_root), args.batch_size)
+        run_process(Path(args.raw_root), args.batch_size, cleanup=not args.keep_intermediates)
         run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv))
         run_report(Path(args.csv), Path(args.output), args.title)
+
+    elif args.mode == "cleanup":
+        import gzip
+        import shutil
+
+        # Find all sessions that have a merged CSV and compress their intermediates
+        merged_files = list(MERGED_DIR.glob("*_merged.csv"))
+        if not merged_files:
+            print("No merged CSVs found — nothing to clean up.")
+            return
+
+        print(f"\n{'='*60}")
+        print(f"  Cleanup — {len(merged_files)} merged sessions found")
+        print(f"  Compressing intermediate CSVs (keeps .csv.gz for re-inspection)")
+        print(f"{'='*60}")
+
+        total_freed = 0.0
+        for mf in sorted(merged_files):
+            session_id = mf.stem.split("_")[0]
+            edf_stem = mf.stem.replace(f"{session_id}_", "").replace("_eog_merged", "")
+
+            intermediates = [
+                EOG_DIR  / f"{session_id}_{edf_stem}_eog.csv",
+                GSSC_DIR / f"{session_id}_gssc.csv",
+                REMS_DIR / f"{session_id}_extracted_rems.csv",
+                EM_DIR   / f"{session_id}_em.csv",
+                EM_DIR   / f"{session_id}_subepochs.csv",
+                EEG_DIR  / f"{session_id}_eeg.csv",
+            ]
+            existing = [f for f in intermediates if f.exists()]
+            if not existing:
+                continue
+
+            size_mb = sum(f.stat().st_size for f in existing) / (1024**2)
+            print(f"\n  {session_id}: {len(existing)} intermediate files ({size_mb:.1f} MB)")
+
+            if args.dry_run:
+                for f in existing:
+                    print(f"    [DRY RUN] would compress {f.name}")
+            else:
+                freed = _compress_intermediates(session_id, edf_stem)
+                total_freed += freed
+
+        print(f"\n{'='*60}")
+        if args.dry_run:
+            print(f"  [DRY RUN] No files were changed.")
+        else:
+            print(f"  ✓ Total freed: {total_freed:.1f} MB")
+        print(f"{'='*60}\n")
 
 
 # =====================================================================
