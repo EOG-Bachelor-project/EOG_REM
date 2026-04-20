@@ -15,8 +15,8 @@ from pathlib import Path
 # =====================================================================
 GROUP_COLORS = {
     "Control":  "#4477AA",
-    "PD":       "#EE7733",
-    "PD+RBD":   "#AA3377",
+    "PD(-RBD)": "#EE7733",
+    "PD(+RBD)":   "#AA3377",
     "iRBD":     "#228833",
 }
 
@@ -24,29 +24,23 @@ GROUP_COLORS = {
 # Helper
 # =====================================================================
 def _assign_group(df: pd.DataFrame) -> pd.Series:
-    """
-    Assign each subject to a diagnostic group based on binary columns.
-    Control group is identified by PLM, control, or DG473 in DCSM_ID.
-
-    Priority order: iRBD → PD+RBD → PD → Control
-    """
     groups = pd.Series("Control", index=df.index)
 
-    if "PD" in df.columns:
-        groups[df["PD"] == 1] = "PD"
+    if "PD(-RBD)" in df.columns:
+        groups[df["PD(-RBD)"] == 1] = "PD(-RBD)"
 
-    if "PD" in df.columns and "iRBD" in df.columns:
-        groups[(df["PD"] == 1) & (df["iRBD"] == 1)] = "PD+RBD"
+    if "PD(+RBD)" in df.columns:
+        groups[df["PD(+RBD)"] == 1] = "PD(+RBD)"
 
     if "iRBD" in df.columns:
-        groups[(df["iRBD"] == 1) & (df.get("PD", 0) == 0)] = "iRBD"
+        groups[df["iRBD"] == 1] = "iRBD"
 
-    # Override with DCSM_ID if control keywords present
-    if "DCSM_ID" in df.columns:
-        control_mask = df["DCSM_ID"].str.contains(
-            "PLM|control|DG473", case=False, na=False
-        )
-        groups[control_mask] = "Control"
+    # PLM and Control both map to "Control"
+    if "Control" in df.columns:
+        groups[df["Control"] == 1] = "Control"
+
+    if "PLM" in df.columns:
+        groups[df["PLM"] == 1] = "Control"
 
     return groups
 
@@ -85,7 +79,7 @@ def plot_group_comparison(
     print(f"Group counts:\n{group_counts.to_string()}\n")
 
     # --- 3) Select features ---
-    exclude = {"subject_id", "_group", "PD", "iRBD"}
+    exclude = {"subject_id", "_group", "PD(-RBD)", "PD(+RBD)", "iRBD"}
     if features is None:
         features = [
             c for c in df.columns
