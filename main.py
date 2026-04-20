@@ -223,11 +223,11 @@ def process_patient(rec, cleanup: bool = True) -> bool:
     try:
         # ── Check which outputs already exist ───────────────────────
         existing = _check_existing_outputs(session_id, edf_path.stem)
-
+ 
         skip_summary = [f"{name}: {'EXISTS' if exists else 'missing'}"
                         for name, exists in existing.items()]
         print(f"  Intermediate files: {', '.join(skip_summary)}")
-
+ 
         # Stages that need the EDF: 1 (eog), 2 (gssc), 3 (rems), 5 (em), 6 (eeg)
         needs_edf = (
             not existing["eog"]  or
@@ -236,7 +236,7 @@ def process_patient(rec, cleanup: bool = True) -> bool:
             not existing["em"]   or
             not existing["eeg"]
         )
-
+ 
         # ── Load EDF once (only if at least one stage needs it) ─────
         raw = None
         if needs_edf:
@@ -248,14 +248,14 @@ def process_patient(rec, cleanup: bool = True) -> bool:
             print(f"    sfreq: {raw.info['sfreq']} Hz  |  channels: {len(raw.ch_names)}")
         else:
             print(f"\n  All intermediate files exist — skipping EDF load.")
-
+ 
         # ── Stage 1: EDF → EOG CSV ──────────────────────────────────
         if existing["eog"]:
             print(f"\n{BOLD}[1/7] EDF → EOG CSV — SKIPPED (already exists){RESET}")
         else:
             print(f"\n{BOLD}[1/7] EDF → EOG CSV{RESET}")
             edf_to_csv(edf_path, raw=raw, out_dir=EOG_DIR, lights_path=lights_path)
-
+ 
         # ── Stage 2: GSSC sleep staging ─────────────────────────────
         if existing["gssc"]:
             print(f"\n{BOLD}[2/7] GSSC sleep staging — SKIPPED (already exists){RESET}")
@@ -263,31 +263,31 @@ def process_patient(rec, cleanup: bool = True) -> bool:
         else:
             print(f"\n{BOLD}[2/7] GSSC sleep staging{RESET}")
             gssc_df = GSSC_to_csv(edf_path, raw=raw, out_dir=GSSC_DIR, lights_path=lights_path)
-
+ 
         stage_map = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
         hypno_int = gssc_df["stage"].map(stage_map).fillna(0).astype(int).values
-
+ 
         # ── Stage 3: Extract REM events ─────────────────────────────
         if existing["rems"]:
             print(f"\n{BOLD}[3/7] Extract REM events — SKIPPED (already exists){RESET}")
-            df, loc, roc, result = None, None, None, None
+            df, loc, roc, loc_clean, roc_clean = None, None, None, None, None
         else:
             print(f"\n{BOLD}[3/7] Extract REM events{RESET}")
-            df, loc, roc, result = extract_rems_from_edf(
+            df, loc, roc, loc_clean, roc_clean = extract_rems_from_edf(
                 edf_path=edf_path,
                 raw=raw,
                 out_dir=REMS_DIR,
                 lights_path=lights_path,
                 gssc_df=gssc_df,
             )
-
+ 
         # ── Stage 4: Mask artefacts in EOG CSV ──────────────────────
         print(f"\n{BOLD}[4/7] Mask artefacts in EOG CSV{RESET}")
         eog_csv_path = _wait_for_file(
             EOG_DIR / f"{session_id}_{edf_path.stem}_eog.csv"
         )
         eog_df = pd.read_csv(eog_csv_path)
-
+ 
         artefact_mask = (
             (np.abs(eog_df["LOC"].values) > AMPLITUDE_THRESH_UV) |
             (np.abs(eog_df["ROC"].values) > AMPLITUDE_THRESH_UV)
@@ -297,7 +297,7 @@ def process_patient(rec, cleanup: bool = True) -> bool:
         eog_df.loc[artefact_mask, "ROC"] = np.nan
         eog_df.to_csv(eog_csv_path, index=False)
         print(f"    Artefact samples masked: {n_masked:,} / {len(eog_df):,}")
-
+ 
         # ── Stage 5: Detect & classify eye movements ────────────────
         if existing["em"]:
             print(f"\n{BOLD}[5/7] Detect & classify eye movements — SKIPPED (already exists){RESET}")
@@ -310,24 +310,22 @@ def process_patient(rec, cleanup: bool = True) -> bool:
                 out_dir=EM_DIR,
                 lights_path=lights_path,
             )
-
+ 
         # ── Stage 6: Extract EEG signals ────────────────────────────
         if existing["eeg"]:
             print(f"\n{BOLD}[6/7] Extract EEG signals — SKIPPED (already exists){RESET}")
         else:
             print(f"\n{BOLD}[6/7] Extract EEG signals{RESET}")
-            # If stage 3 was skipped, we need to re-run it to get loc/roc/result
-            if result is None:
+            # If stage 3 was skipped, we need to re-run it to get loc/roc/loc_clean/roc_clean
+            if loc_clean is None:
                 print("    Re-running stage 3 to get filtered signals for EEG extraction...")
-                df, loc, roc, result = extract_rems_from_edf(
+                df, loc, roc, loc_clean, roc_clean = extract_rems_from_edf(
                     edf_path=edf_path,
                     raw=raw,
                     out_dir=REMS_DIR,
                     lights_path=lights_path,
                     gssc_df=gssc_df,
                 )
-            loc_clean = result._data_filt[0]
-            roc_clean = result._data_filt[1]
             eeg_to_csv(
                 edf_path=edf_path,
                 loc=loc,
@@ -337,7 +335,7 @@ def process_patient(rec, cleanup: bool = True) -> bool:
                 out_dir=EEG_DIR,
                 lights_path=lights_path,
             )
-
+ 
         # ── Stage 7: Merge into unified CSV ─────────────────────────
         print(f"\n{BOLD}[7/7] Merge into unified CSV{RESET}")
         eog_file       = _wait_for_file(EOG_DIR  / f"{session_id}_{edf_path.stem}_eog.csv")
@@ -347,8 +345,8 @@ def process_patient(rec, cleanup: bool = True) -> bool:
         eeg_file       = _wait_for_file(EEG_DIR  / f"{session_id}_eeg.csv")
         subepochs_file = EM_DIR / f"{session_id}_subepochs.csv"                             # optional, don't wait
         output_file    = MERGED_DIR / f"{session_id}_{edf_path.stem}_eog_merged.csv"
-
-
+ 
+ 
         merge_all(
             eog_file=eog_file,
             gssc_file=gssc_file,
@@ -358,18 +356,18 @@ def process_patient(rec, cleanup: bool = True) -> bool:
             subepochs_file=subepochs_file,
             eeg_file=eeg_file,
         )
-
+ 
         # ── Cleanup: compress intermediate CSVs to free disk space ────
         if cleanup:
             print(f"\n{BOLD}[Cleanup] Compressing intermediate CSVs{RESET}")
             _compress_intermediates(session_id, edf_path.stem)
         else:
             print(f"\n  Intermediates kept uncompressed (--keep-intermediates was set)")
-
+ 
         elapsed = time.perf_counter() - t0
         print(f"\n{GREEN}✓ {session_id} completed in {elapsed:.1f}s ({elapsed/60:.1f} min){RESET}")
         return True
-
+ 
     except Exception as e:
         elapsed = time.perf_counter() - t0
         print(f"\n{RED}✗ {session_id} FAILED after {elapsed:.1f}s: {e}{RESET}")
