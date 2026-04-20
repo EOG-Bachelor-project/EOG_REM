@@ -443,7 +443,7 @@ def run_process(raw_root: Path, batch_size: int, cleanup: bool = True) -> None:
         print(f"\n   {GREEN}All patients processed!{RESET}")
     print(f"\n{'='*70}")
 
-def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path) -> None:
+def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path, patient_excel: Path | None = None) -> None:
     """Collect features from merged CSVs and cache to a single feature table."""
     if not merged_dir.is_dir():
         print(f"Error: '{merged_dir}' is not a directory.")
@@ -457,6 +457,19 @@ def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path) -> No
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     combined.to_csv(csv_path, index=False)
     print(f"Feature CSV saved -> {csv_path}  ({combined.shape[0]} subjects, {combined.shape[1] - 1} features)")
+
+    # ---- Merge patient info if Excel path provided ----
+    if patient_excel is not None and patient_excel.is_file():
+        from preprocessing.merge_patient_info import merge_patient_info
+        info_csv = csv_path.parent / "features_with_info.csv"
+        merge_patient_info(
+            feature_csv   = csv_path,
+            patient_excel = patient_excel,
+            output_csv    = info_csv,
+        )
+        print(f"Features with patient info saved -> {info_csv}")
+    elif patient_excel is not None:
+        print(f"Warning: patient Excel not found at {patient_excel} — skipping info merge")
 
 
 def run_report(csv_path: Path, output_path: Path, title: str | None) -> None:
@@ -511,6 +524,8 @@ def main():
     p_ext.add_argument("--pattern", type=str, default="*_merged.csv", help="Glob pattern (default: *_merged.csv)")
     p_ext.add_argument("--csv", type=str, default=str(DEFAULT_FEATURE_CSV),
                        help=f"Output feature CSV (default: {DEFAULT_FEATURE_CSV})")
+    p_ext.add_argument("--patient-excel", type=str, default=None,      
+                   help="Path to patient info Excel file to join onto features")
 
     # ---- report ----
     p_rep = sub.add_parser("report", help="Generate HTML report from cached feature CSV.")
@@ -532,6 +547,8 @@ def main():
     p_all.add_argument("--csv", type=str, default=str(DEFAULT_FEATURE_CSV))
     p_all.add_argument("--output", type=str, default=str(DEFAULT_REPORT_HTML))
     p_all.add_argument("--title", type=str, default=None)
+    p_all.add_argument("--patient-excel", type=str, default=None,
+                   help="Path to patient info Excel file to join onto features")
 
     # ---- cleanup ----
     p_clean = sub.add_parser("cleanup", help="Delete intermediate CSVs for already-merged sessions to free disk space.")
@@ -554,14 +571,14 @@ def main():
         run_process(Path(args.raw_root), args.batch_size, cleanup=not args.keep_intermediates)
 
     elif args.mode == "extract":
-        run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv))
+        run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv), patient_excel=Path(args.patient_excel) if args.patient_excel else None)
 
     elif args.mode == "report":
         run_report(Path(args.csv), Path(args.output), args.title)
 
     elif args.mode == "all":
         run_process(Path(args.raw_root), args.batch_size, cleanup=not args.keep_intermediates)
-        run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv))
+        run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv), patient_excel=Path(args.patient_excel) if args.patient_excel else None)
         run_report(Path(args.csv), Path(args.output), args.title)
 
     elif args.mode == "cleanup":
