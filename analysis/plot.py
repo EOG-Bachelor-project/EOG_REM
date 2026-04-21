@@ -1118,7 +1118,7 @@ def plot_group_comparison(
     print(f"Group counts:\n{group_counts.to_string()}\n")
 
     # --- 3) Select features ---
-    exclude = {"subject_id", "_group", "PD(-RBD)", "PD(+RBD)", "iRBD"}
+    exclude = {"DCSM_ID", "_group", "PD(-RBD)", "PD(+RBD)", "iRBD", "Control"}
     if features is None:
         features = [
             c for c in df.columns
