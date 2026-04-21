@@ -19,7 +19,7 @@ from datetime import datetime
 from features.eog_feats import extract_features
 from features.gssc_feats import extract_gssc_features
 from features.eeg_feats import extract_eeg_features
-
+from features.patient_feats import extract_patient_features
 
 # =====================================================================
 # 1)  COLLECT FEATURES 
@@ -29,6 +29,7 @@ def collect_features(
     merged_dir: str | Path,
     fs: float = 250.0,
     pattern: str = "*_merged.csv",
+    patient_excel: str | Path | None = None,
 ) -> pd.DataFrame:
     """
     Run extract_features(), extract_gssc_features() and extract_eeg_features() on every merged CSV
@@ -42,6 +43,8 @@ def collect_features(
         Sampling frequency of the recordings (default 250 Hz). Used for feature extraction.
     pattern : str, optional
         Glob pattern to match merged CSV files (default "*_merged.csv"). Adjust if your files have a different naming convention.
+    patient_excel : str or Path, optional
+        Path to the patient Excel file for looking up diagnostic group labels. If provided, these will be included as additional columns in the output DataFrame.
 
     Returns
     -------
@@ -92,9 +95,24 @@ def collect_features(
     eeg_df = pd.DataFrame(eeg_rows)
     print(f"EEG features: {eeg_df.shape[0]} subjects | {eeg_df.shape[1] - 1} features")
 
+    # ---- Patient info features ----
+    patient_rows = []
+    if patient_excel is not None:
+        for f in files:
+            try:
+                row = extract_patient_features(f, patient_excel=patient_excel)
+                patient_rows.append(row)
+            except Exception as e:
+                print(f"  [SKIP PATIENT] {f.name} — {e}")
+
+        patient_df = pd.DataFrame(patient_rows)
+        print(f"Patient features: {patient_df.shape[0]} subjects | {patient_df.shape[1] - 1} features")
+
     # ---- Join on subject_id ----
     combined = pd.merge(eog_df, gssc_df, on="subject_id", how="outer", suffixes=("_eog", "_gssc"))
     combined = pd.merge(combined, eeg_df, on="subject_id", how="outer")
+    if patient_rows:
+        combined = pd.merge(combined, patient_df, on="subject_id", how="outer")
     print(f"Combined: {combined.shape[0]} subjects | {combined.shape[1] - 1} features\n")
 
     return combined

@@ -6,11 +6,12 @@
 #              on their own so you don't have to redo the slow preprocessing.
 #
 # Usage:
-#   python main.py <raw_root>                     # same as before: process patients, batch=10
-#   python main.py <raw_root> --batch-size 5      # smaller batch
-#   python main.py extract                        # extract features from merged_csv_eog/
-#   python main.py report                         # regenerate HTML from cached features (fast)
-#   python main.py all <raw_root>                 # process + extract + report in one go
+#   python main.py <raw_root>                                        # same as before: process patients, batch=10
+#   python main.py <raw_root> --batch-size 5                         # smaller batch
+#   python main.py extract                                           # extract features from merged_csv_eog/
+#   python main.py report                                            # regenerate HTML from cached features (fast)
+#   python main.py all <raw_root>                                    # process + extract + report in one go
+#   python main.py extract --patient-excel path/to/patient_info.xlsx # extract features with patient info merged in          
 #
 # Re-running specific stages:
 #   The pipeline skips any stage whose output file already exists.
@@ -449,7 +450,7 @@ def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path, patie
         print(f"Error: '{merged_dir}' is not a directory.")
         sys.exit(1)
 
-    combined = collect_features(merged_dir, fs=fs, pattern=pattern)
+    combined = collect_features(merged_dir, fs=fs, pattern=pattern, patient_excel=patient_excel)
     if combined.empty:
         print("Error: No features extracted.")
         sys.exit(1)
@@ -584,6 +585,7 @@ def main():
     elif args.mode == "cleanup":
         import gzip
         import shutil
+        import re
 
         # Find all sessions that have a merged CSV and compress their intermediates
         merged_files = list(MERGED_DIR.glob("*_merged.csv"))
@@ -598,8 +600,12 @@ def main():
 
         total_freed = 0.0
         for mf in sorted(merged_files):
-            session_id = mf.stem.split("_")[0]
-            edf_stem = mf.stem.replace(f"{session_id}_", "").replace("_eog_merged", "")
+            m = re.match(r"(DCSM_\d+_[a-zA-Z])_(.*?)_eog_merged", mf.stem)
+            if not m:
+                print(f"  Skipping {mf.name} — could not parse session ID")
+                continue
+            session_id = m.group(1)
+            edf_stem = m.group(2)
 
             intermediates = [
                 EOG_DIR  / f"{session_id}_{edf_stem}_eog.csv",
