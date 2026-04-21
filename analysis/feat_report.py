@@ -30,91 +30,73 @@ def collect_features(
     fs: float = 250.0,
     pattern: str = "*_merged.csv",
     patient_excel: str | Path | None = None,
+    file_list: list[Path] | None = None,
 ) -> pd.DataFrame:
     """
-    Run extract_features(), extract_gssc_features() and extract_eeg_features() on every merged CSV
-    in a directory and join them into a single DataFrame.
+    Run all feature extractors on every merged CSV and return a single DataFrame.
 
     Parameters
     ----------
     merged_dir : str or Path
         Directory containing merged CSV files from the preprocessing pipeline.
     fs : float, optional
-        Sampling frequency of the recordings (default 250 Hz). Used for feature extraction.
+        Sampling frequency of the recordings (default 250 Hz).
     pattern : str, optional
-        Glob pattern to match merged CSV files (default "*_merged.csv"). Adjust if your files have a different naming convention.
+        Glob pattern to match merged CSV files (default "*_merged.csv").
     patient_excel : str or Path, optional
-        Path to the patient Excel file for looking up diagnostic group labels. If provided, these will be included as additional columns in the output DataFrame.
+        Path to the patient Excel file for diagnostic group labels.
+    file_list : list of Path, optional
+        Explicit list of files to process; overrides merged_dir + pattern.
 
     Returns
     -------
     pd.DataFrame
-        A DataFrame where each row corresponds to a subject and columns are extracted features from both EOG and GSSC.
+        One row per subject, columns are all extracted features.
     """
     merged_dir = Path(merged_dir)
-    files = sorted(merged_dir.glob(pattern))
+
+    if file_list is not None:
+        files = sorted(file_list)
+    else:
+        files = sorted(merged_dir.glob(pattern))
 
     if not files:
         raise FileNotFoundError(f"No files matching '{pattern}' in {merged_dir}")
 
-    print(f"\nFound {len(files)} merged CSV(s) in {merged_dir}\n")
+    n_total = len(files)
+    print(f"\nFound {n_total} merged CSV(s) in {merged_dir}\n")
 
-    # ---- EOG features ----
-    eog_rows = []
-    for f in files:
+    rows = []
+    for i, f in enumerate(files, start=1):
+        print(f"  [{i}/{n_total}] {f.name}")
+        record: dict = {}
+
         try:
-            row = extract_features(f, fs=fs)
-            eog_rows.append(row)
+            record.update(extract_features(f, fs=fs))
         except Exception as e:
-            print(f"  [SKIP EOG] {f.name} - {e}")
+            print(f"    [SKIP EOG] {e}")
 
-    eog_df = pd.DataFrame(eog_rows)
-    print(f"\nEOG features: {eog_df.shape[0]} subjects | {eog_df.shape[1] - 1} features")
-
-    # ---- GSSC features ----
-    gssc_rows = []
-    for f in files:
         try:
-            row = extract_gssc_features(f, fs=fs)
-            gssc_rows.append(row)
+            record.update(extract_gssc_features(f, fs=fs))
         except Exception as e:
-            print(f"  [SKIP GSSC] {f.name} — {e}")
+            print(f"    [SKIP GSSC] {e}")
 
-    gssc_df = pd.DataFrame(gssc_rows)
-    print(f"GSSC features: {gssc_df.shape[0]} subjects | {gssc_df.shape[1] - 1} features")
+        try:
+            record.update(extract_eeg_features(f, fs=fs))
+        except Exception as e:
+            print(f"    [SKIP EEG] {e}")
 
-    # ---- EEG features ----
-    eeg_rows = []
-    for f in files:
-      try:
-        row = extract_eeg_features(f, fs=fs)
-        eeg_rows.append(row)
-      except Exception as e:
-        print(f"  [SKIP EEG] {f.name} — {e}")
-
-    eeg_df = pd.DataFrame(eeg_rows)
-    print(f"EEG features: {eeg_df.shape[0]} subjects | {eeg_df.shape[1] - 1} features")
-
-    # ---- Patient info features ----
-    patient_rows = []
-    if patient_excel is not None:
-        for f in files:
+        if patient_excel is not None:
             try:
-                row = extract_patient_features(f, patient_excel=patient_excel)
-                patient_rows.append(row)
+                record.update(extract_patient_features(f, patient_excel=patient_excel))
             except Exception as e:
-                print(f"  [SKIP PATIENT] {f.name} — {e}")
+                print(f"    [SKIP PATIENT] {e}")
 
-        patient_df = pd.DataFrame(patient_rows)
-        print(f"Patient features: {patient_df.shape[0]} subjects | {patient_df.shape[1] - 1} features")
+        if record:
+            rows.append(record)
 
-    # ---- Join on subject_id ----
-    combined = pd.merge(eog_df, gssc_df, on="subject_id", how="outer", suffixes=("_eog", "_gssc"))
-    combined = pd.merge(combined, eeg_df, on="subject_id", how="outer")
-    if patient_rows:
-        combined = pd.merge(combined, patient_df, on="subject_id", how="outer")
-    print(f"Combined: {combined.shape[0]} subjects | {combined.shape[1] - 1} features\n")
-
+    combined = pd.DataFrame(rows)
+    print(f"\nDone: {combined.shape[0]} subjects | {combined.shape[1] - 1} features\n")
     return combined
 
 
