@@ -320,22 +320,30 @@ def process_patient(rec, cleanup: bool = True) -> bool:
             # If stage 3 was skipped, we need to re-run it to get loc/roc/loc_clean/roc_clean
             if loc_clean is None:
                 print("    Re-running stage 3 to get filtered signals for EEG extraction...")
-                df, loc, roc, loc_clean, roc_clean = extract_rems_from_edf(
+                result = extract_rems_from_edf(
                     edf_path=edf_path,
                     raw=raw,
                     out_dir=REMS_DIR,
                     lights_path=lights_path,
                     gssc_df=gssc_df,
                 )
-            eeg_to_csv(
-                edf_path=edf_path,
-                loc=loc,
-                roc=roc,
-                loc_clean=loc_clean,
-                roc_clean=roc_clean,
-                out_dir=EEG_DIR,
-                lights_path=lights_path,
-            )
+                if result is None:
+                    print(f"    {RED}Skipping EEG extraction — extract_rems_from_edf returned None (missing channels?){RESET}")
+                else:
+                    df, loc, roc, loc_clean, roc_clean = result
+
+            if loc_clean is not None:
+                eeg_to_csv(
+                    edf_path=edf_path,
+                    loc=loc,
+                    roc=roc,
+                    loc_clean=loc_clean,
+                    roc_clean=roc_clean,
+                    out_dir=EEG_DIR,
+                    lights_path=lights_path,
+                )
+            else:
+                print(f"    {RED}EEG extraction skipped — no filtered signals available{RESET}")
  
         # ── Stage 7: Merge into unified CSV ─────────────────────────
         print(f"\n{BOLD}[7/7] Merge into unified CSV{RESET}")
