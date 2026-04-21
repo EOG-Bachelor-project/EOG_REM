@@ -65,7 +65,6 @@ GSSC_DIR     = Path("gssc_csv")
 REMS_DIR     = Path("extracted_rems")
 EM_DIR       = Path("detected_ems")
 MERGED_DIR   = Path("merged_csv_eog")
-MERGED_DIR_b = Path("merged_csv_eog_backup")
 FEATURES_DIR = Path("features_csv")
 REPORTS_DIR  = Path("reports")
 EEG_DIR      = Path("eeg_csv")
@@ -385,7 +384,7 @@ def process_patient(rec, cleanup: bool = True) -> bool:
 
 
 # =====================================================================
-# Step runners — each does one thing
+# Run processing for one patient
 # =====================================================================
 def run_process(raw_root: Path, batch_size: int, cleanup: bool = True) -> None:
     """Run the original resume-friendly patient batch processor."""
@@ -452,6 +451,9 @@ def run_process(raw_root: Path, batch_size: int, cleanup: bool = True) -> None:
         print(f"\n   {GREEN}All patients processed!{RESET}")
     print(f"\n{'='*70}")
 
+# =====================================================================
+# Run feature extraction
+# =====================================================================
 def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path, patient_excel: Path | None = None) -> None:
     """Collect features from merged CSVs and cache to a single feature table."""
     if not merged_dir.is_dir():
@@ -481,6 +483,9 @@ def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path, patie
         print(f"Warning: patient Excel not found at {patient_excel} — skipping info merge")
 
 
+# =====================================================================
+# Run HTML report generation from cached feature CSV
+# =====================================================================
 def run_report(csv_path: Path, output_path: Path, title: str | None) -> None:
     """Render the HTML report from a cached feature CSV."""
     if not csv_path.is_file():
@@ -496,7 +501,7 @@ def run_report(csv_path: Path, output_path: Path, title: str | None) -> None:
 
 
 # =====================================================================
-# CLI
+# CLI - Command-line interface with subcommands for each stage
 # =====================================================================
 def main():
     parser = argparse.ArgumentParser(
@@ -527,8 +532,8 @@ def main():
 
     # ---- extract ----
     p_ext = sub.add_parser("extract", help="Extract features from merged CSVs into a cached CSV.")
-    p_ext.add_argument("merged_dir", type=str, nargs="?", default=str(MERGED_DIR_b),
-                       help=f"Directory with merged CSVs (default: {MERGED_DIR_b})")
+    p_ext.add_argument("merged_dir", type=str, nargs="?", default=str(MERGED_DIR),
+                       help=f"Directory with merged CSVs (default: {MERGED_DIR})")
     p_ext.add_argument("--fs", type=float, default=250.0, help="Sampling frequency [Hz] (default: 250)")
     p_ext.add_argument("--pattern", type=str, default="*_merged.csv", help="Glob pattern (default: *_merged.csv)")
     p_ext.add_argument("--csv", type=str, default=str(DEFAULT_FEATURE_CSV),
