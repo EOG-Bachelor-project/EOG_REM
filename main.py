@@ -93,7 +93,7 @@ def _is_processed(session_id: str) -> bool:
     If it does, we assume all earlier stages succeeded and skip.
     """
     merged_path = MERGED_DIR / f"{session_id}_contiguous_eog_merged.csv"
-    return merged_path.exists()
+    return merged_path.exists() or merged_path.with_suffix(".csv.gz").exists()
 
 
 def _check_existing_outputs(session_id: str, edf_stem: str) -> dict[str, bool]:
@@ -525,7 +525,7 @@ def main():
     p_ext.add_argument("merged_dir", type=str, nargs="?", default=str(MERGED_DIR),
                        help=f"Directory with merged CSVs (default: {MERGED_DIR})")
     p_ext.add_argument("--fs", type=float, default=250.0, help="Sampling frequency [Hz] (default: 250)")
-    p_ext.add_argument("--pattern", type=str, default="*_merged.csv", help="Glob pattern (default: *_merged.csv)")
+    p_ext.add_argument("--pattern", type=str, default="*_merged.csv*", help="Glob pattern (default: *_merged.csv*)")
     p_ext.add_argument("--csv", type=str, default=str(DEFAULT_FEATURE_CSV),
                        help=f"Output feature CSV (default: {DEFAULT_FEATURE_CSV})")
     p_ext.add_argument("--patient-excel", type=str, default=None,      
@@ -547,7 +547,7 @@ def main():
                        help="Keep intermediate CSVs after merging (default: delete to save disk space)")
     p_all.add_argument("--merged-dir", type=str, default=str(MERGED_DIR))
     p_all.add_argument("--fs", type=float, default=250.0)
-    p_all.add_argument("--pattern", type=str, default="*_merged.csv")
+    p_all.add_argument("--pattern", type=str, default="*_merged.csv*")
     p_all.add_argument("--csv", type=str, default=str(DEFAULT_FEATURE_CSV))
     p_all.add_argument("--output", type=str, default=str(DEFAULT_REPORT_HTML))
     p_all.add_argument("--title", type=str, default=None)
@@ -591,7 +591,7 @@ def main():
         import re
 
         # Find all sessions that have a merged CSV and compress their intermediates
-        merged_files = list(MERGED_DIR.glob("*_merged.csv"))
+        merged_files = list(MERGED_DIR.glob("*_merged.csv*"))
         if not merged_files:
             print("No merged CSVs found — nothing to clean up.")
             return
