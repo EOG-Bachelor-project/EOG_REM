@@ -1116,6 +1116,8 @@ def plot_group_comparison(
     # --- 1) Load ---
     df = pd.read_csv(feature_csv)
     print(f"Loaded: {feature_csv}  ({df.shape[0]} subjects, {df.shape[1]} columns)")
+    print(f"Columns: {df.columns.tolist()}")                                                             
+    print(f"Group cols present: {[c for c in ['Control', 'PD(-RBD)', 'PD(+RBD)', 'iRBD', 'PLM'] if c in df.columns]}")  
 
     # --- 2) Assign groups ---
     df["_group"] = _assign_group(df)
@@ -1152,6 +1154,7 @@ def plot_group_comparison(
         ]
 
         # --- Violin ---
+        violin_data = [d if len (d)>1 else np.array([np.nan, np.nan]) for d in data_per_group]
         parts = ax.violinplot(
             [d if len(d) > 1 else [np.nan] for d in data_per_group],
             positions=x_positions,

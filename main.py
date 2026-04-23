@@ -473,20 +473,6 @@ def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path, patie
     combined.to_csv(csv_path, index=False)
     print(f"Feature CSV saved -> {csv_path}  ({combined.shape[0]} subjects, {combined.shape[1] - 1} features)")
 
-    # ---- Merge patient info if Excel path provided ----
-    if patient_excel is not None and patient_excel.is_file():
-        from preprocessing.merge_patient_info import merge_patient_info
-        info_csv = csv_path.parent / "features_with_info.csv"
-        merge_patient_info(
-            feature_csv   = csv_path,
-            patient_excel = patient_excel,
-            output_csv    = info_csv,
-        )
-        print(f"Features with patient info saved -> {info_csv}")
-    elif patient_excel is not None:
-        print(f"Warning: patient Excel not found at {patient_excel} — skipping info merge")
-
-
 # =====================================================================
 # Run HTML report generation from cached feature CSV
 # =====================================================================
