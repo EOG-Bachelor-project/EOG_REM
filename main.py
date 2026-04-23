@@ -272,20 +272,24 @@ def process_patient(rec, cleanup: bool = True) -> bool:
             print(f"\n{BOLD}[3/7] Extract REM events — SKIPPED (already exists){RESET}")
             df, loc, roc, loc_clean, roc_clean = None, None, None, None, None
         else:
-            print(f"\n{BOLD}[3/7] Extract REM events{RESET}")
-            df, loc, roc, loc_clean, roc_clean = extract_rems_from_edf(
+            result = extract_rems_from_edf(
                 edf_path=edf_path,
                 raw=raw,
                 out_dir=REMS_DIR,
                 lights_path=lights_path,
                 gssc_df=gssc_df,
             )
+            if result is None:
+                raise RuntimeError("Signal too short or missing channels — skipping session")
+            df, loc, roc, loc_clean, roc_clean = result
  
         # ── Stage 4: Mask artefacts in EOG CSV ──────────────────────
         print(f"\n{BOLD}[4/7] Mask artefacts in EOG CSV{RESET}")
-        eog_csv_path = _wait_for_file(
-            EOG_DIR / f"{session_id}_{edf_path.stem}_eog.csv"
-        )
+        eog_csv_path = EOG_DIR / f"{session_id}_{edf_path.stem}_eog.csv"
+        if not eog_csv_path.exists() or eog_csv_path.stat().st_size < 10:
+            print("    EOG CSV missing or empty — regenerating...")
+            edf_to_csv(edf_path, raw=raw, out_dir=EOG_DIR, lights_path=lights_path)
+        eog_csv_path = _wait_for_file(eog_csv_path)
         eog_df = pd.read_csv(eog_csv_path)
  
         artefact_mask = (
