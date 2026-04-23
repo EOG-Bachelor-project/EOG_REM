@@ -1134,109 +1134,112 @@ def plot_group_comparison(
         ]
     print(f"Plotting {len(features)} features...")
 
-    # --- 4) Build figure ---
-    n_rows = int(np.ceil(len(features) / n_cols))
-    fig, axes = plt.subplots(
-        n_rows, n_cols,
-        figsize=(n_cols * 4, n_rows * 4),
-        gridspec_kw={"hspace": 0.6, "wspace": 0.4},
-    )
-    axes = np.array(axes).flatten()
+    # --- 4) Build figure 
+    n_per_page  = n_cols  # 4 features per window
+    n_pages     = int(np.ceil(len(features) / n_per_page))
+    groups      = list(GROUP_COLORS.keys())   
+    colors      = list(GROUP_COLORS.values())  
+    x_positions = np.arange(len(groups))      
 
-    groups     = list(GROUP_COLORS.keys())
-    colors     = list(GROUP_COLORS.values())
-    x_positions = np.arange(len(groups))
+    for page in range(n_pages):
+        page_feats = features[page * n_per_page : (page + 1) * n_per_page]
 
-    for ax, feat in zip(axes, features):
-        data_per_group = [
-            df.loc[df["_group"] == g, feat].dropna().values
-            for g in groups
-        ]
-
-        # --- Violin ---
-        violin_data = [d if len (d)>1 else np.array([np.nan, np.nan]) for d in data_per_group]
-        parts = ax.violinplot(
-            [d if len(d) > 1 else [np.nan] for d in data_per_group],
-            positions=x_positions,
-            showmedians=False,
-            showextrema=False,
-            widths=0.6,
+        fig, axes = plt.subplots(
+            1, n_per_page,
+            figsize=(n_per_page * 4, 5),
+            gridspec_kw={"wspace": 0.4},
         )
-        for pc, color in zip(parts["bodies"], colors):
-            pc.set_facecolor(color)
-            pc.set_alpha(0.35)
-            pc.set_edgecolor("none")
+        axes = np.array(axes).flatten()
 
-        # --- Boxplot ---
-        bp = ax.boxplot(
-            [d if len(d) > 0 else [np.nan] for d in data_per_group],
-            positions=x_positions,
-            widths=0.25,
-            patch_artist=True,
-            medianprops=dict(color="#F43F5E", linewidth=2),
-            whiskerprops=dict(linewidth=1.2),
-            capprops=dict(linewidth=1.2),
-            flierprops=dict(marker="o", markersize=3, alpha=0.5),
-            manage_ticks=False,
-        )
-        for patch, color in zip(bp["boxes"], colors):
-            patch.set_facecolor(color)
-            patch.set_alpha(0.7)
+        for ax, feat in zip(axes, page_feats):
+            data_per_group = [
+                df.loc[df["_group"] == g, feat].dropna().values
+                for g in groups
+            ]
 
-        # --- Jittered points ---
-        for xi, (d, color) in enumerate(zip(data_per_group, colors)):
-            if len(d) == 0:
-                continue
-            jitter = np.random.RandomState(42).uniform(-0.08, 0.08, size=len(d))
-            ax.scatter(
-                xi + jitter, d,
-                color=color, s=14, alpha=0.6, zorder=3, edgecolors="none"
+            # --- Violin ---
+            violin_data = [d if len(d) > 1 else np.array([np.nan, np.nan]) for d in data_per_group]
+            parts = ax.violinplot(
+                violin_data,
+                positions=x_positions,
+                showmedians=False,
+                showextrema=False,
+                widths=0.6,
             )
+            for pc, color in zip(parts["bodies"], colors):
+                pc.set_facecolor(color)
+                pc.set_alpha(0.35)
+                pc.set_edgecolor("none")
 
-        ax.set_title(feat, fontsize=8, fontweight="bold", pad=4)
-        ax.set_xticks(x_positions)
-        ax.set_xticklabels(
-            [f"{g}\n(n={len(d)})" for g, d in zip(groups, data_per_group)],
-            fontsize=7,
+            # --- Boxplot ---
+            bp = ax.boxplot(
+                [d if len(d) > 0 else [np.nan] for d in data_per_group],
+                positions          = x_positions,
+                widths             = 0.25,
+                patch_artist       = True,
+                medianprops        = dict(color="#F43F5E", linewidth=2),
+                whiskerprops       = dict(linewidth=1.2),
+                capprops           = dict(linewidth=1.2),
+                flierprops         = dict(marker="o", markersize=3, alpha=0.5),
+                manage_ticks       = False,
+            )
+            for patch, color in zip(bp["boxes"], colors):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+
+            # --- Jittered points ---
+            for xi, (d, color) in enumerate(zip(data_per_group, colors)):
+                if len(d) == 0:
+                    continue
+                jitter = np.random.RandomState(42).uniform(-0.08, 0.08, size=len(d))
+                ax.scatter(xi + jitter, d, color=color, s=14, alpha=0.6, zorder=3, edgecolors="none")
+
+            ax.set_title(feat, fontsize=8, fontweight="bold", pad=4)
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(
+                [f"{g}\n(n={len(d)})" for g, d in zip(groups, data_per_group)],
+                fontsize=7,
+            )
+            ax.tick_params(labelsize=7)
+            ax.grid(axis="y", alpha=0.3, linestyle="--")
+            ax.axhline(0, color="black", linewidth=0.4, alpha=0.3)
+
+        # --- Hide unused axes on last page ---
+        for ax in axes[len(page_feats):]:
+            ax.set_visible(False)
+
+        # --- Legend ---
+        legend_patches = [
+            mpatches.Patch(color=c, label=g, alpha=0.7)
+            for g, c in GROUP_COLORS.items()
+        ]
+        fig.legend(
+            handles         = legend_patches,
+            loc             = "lower center",
+            ncol            = len(GROUP_COLORS),
+            fontsize        = 9,
+            title           = "Diagnostic Group",
+            title_fontsize  = 9,
+            bbox_to_anchor  = (0.5, 0.0),
+            frameon         = True,
         )
-        ax.tick_params(labelsize=7)
-        ax.grid(axis="y", alpha=0.3, linestyle="--")
-        ax.axhline(0, color="black", linewidth=0.4, alpha=0.3)
+        fig.suptitle(
+            f"Feature Distributions by Diagnostic Group  —  page {page + 1} / {n_pages}",
+            fontsize=13, fontweight="bold",
+        )
+        fig.subplots_adjust(bottom=0.18)
 
-    # --- Hide unused axes ---
-    for ax in axes[len(features):]:
-        ax.set_visible(False)
-
-    # --- Legend ---
-    legend_patches = [
-        mpatches.Patch(color=c, label=g, alpha=0.7)
-        for g, c in GROUP_COLORS.items()
-    ]
-    fig.legend(
-        handles=legend_patches,
-        loc="lower center",
-        ncol=len(GROUP_COLORS),
-        fontsize=9,
-        title="Diagnostic Group",
-        title_fontsize=9,
-        bbox_to_anchor=(0.5, 0.0),
-        frameon=True,
-    )
-    fig.suptitle("Feature Distributions by Diagnostic Group", fontsize=14, fontweight="bold")
-    fig.subplots_adjust(bottom=0.06)
-
-    # --- 5) Save or show ---
-    if out_dir is not None:
-        out_dir = Path(out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        fname = out_dir / "group_comparison.png"
-        plt.savefig(fname, dpi=150, bbox_inches="tight")
-        plt.close(fig)
-        print(f"Saved: {fname}")
-    else:
-        plt.show()
-        plt.close(fig)
-
+        # --- 5) Save or show 
+        if out_dir is not None:
+            out_dir = Path(out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            fname = out_dir / f"group_comparison_page{page + 1:03d}.png"
+            plt.savefig(fname, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            print(f"Saved: {fname}")
+        else:
+            plt.show()
+            plt.close(fig)
 
 # =====================================================================
 # Test
