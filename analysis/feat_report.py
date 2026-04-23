@@ -10,7 +10,6 @@
 from __future__ import annotations
 import sys
 import argparse
-from importlib_metadata import files
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -351,7 +350,7 @@ FEATURE_DESCRIPTIONS = {
     "n_rem_epochs":                "Number of distinct REM episodes across the night",
     "rem_epoch_count":             "Number of distinct REM epochs",
     "rem_epoch_mean_duration_min": "Mean REM epoch duration [minutes]",
-    "rem_epoch_std_duration_min":  "Std of REM epoch durations [minutes]",
+    "rem_epoch_std_duration_min":  "Std of REM epoch durations [minutes] - NaN values indicate only a patient has only one REM epoch",
     "rem_epoch_min_duration_min":  "Shortest REM epoch duration [minutes]",
     "rem_epoch_max_duration_min":  "Longest REM epoch duration [minutes]",
 
@@ -411,7 +410,7 @@ FEATURE_DESCRIPTIONS = {
     # REM stability
     "rem_stability_index":       "Mean prob_rem in REM epochs — higher = more stable REM",
     "rem_fragmentation_index":   "REM-to-nonREM transitions per hour — higher = more fragmented",
-    "rem_w_transition_frac":     "Fraction of REM exits going directly to Wake — elevated in RBD",
+    "rem_w_transition_frac":     "Fraction of REM exits going directly to Wake — elevated in RBD - NaN values indicate a patient has zero REM-to-Wake transitions",
     "amount_of_rem":             "Fraction of ALL samples where prob_rem > 0.5 (Cesari definition)",
 
     # EEG features
@@ -440,12 +439,14 @@ FEATURE_GROUPS = [
                              "rem_loc_std_uv", "rem_roc_std_uv",
                              "rem_loc_p95_uv", "rem_roc_p95_uv"]),
 
-    ("REM Events",          ["rem_event_count", "rem_event_rate_per_min",
+    ("REM Events - NaN values indicate a patient has zero detected REM events",          
+                            ["rem_event_count", "rem_event_rate_per_min",
                              "rem_event_mean_duration_s", "rem_event_median_duration_s",
                              "rem_event_mean_loc_amp_uv", "rem_event_mean_roc_amp_uv",
                              "rem_event_mean_loc_rise_slope", "rem_event_mean_roc_rise_slope"]),
 
-    ("EM Classification",   ["sem_count_rem_sleep", "rem_em_count_rem_sleep",
+    ("EM Classification - NaN values indicate a patient has zero eye movements detected during REM",   
+                            ["sem_count_rem_sleep", "rem_em_count_rem_sleep",
                              "sem_rate_per_min", "rem_em_rate_per_min",
                              "sem_fraction", "rem_em_fraction",
                              "sem_mean_duration_s", "rem_em_mean_duration_s",
