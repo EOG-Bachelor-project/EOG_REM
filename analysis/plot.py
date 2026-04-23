@@ -279,7 +279,12 @@ def plot_eog_epochs(
     lprint(length=100, height=1, char="%")
 
     # ==== 1) Load CSV file ====
-    df = pd.read_csv(file, low_memory=False)
+    _peek_cols = pd.read_csv(file, nrows=0).columns.tolist()
+    optional = ["EpochType", "EM_Type", "is_em_event", "event_Start", "event_End", "event_Peak"]
+    usecols = [c for c in [time_col, loc_col, roc_col, stage_col, "EEG_LOC", "EEG_ROC"] + optional
+               if c in _peek_cols]
+    df = pd.read_csv(file, usecols=usecols, dtype={loc_col: "float32", roc_col: "float32"})
+
     print(f"Columns in merged CSV: \n{df.columns.tolist()}")
     print(f"EpochType values: {df['EpochType'].value_counts().to_dict() if 'EpochType' in df.columns else 'NOT FOUND'}")
 
