@@ -971,7 +971,7 @@ def plot_eeg_psd(
         eeg_loc_col: str = "EEG_LOC",
         eeg_roc_col: str = "EEG_ROC",
         stage_col:   str = "stage",
-        fs:          float = 256.0,
+        fs:          float = 128.0,
         nperseg_sec: float = 4.0,
         min_sec:     float = 10.0,
         out_dir:     Path | None = None,
@@ -997,7 +997,7 @@ def plot_eeg_psd(
     stage_col : str
         Name of the sleep stage column. Default is 'stage'.
     fs : float
-        Sampling frequency in Hz. Default is 256 Hz.
+        Sampling frequency in Hz. Default is 128 Hz.
     nperseg_sec : float
         Welch segment length in seconds. Default is 4.0 s.
     min_sec : float
@@ -1057,6 +1057,7 @@ def plot_eeg_psd(
         # PSD per stage
         for stage, color in STAGE_COLORS.items():
             mask = df[stage_col] == stage
+            print(f"{stage}: {mask.sum()} samples (need {min_samples})")
             if mask.sum() < min_samples:
                 continue
             sig = df.loc[mask, col].values
