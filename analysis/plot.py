@@ -1198,9 +1198,10 @@ def plot_group_comparison(
             ax.set_xticks(x_positions)
             ax.set_xticklabels(
                 [f"{g}\n(n={len(d)})" for g, d in zip(groups, data_per_group)],
-                fontsize=7,
+                fontsize=6, rotation=15, ha="right",
             )
             ax.tick_params(labelsize=7)
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.2g}"))
             ax.grid(axis="y", alpha=0.3, linestyle="--")
             ax.axhline(0, color="black", linewidth=0.4, alpha=0.3)
 
@@ -1215,12 +1216,12 @@ def plot_group_comparison(
         ]
         fig.legend(
             handles         = legend_patches,
-            loc             = "lower center",
+            loc             = "upper center",
             ncol            = len(GROUP_COLORS),
             fontsize        = 9,
             title           = "Diagnostic Group",
             title_fontsize  = 9,
-            bbox_to_anchor  = (0.5, 0.0),
+            bbox_to_anchor  = (0.5, 1.0),
             frameon         = True,
         )
         fig.suptitle(
