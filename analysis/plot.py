@@ -299,7 +299,8 @@ def plot_eog_epochs(
     # Check which EM columns are available
     has_em_type    = show_em and "EM_Type"     in df.columns
     has_epoch_type = show_em and "EpochType"   in df.columns
-    
+    has_eeg        = "EEG_LOC" in df.columns and "EEG_ROC" in df.columns
+
     # ==== 2) Find epoch start times ====
     # Identify where stage transitions occur and label each run
     df["_block"] = (df[stage_col] != df[stage_col].shift()).cumsum()
@@ -405,9 +406,22 @@ def plot_eog_epochs(
         if has_epoch_type:
             _shade_epoch_type(ax_eeg, epoch_df)
 
-        _plot_signal(ax_eeg, t, epoch_df["EEG_LOC"].values, SIG_COLORS["EEG_LOC"], label="EEG (LOC)", lw=0.9)
-        _plot_signal(ax_eeg, t, epoch_df["EEG_ROC"].values, SIG_COLORS["EEG_ROC"], label="EEG (ROC)", lw=0.9)
+        if has_eeg:
+            _plot_signal(ax_eeg, t, epoch_df["EEG_LOC"].values, SIG_COLORS["EEG_LOC"], label="EEG (LOC)", lw=0.9)
+            _plot_signal(ax_eeg, t, epoch_df["EEG_ROC"].values, SIG_COLORS["EEG_ROC"], label="EEG (ROC)", lw=0.9)
+        else:
+            ax_eeg.text(0.5, 0.5, "EEG not available", transform=ax_eeg.transAxes,
+                        ha="center", va="center", fontsize=10, color="grey")
+
         _format_signal_ax(ax_eeg, "Recovered EEG (LOC − cleaned, ROC − cleaned)", window_sec, epoch_sec)
+
+        eeg_handles, _ = ax_eeg.get_legend_handles_labels()
+        ax_eeg.set_xticks(np.arange(0, window_sec + 1, 1))
+        ax_eeg.legend(
+        handles=eeg_handles,
+        fontsize=8, loc="center left", ncol=2,
+        bbox_to_anchor=(1, 0.5), frameon=True,
+        )
 
         # ── Hypnogram panel ───────────────────────────────────────────
         for _, sp in span_groups.iterrows():
