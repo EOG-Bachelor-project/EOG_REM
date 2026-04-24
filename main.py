@@ -193,7 +193,10 @@ def _compress_intermediates(session_id: str, edf_stem: str) -> float:
 # =====================================================================
 # Core — process one patient through the full pipeline
 # =====================================================================
-def process_patient(rec, cleanup: bool = True) -> bool:
+def process_patient(
+        rec, 
+        cleanup: bool = True
+        ) -> bool:
     """
     Run stages 1-7 for a single patient session, skipping any stage
     whose output file already exists on disk.
@@ -390,8 +393,26 @@ def process_patient(rec, cleanup: bool = True) -> bool:
 # =====================================================================
 # Run processing for one patient
 # =====================================================================
-def run_process(raw_root: Path, batch_size: int, cleanup: bool = True) -> None:
-    """Run the original resume-friendly patient batch processor."""
+def run_process(
+        raw_root:       Path, 
+        batch_size:     int, 
+        cleanup:        bool = True
+        ) -> None:
+    """
+    Run the original resume-friendly patient batch processor.
+
+    Parameters
+    ----------
+    raw_root : Path
+        The root directory containing raw EDF/TXT recordings.
+    batch_size : int
+        The number of patients to process in this run. The pipeline will skip
+        already processed patients (merged CSV exists) and stop after processing
+        this many new patients.
+    cleanup : bool
+        Whether to compress intermediate CSVs after merging to save disk space.
+        **Default is True** (intermediates are deleted after merging).
+    """
     if not raw_root.is_dir():
         print(f"Error: '{raw_root}' is not a directory.")
         sys.exit(1)
@@ -458,13 +479,36 @@ def run_process(raw_root: Path, batch_size: int, cleanup: bool = True) -> None:
 # =====================================================================
 # Run feature extraction
 # =====================================================================
-def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path, patient_excel: Path | None = None) -> None:
-    """Collect features from merged CSVs and cache to a single feature table."""
+def run_extract(
+        merged_dir:     Path, 
+        fs:             float, 
+        pattern:        str, 
+        csv_path:       Path, 
+        patient_excel:  Path | None = None
+        ) -> None:
+    """
+    Collect features from merged CSVs and cache to a single feature table.
+    
+    Parameters
+    ----------
+    merged_dir : Path
+        Directory containing merged CSVs from preprocessing (default: merged_csv_eog/)
+    fs : float
+        Sampling frequency in Hz (default: 250.0)
+    pattern : str
+        Glob pattern to match merged CSV files (default: "*_merged.csv.gz")
+    csv_path : Path
+        Output path for the cached feature CSV (default: features_csv/features.csv)
+    patient_excel : Path or None
+        Optional path to an Excel file with patient info to merge onto features.
+        The Excel file should have a "patient_id" column that matches the session_id
+        in the merged CSV filenames. If None, no patient info is merged (default: None).
+    """
     if not merged_dir.is_dir():
         print(f"Error: '{merged_dir}' is not a directory.")
         sys.exit(1)
 
-    combined = collect_features(merged_dir, fs=fs, pattern=pattern, patient_excel=patient_excel)
+    combined = collect_features(merged_dir, fs=fs, pattern=pattern, patient_excel=patient_excel, cache_csv=csv_path)
     if combined.empty:
         print("Error: No features extracted.")
         sys.exit(1)
@@ -476,8 +520,23 @@ def run_extract(merged_dir: Path, fs: float, pattern: str, csv_path: Path, patie
 # =====================================================================
 # Run HTML report generation from cached feature CSV
 # =====================================================================
-def run_report(csv_path: Path, output_path: Path, title: str | None) -> None:
-    """Render the HTML report from a cached feature CSV."""
+def run_report(
+        csv_path:       Path, 
+        output_path:    Path, 
+        title:          str | None 
+        ) -> None:
+    """
+    Render the HTML report from a cached feature CSV.
+    
+    Parameters
+    ----------
+    csv_path : Path
+        Path to the cached feature CSV (default: features_csv/features.csv)
+    output_path : Path
+        Path to save the generated HTML report (default: reports/features_report.html)
+    title : str or None
+        Optional title for the report. If None, the title will be derived from the CSV filename.
+    """
     if not csv_path.is_file():
         print(f"Error: feature CSV '{csv_path}' not found. Run 'extract' first.")
         sys.exit(1)

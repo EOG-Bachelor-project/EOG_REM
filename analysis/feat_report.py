@@ -31,28 +31,8 @@ def collect_features(
     pattern:        str = "*_merged.csv",
     patient_excel:  str | Path | None = None,
     file_list:      list[Path] | None = None,
-) -> pd.DataFrame:  
-    """
-    Run all feature extractors on every merged CSV and return a single DataFrame.
-
-    Parameters
-    ----------
-    merged_dir : str or Path
-        Directory containing merged CSV files from the preprocessing pipeline.
-    fs : float, optional
-        Sampling frequency of the recordings (default 250 Hz).
-    pattern : str, optional
-        Glob pattern to match merged CSV files (default "*_merged.csv").
-    patient_excel : str or Path, optional
-        Path to the patient Excel file for diagnostic group labels.
-    file_list : list of Path, optional
-        Explicit list of files to process; overrides merged_dir + pattern.
-
-    Returns
-    -------
-    pd.DataFrame
-        One row per subject, columns are all extracted features.
-    """
+    cache_csv:      str | Path | None = None,
+) -> pd.DataFrame:
     merged_dir = Path(merged_dir)
 
     if file_list is not None:
@@ -63,20 +43,35 @@ def collect_features(
     if not files:
         raise FileNotFoundError(f"No files matching '{pattern}' in {merged_dir}")
 
+    # Load cached features and skip already-extracted subjects
+    cached_df = None
+    if cache_csv is not None and Path(cache_csv).exists():
+        cached_df = pd.read_csv(cache_csv)
+        done_ids = set(cached_df["subject_id"].values)
+        before = len(files)
+        files = [f for f in files if f.stem not in done_ids]
+        print(f"\nCache: {len(done_ids)} subjects already extracted, {before - len(files)} skipped")
+
     n_total = len(files)
-    print(f"\nFound {n_total} merged CSV(s) in {merged_dir}\n")
+    print(f"\nProcessing {n_total} new merged CSV(s)\n")
 
-    with ProcessPoolExecutor(max_workers=8) as pool:
-        futures = {pool.submit(_extract_one, (f, fs, patient_excel)): f for f in files}
-        rows = []
-        for i, fut in enumerate(as_completed(futures), 1):
-            f = futures[fut]
-            print(f"  [{i}/{n_total}] {f.name}")
-            result = fut.result()
-            if result is not None:
-                rows.append(result)
+    rows = []
+    for i, f in enumerate(files, 1):
+        print(f"  [{i}/{n_total}] {f.name}")
+        result = _extract_one((f, fs, patient_excel))
+        if result is not None:
+            rows.append(result)
 
-    combined = pd.DataFrame(rows)
+    new_df = pd.DataFrame(rows)
+
+    # Append to cached results
+    if cached_df is not None and not new_df.empty:
+        combined = pd.concat([cached_df, new_df], ignore_index=True)
+    elif cached_df is not None:
+        combined = cached_df
+    else:
+        combined = new_df
+
     print(f"\nDone: {combined.shape[0]} subjects | {combined.shape[1] - 1} features\n")
     return combined
 
