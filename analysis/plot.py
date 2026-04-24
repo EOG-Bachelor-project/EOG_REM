@@ -1262,7 +1262,7 @@ def plot_group_comparison(
 # =====================================================================
 if __name__ == "__main__":
     plot_eog_epochs(
-        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged_Umaer.csv",
+        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged.csv.gz",
         stage      = "REM",
         stage_col  = "stage",
         window_sec = 30.0,
@@ -1272,19 +1272,19 @@ if __name__ == "__main__":
     )
 
     plot_fullnight_overview(
-        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged_Umaer.csv",
+        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged.csv.gz",
         out_dir=None
     )
 
     plot_group_comparison(
-        feature_csv = "features_csv/features_with_info.csv",
+        feature_csv = "features_csv/features.csv",
         features    = None,
         out_dir     = None,
         n_cols      = 4,
     )
 
     """plot_transition_epochs(
-        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv", 
+        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv.gz", 
         from_stage  = "REM", 
         to_stage    = "W", 
         window_sec  = 60,
@@ -1292,7 +1292,7 @@ if __name__ == "__main__":
         )"""
     
     """plot_eeg_psd(
-        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged_Umaer.csv",
+        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged.csv.gz",
         eeg_loc_col = "EEG_LOC",
         eeg_roc_col = "EEG_ROC",
         fs          = 256.0,
