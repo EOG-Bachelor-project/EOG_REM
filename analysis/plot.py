@@ -1071,8 +1071,8 @@ def plot_eeg_psd(
         # PSD per stage
         for stage, color in STAGE_COLORS.items():
             mask = df[stage_col] == stage
-            print(f"{stage}: {mask.sum()} samples (need {min_samples})")
-            if mask.sum() < min_samples:
+            print(f"{stage}: {mask.sum()} stage samples | {len(sig)} non-NaN EEG samples (need {min_samples})")
+            if len(sig) < min_samples:
                 continue
             sig = df.loc[mask, col].values
             f, psd = welch(sig, fs=fs, nperseg=min(nperseg, len(sig)))
