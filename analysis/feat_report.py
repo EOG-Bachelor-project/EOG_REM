@@ -89,21 +89,26 @@ def collect_features(
 # Helper for parallel processing 
 # —————————————————————————————————————————————————————————————————————
 def _extract_one(args):
-    
     f, fs, patient_excel = args
-
+    record = {}
     try:
-        record = {}
         record.update(extract_features(f, fs=fs))
-        record.update(extract_gssc_features(f, fs=fs))
-        record.update(extract_eeg_features(f, fs=fs))
-        if patient_excel is not None:
-            record.update(extract_patient_features(f, patient_excel=patient_excel))
-        return record
-    
     except Exception as e:
-        print(f"  [SKIP] {f.name} — {e}")
-        return None
+        print(f"  [SKIP EOG] {f.name} — {e}")
+    try:
+        record.update(extract_gssc_features(f, fs=fs))
+    except Exception as e:
+        print(f"  [SKIP GSSC] {f.name} — {e}")
+    try:
+        record.update(extract_eeg_features(f, fs=fs))
+    except Exception as e:
+        print(f"  [SKIP EEG] {f.name} — {e}")
+    if patient_excel is not None:
+        try:
+            record.update(extract_patient_features(f, patient_excel=patient_excel))
+        except Exception as e:
+            print(f"  [SKIP PATIENT] {f.name} — {e}")
+    return record if record else None
 
 # =====================================================================
 # 2)  HTML REPORT  
