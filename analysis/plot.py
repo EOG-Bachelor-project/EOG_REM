@@ -1040,6 +1040,8 @@ def plot_eeg_psd(
         )
  
     df = df.sort_values(by=time_col).reset_index(drop=True)
+    print(f"Unique stages in CSV: {df[stage_col].unique()}")
+    print(f"STAGE_COLORS keys: {list(STAGE_COLORS.keys())}")
     nperseg    = int(nperseg_sec * fs)
     min_samples = int(min_sec * fs)
  
@@ -1077,6 +1079,7 @@ def plot_eeg_psd(
                 continue
             f, psd = welch(sig, fs=fs, nperseg=min(nperseg, len(sig)))
             band_mask = (f >= 0.5) & (f <= 35.0)
+            print(f"  {stage} PSD — min: {psd[band_mask].min():.4f}  max: {psd[band_mask].max():.4f}  any zeros: {(psd[band_mask] == 0).any()}")
             ax.semilogy(f[band_mask], psd[band_mask], color=color, linewidth=1.8, label=stage, zorder=2)
  
         ax.set_title(panel_titles.get(col, col), fontsize=11, pad=10)
