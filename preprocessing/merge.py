@@ -333,7 +333,7 @@ def merge_all(
         eeg_df[[time_col, "EEG_LOC", "EEG_ROC"]].sort_values(time_col),
         on=time_col,
         direction="nearest",
-        tolerance=1/128,  # Assumes fs target is 128 Hz  
+        tolerance=None,  # Maximum allowed distance for a match. If None, there is no tolerance and will always return the nearest row.
     )
     print(f"    Merged shape after EEG join: {merged_df.shape}")
 
