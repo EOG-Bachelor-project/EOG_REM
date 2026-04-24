@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from features.eog_feats import extract_features
 from features.gssc_feats import extract_gssc_features
@@ -25,12 +26,12 @@ from features.patient_feats import extract_patient_features
 # =====================================================================
 
 def collect_features(
-    merged_dir: str | Path,
-    fs: float = 250.0,
-    pattern: str = "*_merged.csv",
-    patient_excel: str | Path | None = None,
-    file_list: list[Path] | None = None,
-) -> pd.DataFrame:
+    merged_dir:     str | Path,
+    fs:             float = 250.0,
+    pattern:        str = "*_merged.csv",
+    patient_excel:  str | Path | None = None,
+    file_list:      list[Path] | None = None,
+) -> pd.DataFrame:  
     """
     Run all feature extractors on every merged CSV and return a single DataFrame.
 
@@ -65,39 +66,39 @@ def collect_features(
     n_total = len(files)
     print(f"\nFound {n_total} merged CSV(s) in {merged_dir}\n")
 
-    rows = []
-    for i, f in enumerate(files, start=1):
-        print(f"  [{i}/{n_total}] {f.name}")
-        record: dict = {}
-
-        try:
-            record.update(extract_features(f, fs=fs))
-        except Exception as e:
-            print(f"    [SKIP EOG] {e}")
-
-        try:
-            record.update(extract_gssc_features(f, fs=fs))
-        except Exception as e:
-            print(f"    [SKIP GSSC] {e}")
-
-        try:
-            record.update(extract_eeg_features(f, fs=fs))
-        except Exception as e:
-            print(f"    [SKIP EEG] {e}")
-
-        if patient_excel is not None:
-            try:
-                record.update(extract_patient_features(f, patient_excel=patient_excel))
-            except Exception as e:
-                print(f"    [SKIP PATIENT] {e}")
-
-        if record:
-            rows.append(record)
+    with ProcessPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_extract_one, (f, fs, patient_excel)): f for f in files}
+        rows = []
+        for i, fut in enumerate(as_completed(futures), 1):
+            f = futures[fut]
+            print(f"  [{i}/{n_total}] {f.name}")
+            result = fut.result()
+            if result is not None:
+                rows.append(result)
 
     combined = pd.DataFrame(rows)
     print(f"\nDone: {combined.shape[0]} subjects | {combined.shape[1] - 1} features\n")
     return combined
 
+# —————————————————————————————————————————————————————————————————————
+# Helper for parallel processing 
+# —————————————————————————————————————————————————————————————————————
+def _extract_one(args):
+    
+    f, fs, patient_excel = args
+
+    try:
+        record = {}
+        record.update(extract_features(f, fs=fs))
+        record.update(extract_gssc_features(f, fs=fs))
+        record.update(extract_eeg_features(f, fs=fs))
+        if patient_excel is not None:
+            record.update(extract_patient_features(f, patient_excel=patient_excel))
+        return record
+    
+    except Exception as e:
+        print(f"  [SKIP] {f.name} — {e}")
+        return None
 
 # =====================================================================
 # 2)  HTML REPORT  
@@ -209,10 +210,10 @@ def _build_histogram_svg(
     return f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
 
 def _build_boxplot_svg(
-        values: list[float],
-        x_label: str = "Value",
-        width: int = 520,
-        height: int = 260,
+        values:   list[float],
+        x_label:  str = "Value",
+        width:    int = 520,
+        height:   int = 260,
         ) -> str:
     """
     Build a SVG boxplot with jittered data points and outliers highlighted.
