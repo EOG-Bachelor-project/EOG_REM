@@ -26,12 +26,13 @@ from features.patient_feats import extract_patient_features
 # =====================================================================
 
 def collect_features(
-    merged_dir:     str | Path,
-    fs:             float = 250.0,
-    pattern:        str = "*_merged.csv",
-    patient_excel:  str | Path | None = None,
-    file_list:      list[Path] | None = None,
-    cache_csv:      str | Path | None = None,
+    merged_dir:       str | Path,
+    fs:               float = 250.0,
+    pattern:          str = "*_merged.csv",
+    patient_excel:    str | Path | None = None,
+    file_list:        list[Path] | None = None,
+    cache_csv:        str | Path | None = None,
+    force_reextract:  list[str] | None = None,
 ) -> pd.DataFrame:
     merged_dir = Path(merged_dir)
 
@@ -43,14 +44,24 @@ def collect_features(
     if not files:
         raise FileNotFoundError(f"No files matching '{pattern}' in {merged_dir}")
 
-    # Load cached features and skip already-extracted subjects
     cached_df = None
     if cache_csv is not None and Path(cache_csv).exists():
         cached_df = pd.read_csv(cache_csv)
-        done_ids = set(cached_df["subject_id"].values)
-        before = len(files)
-        files = [f for f in files if f.stem not in done_ids]
-        print(f"\nCache: {len(done_ids)} subjects already extracted, {before - len(files)} skipped")
+
+        # Drop subjects that need re-extraction
+        if force_reextract is not None:
+            if len(force_reextract) == 0:
+                print("Force re-extracting ALL subjects")
+                cached_df = None
+            else:
+                print(f"Force re-extracting: {force_reextract}")
+                cached_df = cached_df[~cached_df["subject_id"].isin(force_reextract)]
+
+        if cached_df is not None:
+            done_ids = set(cached_df["subject_id"].values)
+            before = len(files)
+            files = [f for f in files if f.stem not in done_ids]
+            print(f"\nCache: {len(done_ids)} done, {before - len(files)} skipped")
 
     n_total = len(files)
     print(f"\nProcessing {n_total} new merged CSV(s)\n")
@@ -64,7 +75,6 @@ def collect_features(
 
     new_df = pd.DataFrame(rows)
 
-    # Append to cached results
     if cached_df is not None and not new_df.empty:
         combined = pd.concat([cached_df, new_df], ignore_index=True)
     elif cached_df is not None:

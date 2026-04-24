@@ -484,7 +484,8 @@ def run_extract(
         fs:             float, 
         pattern:        str, 
         csv_path:       Path, 
-        patient_excel:  Path | None = None
+        patient_excel:  Path | None = None,
+        force_reextract=None,
         ) -> None:
     """
     Collect features from merged CSVs and cache to a single feature table.
@@ -508,7 +509,10 @@ def run_extract(
         print(f"Error: '{merged_dir}' is not a directory.")
         sys.exit(1)
 
-    combined = collect_features(merged_dir, fs=fs, pattern=pattern, patient_excel=patient_excel, cache_csv=csv_path)
+    combined = collect_features(merged_dir, fs=fs, pattern=pattern,
+                                patient_excel=patient_excel, cache_csv=csv_path,
+                                force_reextract=force_reextract)
+    
     if combined.empty:
         print("Error: No features extracted.")
         sys.exit(1)
@@ -589,6 +593,8 @@ def main():
                        help=f"Output feature CSV (default: {DEFAULT_FEATURE_CSV})")
     p_ext.add_argument("--patient-excel", type=str, default=None,      
                    help="Path to patient info Excel file to join onto features")
+    p_ext.add_argument("--force-reextract", type=str, nargs="*", default=None,
+                   help="Re-extract specific subjects or pass no args to re-extract all")
 
     # ---- report ----
     p_rep = sub.add_parser("report", help="Generate HTML report from cached feature CSV.")
@@ -634,7 +640,9 @@ def main():
         run_process(Path(args.raw_root), args.batch_size, cleanup=not args.keep_intermediates)
 
     elif args.mode == "extract":
-        run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv), patient_excel=Path(args.patient_excel) if args.patient_excel else None)
+        run_extract(Path(args.merged_dir), args.fs, args.pattern, Path(args.csv),
+                    patient_excel=Path(args.patient_excel) if args.patient_excel else None,
+                    force_reextract=args.force_reextract)
 
     elif args.mode == "report":
         run_report(Path(args.csv), Path(args.output), args.title)
