@@ -980,7 +980,7 @@ def main():
         sys.exit(1)
 
     # ---- Collect features ----
-    combined = collect_features(merged_dir, fs=args.fs, pattern=args.pattern)
+    combined = collect_features(merged_dir, fs=args.fs, pattern=args.pattern, patient_excel=Path(args.patient_excel) if args.patient_excel else None,)
 
     if combined.empty:
         print("Error: No features extracted.")
