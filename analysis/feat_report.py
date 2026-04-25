@@ -14,104 +14,260 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
-from concurrent.futures import ProcessPoolExecutor, as_completed
-
-from features.eog_feats import extract_features
-from features.gssc_feats import extract_gssc_features
-from features.eeg_feats import extract_eeg_features
+from functools import reduce
+ 
+from features.eog_feats import extract_features_batch
+from features.gssc_feats import extract_gssc_features_batch
+from features.eeg_feats import extract_eeg_features_batch
+from features.bout_feats import extract_bout_features_batch
 from features.patient_feats import extract_patient_features
 
 # =====================================================================
-# 1)  COLLECT FEATURES 
+# Module registry
 # =====================================================================
+FEATURES_DIR = Path("features_csv")
+FEATURES_DIR.mkdir(parents=True, exist_ok=True)
+ 
+# Each entry: module_name -> (batch_function, csv_filename)
+# patient is special — needs patient_excel — handled separately below.
+MODULE_REGISTRY: dict[str, tuple[callable, str]] = {
+    "eog":     (extract_features_batch,           "eog_features.csv"),
+    "gssc":    (extract_gssc_features_batch,       "gssc_features.csv"),
+    "eeg":     (extract_eeg_features_batch,        "eeg_features.csv"),
+    "bout":    (extract_bout_features_batch,       "bout_features.csv"),
+}
+ 
+ALL_MODULE_NAMES = list(MODULE_REGISTRY.keys()) + ["patient"]
 
-def collect_features(
-    merged_dir:       str | Path,
-    fs:               float = 250.0,
-    pattern:          str = "*_merged.csv",
-    patient_excel:    str | Path | None = None,
-    file_list:        list[Path] | None = None,
-    cache_csv:        str | Path | None = None,
-    force_reextract:  list[str] | None = None,
-) -> pd.DataFrame:
-    merged_dir = Path(merged_dir)
-
-    if file_list is not None:
-        files = sorted(file_list)
-    else:
-        files = sorted(merged_dir.glob(pattern))
-
-    if not files:
-        raise FileNotFoundError(f"No files matching '{pattern}' in {merged_dir}")
-
-    cached_df = None
-    if cache_csv is not None and Path(cache_csv).exists():
-        cached_df = pd.read_csv(cache_csv)
-
-        # Drop subjects that need re-extraction
-        if force_reextract is not None:
-            if len(force_reextract) == 0:
-                print("Force re-extracting ALL subjects")
-                cached_df = None
-            else:
-                print(f"Force re-extracting: {force_reextract}")
-                cached_df = cached_df[~cached_df["subject_id"].isin(force_reextract)]
-
-        if cached_df is not None:
-            done_ids = set(cached_df["subject_id"].values)
-            before = len(files)
-            files = [f for f in files if f.stem not in done_ids]
-            print(f"\nCache: {len(done_ids)} done, {before - len(files)} skipped")
-
-    n_total = len(files)
-    print(f"\nProcessing {n_total} new merged CSV(s)\n")
-
+# =====================================================================
+# 1) Run individual module batch extractions
+# =====================================================================
+ 
+def _run_module(
+        name:          str,
+        merged_dir:    Path,
+        fs:            float,
+        pattern:       str,
+        patient_excel: Path | None = None,
+) -> pd.DataFrame | None:
+    """Run a single module's batch extraction and save its CSV."""
+ 
+    if name == "patient":
+        return _run_patient_module(merged_dir, pattern, patient_excel)
+ 
+    if name not in MODULE_REGISTRY:
+        print(f"  [WARN] Unknown module '{name}' — skipping")
+        return None
+ 
+    batch_fn, csv_name = MODULE_REGISTRY[name]
+    output_file = FEATURES_DIR / csv_name
+ 
+    print(f"\n{'='*60}")
+    print(f"  Module: {name}  ->  {output_file}")
+    print(f"{'='*60}")
+ 
+    try:
+        df = batch_fn(merged_dir, output_file=output_file, fs=fs, pattern=pattern)
+        print(f"  {name}: {df.shape[0]} subjects, {df.shape[1]-1} features -> {output_file}")
+        return df
+    except Exception as e:
+        print(f"  [ERROR] {name}: {e}")
+        return None
+ 
+ 
+def _run_patient_module(
+        merged_dir:    Path,
+        pattern:       str,
+        patient_excel: Path | None,
+) -> pd.DataFrame | None:
+    """Special handler for patient features (needs patient_excel)."""
+    if patient_excel is None:
+        print("  [SKIP] patient module — no --patient-excel provided")
+        return None
+ 
+    output_file = FEATURES_DIR / "patient_features.csv"
+    files = sorted(merged_dir.glob(pattern))
+ 
+    print(f"\n{'='*60}")
+    print(f"  Module: patient  ->  {output_file}")
+    print(f"{'='*60}")
+ 
     rows = []
-    for i, f in enumerate(files, 1):
-        print(f"  [{i}/{n_total}] {f.name}")
-        result = _extract_one((f, fs, patient_excel))
-        if result is not None:
-            rows.append(result)
-
-    new_df = pd.DataFrame(rows)
-
-    if cached_df is not None and not new_df.empty:
-        combined = pd.concat([cached_df, new_df], ignore_index=True)
-    elif cached_df is not None:
-        combined = cached_df
-    else:
-        combined = new_df
-
-    print(f"\nDone: {combined.shape[0]} subjects | {combined.shape[1] - 1} features\n")
+    for f in files:
+        try:
+            row = extract_patient_features(f, patient_excel=patient_excel)
+            rows.append(row)
+        except Exception as e:
+            print(f"  [SKIP] {f.name} — {e}")
+ 
+    if not rows:
+        return None
+ 
+    df = pd.DataFrame(rows)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_file, index=False)
+    print(f"  patient: {df.shape[0]} subjects, {df.shape[1]-1} features -> {output_file}")
+    return df
+ 
+ 
+# =====================================================================
+# 2) Merge all per-module CSVs into one feature table
+# =====================================================================
+ 
+def merge_feature_csvs(
+        features_dir: Path = FEATURES_DIR,
+        output_file:  Path | None = None,
+) -> pd.DataFrame:
+    """
+    Outer-join all ``*_features.csv`` files in ``features_dir`` on ``subject_id``.
+ 
+    Parameters
+    ----------
+    features_dir : Path
+        Directory containing per-module feature CSVs.
+    output_file : Path | None
+        If provided, save the merged DataFrame here.
+ 
+    Returns
+    -------
+    pd.DataFrame
+        One row per subject, all features merged.
+    """
+    csv_files = sorted(features_dir.glob("*_features.csv"))
+ 
+    if not csv_files:
+        print("No per-module feature CSVs found — nothing to merge.")
+        return pd.DataFrame()
+ 
+    dfs = []
+    for f in csv_files:
+        try:
+            df = pd.read_csv(f, low_memory=False)
+            if "subject_id" not in df.columns:
+                print(f"  [SKIP] {f.name} — missing 'subject_id' column")
+                continue
+            print(f"  Loaded {f.name}: {df.shape[0]} subjects, {df.shape[1]-1} features")
+            dfs.append(df)
+        except Exception as e:
+            print(f"  [SKIP] {f.name} — {e}")
+ 
+    if not dfs:
+        return pd.DataFrame()
+ 
+    # Outer join all DataFrames on subject_id
+    combined = reduce(
+        lambda left, right: pd.merge(left, right, on="subject_id", how="outer", suffixes=("", "_dup")),
+        dfs
+    )
+ 
+    # Drop any duplicate columns created by merge (e.g. subject_id_dup)
+    dup_cols = [c for c in combined.columns if c.endswith("_dup")]
+    if dup_cols:
+        combined.drop(columns=dup_cols, inplace=True)
+ 
+    if output_file is not None:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        combined.to_csv(output_file, index=False)
+        print(f"\nMerged feature table saved -> {output_file}  "
+              f"({combined.shape[0]} subjects, {combined.shape[1]-1} features)")
+ 
+    return combined
+ 
+ 
+# =====================================================================
+# 3) Main entry point — collect_features()
+# =====================================================================
+ 
+def collect_features(
+        merged_dir:    str | Path,
+        fs:            float = 250.0,
+        pattern:       str = "*_merged.csv",
+        modules:       list[str] | None = None,
+        force:         bool = False,
+        patient_excel: str | Path | None = None,
+        output_csv:    str | Path | None = None,
+) -> pd.DataFrame:
+    """
+    Run feature extraction modules and merge results into a single CSV.
+ 
+    Parameters
+    ----------
+    merged_dir : str | Path
+        Directory containing merged CSV files (output of merge_all).
+    fs : float
+        Sampling frequency in [Hz]. Default is **250.0 Hz**.
+    pattern : str
+        Glob pattern to match merged CSVs. Default is ``'*_merged.csv'``.
+    modules : list[str] | None
+        Which modules to run. None or empty = all modules.
+        Valid names: 'eog', 'gssc', 'eeg', 'bout', 'patient'.
+    force : bool
+        If True, delete existing per-module CSVs for selected modules
+        before re-extracting. Default is False.
+    patient_excel : str | Path | None
+        Path to patient info Excel file. Required if 'patient' module is selected.
+    output_csv : str | Path | None
+        Path to save the final merged feature CSV.
+        Default is ``features_csv/features.csv``.
+ 
+    Returns
+    -------
+    pd.DataFrame
+        Merged feature table (one row per subject).
+    """
+    merged_dir = Path(merged_dir)
+    if output_csv is None:
+        output_csv = FEATURES_DIR / "features.csv"
+    output_csv = Path(output_csv)
+ 
+    # Default to all modules
+    if not modules:
+        modules = list(ALL_MODULE_NAMES)
+ 
+    print(f"\n{'='*60}")
+    print(f"  Feature extraction")
+    print(f"  Modules : {modules}")
+    print(f"  Force   : {force}")
+    print(f"  Dir     : {merged_dir}")
+    print(f"{'='*60}")
+ 
+    # ---- Force: delete selected module CSVs ----
+    if force:
+        for name in modules:
+            if name == "patient":
+                csv_path = FEATURES_DIR / "patient_features.csv"
+            elif name in MODULE_REGISTRY:
+                _, csv_name = MODULE_REGISTRY[name]
+                csv_path = FEATURES_DIR / csv_name
+            else:
+                continue
+ 
+            if csv_path.exists():
+                csv_path.unlink()
+                print(f"  [FORCE] Deleted {csv_path}")
+ 
+    # ---- Run selected modules ----
+    for name in modules:
+        _run_module(
+            name=name,
+            merged_dir=merged_dir,
+            fs=fs,
+            pattern=pattern,
+            patient_excel=Path(patient_excel) if patient_excel else None,
+        )
+ 
+    # ---- Merge all per-module CSVs ----
+    print(f"\n{'='*60}")
+    print(f"  Merging all per-module CSVs")
+    print(f"{'='*60}")
+ 
+    combined = merge_feature_csvs(FEATURES_DIR, output_file=output_csv)
+ 
     return combined
 
-# —————————————————————————————————————————————————————————————————————
-# Helper for parallel processing 
-# —————————————————————————————————————————————————————————————————————
-def _extract_one(args):
-    f, fs, patient_excel = args
-    record = {}
-    try:
-        record.update(extract_features(f, fs=fs))
-    except Exception as e:
-        print(f"  [SKIP EOG] {f.name} — {e}")
-    try:
-        record.update(extract_gssc_features(f, fs=fs))
-    except Exception as e:
-        print(f"  [SKIP GSSC] {f.name} — {e}")
-    try:
-        record.update(extract_eeg_features(f, fs=fs))
-    except Exception as e:
-        print(f"  [SKIP EEG] {f.name} — {e}")
-    if patient_excel is not None:
-        try:
-            record.update(extract_patient_features(f, patient_excel=patient_excel))
-        except Exception as e:
-            print(f"  [SKIP PATIENT] {f.name} — {e}")
-    return record if record else None
 
 # =====================================================================
-# 2)  HTML REPORT  
+# 4)  HTML REPORT  
 # =====================================================================
 def _svg_no_data(width: int = 520, height: int = 240) -> str:
     return (
@@ -150,7 +306,6 @@ def _build_histogram_svg(
     counts, edges = np.histogram(values, bins=n_bins)
     max_count = max(counts) if max(counts) > 0 else 1
 
-    # Padding reserves room for axis titles
     pad_l, pad_r, pad_t, pad_b = 58, 22, 22, 58
     plot_w = width - pad_l - pad_r
     plot_h = height - pad_t - pad_b
@@ -159,7 +314,6 @@ def _build_histogram_svg(
 
     parts = []
 
-    # --- Horizontal gridlines + Y-axis tick labels ---
     for i in range(5):
         frac = i / 4
         y = pad_t + plot_h * (1 - frac)
@@ -173,7 +327,6 @@ def _build_histogram_svg(
             f'text-anchor="end">{val}</text>'
         )
 
-    # --- Bars ---
     for i, c in enumerate(counts):
         bh = (c / max_count) * plot_h if max_count > 0 else 0
         x = pad_l + i * bar_w + gap / 2
@@ -183,7 +336,6 @@ def _build_histogram_svg(
             f'height="{bh:.1f}" fill="#0E7490" rx="2"/>'
         )
 
-    # --- Axis lines ---
     y_axis = pad_t + plot_h
     parts.append(
         f'<line x1="{pad_l}" y1="{y_axis:.1f}" x2="{width - pad_r}" y2="{y_axis:.1f}" '
@@ -194,7 +346,6 @@ def _build_histogram_svg(
         f'stroke="#1C2A3A" stroke-width="1.2"/>'
     )
 
-    # --- X-axis tick labels (min, mid, max) ---
     vmin, vmax = edges[0], edges[-1]
     vmid = (vmin + vmax) / 2
     tick_y = y_axis + 14
@@ -202,13 +353,11 @@ def _build_histogram_svg(
     parts.append(f'<text x="{pad_l + plot_w / 2}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="middle">{vmid:.3g}</text>')
     parts.append(f'<text x="{width - pad_r}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="end">{vmax:.3g}</text>')
 
-    # --- X-axis title ---
     parts.append(
         f'<text x="{pad_l + plot_w / 2}" y="{height - 10}" font-size="12" '
         f'fill="#1C2A3A" text-anchor="middle" font-weight="600">{x_label}</text>'
     )
 
-    # --- Y-axis title ---
     y_title_x = 16
     y_title_y = pad_t + plot_h / 2
     parts.append(
@@ -227,20 +376,6 @@ def _build_boxplot_svg(
         ) -> str:
     """
     Build a SVG boxplot with jittered data points and outliers highlighted.
-
-    Parameters
-    ----------
-    values : list of float
-        Numeric values to plot.
-    x_label : str
-        Label for the X-axis (feature description + units).
-    width, height : int
-        SVG dimensions in pixels.
-    
-    Returns
-    -------
-    str
-        SVG markup for a boxplot with jittered data points and outliers highlighted.
     """
     if not values or len(values) < 2:
         return _svg_no_data(width, height)
@@ -271,13 +406,11 @@ def _build_boxplot_svg(
 
     parts = []
 
-    # --- Whisker line ---
     parts.append(
         f'<line x1="{xpos(whisker_lo):.1f}" y1="{box_mid:.1f}" '
         f'x2="{xpos(whisker_hi):.1f}" y2="{box_mid:.1f}" stroke="#64748B" stroke-width="1.5"/>'
     )
 
-    # --- Whisker caps ---
     for wv in [whisker_lo, whisker_hi]:
         x = xpos(wv)
         parts.append(
@@ -285,7 +418,6 @@ def _build_boxplot_svg(
             f'stroke="#64748B" stroke-width="1.5"/>'
         )
 
-    # --- IQR box (ocean palette) ---
     bx = xpos(q1)
     bw = xpos(q3) - xpos(q1)
     parts.append(
@@ -293,14 +425,12 @@ def _build_boxplot_svg(
         f'fill="#CFFAFE" stroke="#0E7490" stroke-width="2" rx="3"/>'
     )
 
-    # --- Median line (coral accent) ---
     mx = xpos(med)
     parts.append(
         f'<line x1="{mx:.1f}" y1="{box_top:.1f}" x2="{mx:.1f}" y2="{box_bot:.1f}" '
         f'stroke="#F43F5E" stroke-width="2.5"/>'
     )
 
-    # --- Jittered data points ---
     rng = np.random.RandomState(42)
     jitter = rng.uniform(-plot_h * 0.15, plot_h * 0.15, size=len(arr))
     for i, v in enumerate(arr):
@@ -310,33 +440,28 @@ def _build_boxplot_svg(
             f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="3" fill="#0E7490" opacity="0.55"/>'
         )
 
-    # --- Outliers ---
     for v in outliers:
         cx = xpos(v)
         parts.append(
             f'<circle cx="{cx:.1f}" cy="{box_mid:.1f}" r="3.5" fill="none" stroke="#F43F5E" stroke-width="1.6"/>'
         )
 
-    # --- X-axis line ---
     y_axis = pad_t + plot_h
     parts.append(
         f'<line x1="{pad_l}" y1="{y_axis:.1f}" x2="{width - pad_r}" y2="{y_axis:.1f}" '
         f'stroke="#1C2A3A" stroke-width="1.2"/>'
     )
 
-    # --- X-axis tick labels ---
     tick_y = y_axis + 14
     vmid_label = (vmin + vmax) / 2
     parts.append(f'<text x="{pad_l}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="start">{vmin:.3g}</text>')
     parts.append(f'<text x="{pad_l + plot_w / 2}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="middle">{vmid_label:.3g}</text>')
     parts.append(f'<text x="{width - pad_r}" y="{tick_y}" font-size="11" fill="#475569" text-anchor="end">{vmax:.3g}</text>')
 
-    # --- Stat labels at top ---
     parts.append(f'<text x="{xpos(q1):.1f}" y="{pad_t - 6}" font-size="10" fill="#64748B" text-anchor="middle">Q1={q1:.2g}</text>')
     parts.append(f'<text x="{xpos(med):.1f}" y="{pad_t - 6}" font-size="10" fill="#F43F5E" text-anchor="middle" font-weight="700">med={med:.2g}</text>')
     parts.append(f'<text x="{xpos(q3):.1f}" y="{pad_t - 6}" font-size="10" fill="#64748B" text-anchor="middle">Q3={q3:.2g}</text>')
 
-    # --- X-axis title ---  
     parts.append(
         f'<text x="{pad_l + plot_w / 2}" y="{height - 10}" font-size="12" '
         f'fill="#1C2A3A" text-anchor="middle" font-weight="600">{x_label}</text>'
@@ -408,6 +533,24 @@ FEATURE_DESCRIPTIONS = {
     "phasic_fraction":           "Phasic / (Phasic + Tonic) — key RBD biomarker",
     "tonic_fraction":            "Tonic / (Phasic + Tonic)",
 
+    # Phasic / Tonic Bouts
+    "phasic_bout_count":             "Number of phasic bouts (consecutive 4s sub-epochs)",
+    "phasic_bout_mean_duration_s":   "Mean phasic bout duration [seconds]",
+    "phasic_bout_max_duration_s":    "Longest phasic bout [seconds]",
+    "phasic_bout_min_duration_s":    "Shortest phasic bout [seconds]",
+    "phasic_bout_std_duration_s":    "Std of phasic bout durations [seconds]",
+    "phasic_bout_median_duration_s": "Median phasic bout duration [seconds]",
+    "phasic_bout_rate_per_min":      "Phasic bouts per minute of REM sleep",
+    "phasic_bout_total_duration_s":  "Total time in phasic bouts [seconds]",
+    "tonic_bout_count":              "Number of tonic bouts (consecutive 4s sub-epochs)",
+    "tonic_bout_mean_duration_s":    "Mean tonic bout duration [seconds]",
+    "tonic_bout_max_duration_s":     "Longest tonic bout [seconds]",
+    "tonic_bout_min_duration_s":     "Shortest tonic bout [seconds]",
+    "tonic_bout_std_duration_s":     "Std of tonic bout durations [seconds]",
+    "tonic_bout_median_duration_s":  "Median tonic bout duration [seconds]",
+    "tonic_bout_rate_per_min":       "Tonic bouts per minute of REM sleep",
+    "tonic_bout_total_duration_s":   "Total time in tonic bouts [seconds]",
+
     # GSSC probabilities
     "rem_mean_prob_rem":         "Mean GSSC prob(REM) during REM — high = confident staging",
     "rem_mean_prob_w":           "Mean prob(Wake) during REM — high = unstable REM",
@@ -421,17 +564,17 @@ FEATURE_DESCRIPTIONS = {
     # REM stability
     "rem_stability_index":       "Mean prob_rem in REM epochs — higher = more stable REM",
     "rem_fragmentation_index":   "REM-to-nonREM transitions per hour — higher = more fragmented",
-    "rem_w_transition_frac":     "Fraction of REM exits going directly to Wake — elevated in RBD - NaN values indicate a patient has zero REM-to-Wake transitions",
+    "rem_w_transition_frac":     "Fraction of REM exits going directly to Wake — elevated in RBD",
     "amount_of_rem":             "Fraction of ALL samples where prob_rem > 0.5 (Cesari definition)",
 
     # EEG features
     "eeg_loc__rem__delta":        "EEG (LOC) delta power during REM [µV²/Hz]",
-  "eeg_loc__rem__theta":        "EEG (LOC) theta power during REM [µV²/Hz]",
-  "eeg_loc__rem__alpha":        "EEG (LOC) alpha power during REM [µV²/Hz]",
-  "eeg_loc__rem__beta":         "EEG (LOC) beta power during REM [µV²/Hz]",
-  "eeg_loc__rem__total":        "EEG (LOC) total band power during REM [µV²/Hz]",
-  "eeg_loc__rem__theta_ratio":  "EEG (LOC) theta / total power ratio during REM",
-  "eeg_roc__rem__delta":        "EEG (ROC) delta power during REM [µV²/Hz]",
+    "eeg_loc__rem__theta":        "EEG (LOC) theta power during REM [µV²/Hz]",
+    "eeg_loc__rem__alpha":        "EEG (LOC) alpha power during REM [µV²/Hz]",
+    "eeg_loc__rem__beta":         "EEG (LOC) beta power during REM [µV²/Hz]",
+    "eeg_loc__rem__total":        "EEG (LOC) total band power during REM [µV²/Hz]",
+    "eeg_loc__rem__theta_ratio":  "EEG (LOC) theta / total power ratio during REM",
+    "eeg_roc__rem__delta":        "EEG (ROC) delta power during REM [µV²/Hz]",
 }
 
 # Feature grouping for the cheat sheet
@@ -468,6 +611,17 @@ FEATURE_GROUPS = [
 
     ("Phasic / Tonic",      ["phasic_epoch_count", "tonic_epoch_count",
                              "phasic_fraction", "tonic_fraction"]),
+
+    ("Phasic / Tonic Bouts", [
+        "phasic_bout_count", "phasic_bout_mean_duration_s",
+        "phasic_bout_max_duration_s", "phasic_bout_min_duration_s",
+        "phasic_bout_std_duration_s", "phasic_bout_median_duration_s",
+        "phasic_bout_rate_per_min", "phasic_bout_total_duration_s",
+        "tonic_bout_count", "tonic_bout_mean_duration_s",
+        "tonic_bout_max_duration_s", "tonic_bout_min_duration_s",
+        "tonic_bout_std_duration_s", "tonic_bout_median_duration_s",
+        "tonic_bout_rate_per_min", "tonic_bout_total_duration_s",
+    ]),
 
     ("GSSC Probabilities",  ["rem_mean_prob_rem", "rem_mean_prob_w",
                              "rem_mean_prob_n1", "rem_mean_prob_n2", "rem_mean_prob_n3",
@@ -598,8 +752,6 @@ def generate_report(
     margin: 0 auto;
     padding: 28px 22px;
   }}
-
-  /* ---- Header ---- */
   header {{
     background: #fff;
     border: 1px solid #F0E9D7;
@@ -673,8 +825,6 @@ def generate_report(
     margin-top: 6px;
     font-weight: 600;
   }}
-
-  /* ---- Cards ---- */
   .card {{
     background: #fff;
     border: 1px solid #F0E9D7;
@@ -692,8 +842,6 @@ def generate_report(
     padding-bottom: 10px;
     border-bottom: 1px dashed #E5DDC8;
   }}
-
-  /* ---- Stats table ---- */
   .stats-table {{
     width: 100%;
     border-collapse: collapse;
@@ -729,8 +877,6 @@ def generate_report(
     margin-left: 6px;
     border: 1px solid #FECACA;
   }}
-
-  /* ---- Controls ---- */
   .controls {{
     display: flex;
     align-items: center;
@@ -779,8 +925,6 @@ def generate_report(
     color: #fff;
   }}
   .toggle-btn:hover:not(.active) {{ color: #1C2A3A; }}
-
-  /* ---- Plot grid ---- */
   .plot-grid {{
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
@@ -824,8 +968,6 @@ def generate_report(
     font-style: italic;
   }}
   .plot-card svg {{ width: 100%; height: auto; }}
-
-  /* ---- Cheat sheet ---- */
   .cheat-table {{
     width: 100%;
     border-collapse: collapse;
@@ -861,7 +1003,6 @@ def generate_report(
     margin-bottom: 14px;
     font-style: italic;
   }}
-
   footer {{
     padding: 24px 0 8px;
     color: #94A3B8;
@@ -951,26 +1092,32 @@ function filterPlots() {{
 
 
 # =====================================================================
-# 3)  MAIN
+# 5)  MAIN — standalone usage
 # =====================================================================
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Simple feature report — uses your existing feature functions.",
+        description="Feature extraction + HTML report.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         Examples:
-          python simple_feat_report.py merged_csv_eog/
-          python simple_feat_report.py merged_csv_eog/ --output reports/my_report.html
-          python simple_feat_report.py merged_csv_eog/ --fs 128 --pattern "*.csv"
-          python simple_feat_report.py merged_csv_eog/ --csv features_csv/simple.csv
+          python feat_report.py merged_csv_eog/
+          python feat_report.py merged_csv_eog/ --modules bout eog --force
+          python feat_report.py merged_csv_eog/ --output reports/my_report.html
         """,
     )
     parser.add_argument("merged_dir", type=str, help="Directory with merged CSV files")
     parser.add_argument("--fs", type=float, default=250.0, help="Sampling frequency [Hz] (default: 250)")
     parser.add_argument("--pattern", type=str, default="*_merged.csv", help="Glob pattern (default: *_merged.csv)")
-    parser.add_argument("--output", type=str, default=None, help="Output HTML path (default: reports/simple_report.html)")
-    parser.add_argument("--csv", type=str, default=None, help="Also save feature table as CSV")
+    parser.add_argument("--output", type=str, default=None, help="Output HTML path (default: reports/features_report.html)")
+    parser.add_argument("--csv", type=str, default=None, help="Output merged feature CSV path")
+    parser.add_argument("--modules", type=str, nargs="*", default=None,
+                       choices=["eog", "gssc", "eeg", "bout", "patient"],
+                       help="Which modules to run (default: all)")
+    parser.add_argument("--force", action="store_true",
+                       help="Delete existing module CSVs before re-extracting")
+    parser.add_argument("--patient-excel", type=str, default=None,
+                       help="Path to patient info Excel file (needed for 'patient' module)")
 
     args = parser.parse_args()
     merged_dir = Path(args.merged_dir)
@@ -980,18 +1127,19 @@ def main():
         sys.exit(1)
 
     # ---- Collect features ----
-    combined = collect_features(merged_dir, fs=args.fs, pattern=args.pattern, patient_excel=Path(args.patient_excel) if args.patient_excel else None,)
+    combined = collect_features(
+        merged_dir,
+        fs=args.fs,
+        pattern=args.pattern,
+        modules=args.modules,
+        force=args.force,
+        patient_excel=args.patient_excel,
+        output_csv=args.csv,
+    )
 
     if combined.empty:
         print("Error: No features extracted.")
         sys.exit(1)
-
-    # ---- Optionally save CSV ----
-    if args.csv:
-        csv_path = Path(args.csv)
-        csv_path.parent.mkdir(parents=True, exist_ok=True)
-        combined.to_csv(csv_path, index=False)
-        print(f"Feature CSV saved -> {csv_path}")
 
     # ---- Generate HTML report ----
     output_path = Path(args.output) if args.output else Path("reports/features_report.html")

@@ -107,6 +107,68 @@ def _eeg_band_power_features(df: pd.DataFrame, fs: float) -> dict:
 
     return feats
 
+# =========================================================================================================
+# Batch extraction
+# =========================================================================================================
+FEATURES_DIR = Path("features_csv")
+FEATURES_DIR.mkdir(parents=True, exist_ok=True)
+
+def extract_eeg_features_batch(
+        merged_dir:  str | Path,
+        output_file: str | Path | None = None,
+        fs:          float = 128.0,
+        pattern:     str = "*_merged.csv",
+) -> pd.DataFrame:
+    """
+    Run ``extract_eeg_features`` on every merged CSV in a directory and
+    collect results into a single DataFrame.
+
+    Parameters
+    ----------
+    merged_dir : str | Path
+        Directory containing merged CSV files (output of merge_all).
+    output_file : str | Path | None
+        If provided, save the feature DataFrame to this CSV path.
+        Default saves to ``features_csv/eeg_features.csv``.
+    fs : float
+        Sampling frequency. Default is **128.0 Hz**.
+    pattern : str
+        Glob pattern to match merged CSVs. Default is ``'*_merged.csv'``.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per subject with all extracted EEG features.
+    """
+    merged_dir = Path(merged_dir)
+    files = sorted(merged_dir.glob(pattern))
+
+    if not files:
+        raise FileNotFoundError(
+            f"No files matching '{pattern}' found in {merged_dir}"
+        )
+
+    print(f"\nFound {len(files)} merged CSV(s) in {merged_dir}")
+
+    rows = []
+    for f in files:
+        try:
+            row = extract_eeg_features(f, fs=fs)
+            rows.append(row)
+        except Exception as e:
+            print(f"  [SKIP] {f.name} — {e}")
+
+    feature_df = pd.DataFrame(rows)
+
+    if output_file is None:
+        output_file = FEATURES_DIR / "eeg_features.csv"
+    output_file = Path(output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    feature_df.to_csv(output_file, index=False)
+    print(f"\nEEG feature table saved to: {output_file}  ({feature_df.shape[0]} subjects, {feature_df.shape[1]-1} features)")
+
+    return feature_df
+
 
 # =========================================================================================================
 # Main extraction function
