@@ -152,11 +152,15 @@ def edf_to_csv(
         "ROC": roc,   # µV
     })
 
-    # --- 7) Trim to lights-off/lights-on window
+   # --- 7) Trim to lights-off/lights-on window
     if lights_path is not None:
-        lights_off, lights_on = parse_lights_txt(lights_path)
-        df = df[(df["time_sec"] >= lights_off) & (df["time_sec"] <= lights_on)].reset_index(drop=True)
-        print(f"    Trimmed to sleep period: {len(df)} samples remaining.")
+        result = parse_lights_txt(lights_path)
+        if result is not None:
+            lights_off, lights_on = result
+            df = df[(df["time_sec"] >= lights_off) & (df["time_sec"] <= lights_on)].reset_index(drop=True)
+            print(f"    Trimmed to sleep period: {len(df)} samples remaining.")
+        else:
+            print(f"    Lights times unavailable — using full recording.")
 
     # --- 8) Save to CSV ---
     patient_id = edf_path.parent.name

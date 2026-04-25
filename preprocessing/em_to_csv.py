@@ -138,15 +138,19 @@ def em_to_csv(
     raw.set_channel_types({"LOC": "eog", "ROC": "eog"})
  
     # --- 3) Crop to lights window ---
-    lights_off = 0.0                                                        # Default to 0 if no lights.txt provided, so times remain absolute
+    lights_off = 0.0
     if lights_path is not None:
-        lights_off, lights_on = parse_lights_txt(lights_path)
-        lights_off = max(0.0, lights_off)
-        lights_on  = min(lights_on, raw.times[-1])
-        raw = raw.crop(tmin=lights_off, tmax=lights_on)
-        print(f"    Trimmed to sleep period: {lights_off:.1f} [s] - {lights_on:.1f} [s].")
+        result = parse_lights_txt(lights_path)
+        if result is not None:
+            lights_off, lights_on = result
+            lights_off = max(0.0, lights_off)
+            lights_on  = min(lights_on, raw.times[-1])
+            raw = raw.crop(tmin=lights_off, tmax=lights_on)
+            print(f"    Trimmed to sleep period: {lights_off:.1f} [s] - {lights_on:.1f} [s].")
+        else:
+            print(f"    Lights times unavailable — using full recording.")
  
-    # ---4) Resample if needed ---
+    # --- 4) Resample if needed ---
     sf = raw.info["sfreq"]  
     if sf != fs_target:
         print(f"\nResampling {sf} [Hz] to {fs_target} [Hz]")

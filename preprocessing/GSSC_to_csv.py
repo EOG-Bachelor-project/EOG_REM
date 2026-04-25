@@ -126,9 +126,13 @@ def GSSC_to_csv(
 
     # --- 7) Trim to lights-off/lights-on window
     if lights_path is not None:
-        lights_off, lights_on = parse_lights_txt(lights_path)
-        df = df[(df["epoch_start"] >= lights_off) & (df["epoch_start"] <= lights_on)].reset_index(drop=True)
-        print(f"    Trimmed to sleep period: {len(df)} samples remaining.")
+        result = parse_lights_txt(lights_path)
+        if result is not None:
+            lights_off, lights_on = result
+            df = df[(df["epoch_start"] >= lights_off) & (df["epoch_start"] <= lights_on)].reset_index(drop=True)
+            print(f"    Trimmed to sleep period: {len(df)} samples remaining.")
+        else:
+            print(f"    Lights times unavailable — using full recording.")
 
     # --- 8) Save as CSV ---
     out_path = out_dir / f"{session_id}_gssc.csv"

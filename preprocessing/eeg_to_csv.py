@@ -91,8 +91,12 @@ def eeg_to_csv(
     lights_off = 0.0
     if lights_path is not None:
         from preprocessing.index_file import parse_lights_txt
-        lights_off, _ = parse_lights_txt(lights_path)
-        print(f"    Lights off offset: {lights_off:.1f} [s]")
+        result = parse_lights_txt(lights_path)
+        if result is not None:
+            lights_off, _ = result
+            print(f"    Lights off offset: {lights_off:.1f} [s]")
+        else:
+            print(f"    Lights times unavailable — using 0.0 [s] offset.")
 
     # --- 2) Extract EEG signals ---
     def _interp_nans(arr: np.ndarray) -> np.ndarray:

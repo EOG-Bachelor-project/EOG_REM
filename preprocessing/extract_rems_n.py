@@ -5,7 +5,6 @@
 # =====================================================================
 # Imports
 # =====================================================================
-from unittest import result
 
 import mne 
 import numpy as np
@@ -70,7 +69,7 @@ def extract_rems_from_edf(
         A dataframe containing extracted REM events if successful.
         Returns None if required EOG channels are missing.
     """
-    # --- Validate inputs ---
+    # --- 1) Validate inputs ---
     if not isinstance(edf_path, Path):
         raise ValueError(f"edf_path must be a Path object. Got: {type(edf_path)}")
     if not isinstance(out_dir, Path):
@@ -87,7 +86,7 @@ def extract_rems_from_edf(
 
     session_id = edf_path.parent.name
 
-    # --- Load EDF ---
+    # --- 2) Load EDF ---
     if raw is None:
         raw = mne.io.read_raw_edf(edf_path, preload=pre_load, verbose=False)
         print(" Loaded raw:", raw)
@@ -102,33 +101,38 @@ def extract_rems_from_edf(
     else:
         raw = raw.copy()
     
-    # --- Check required channels ---
+    # --- 3) Check required channels ---
     missing = [ch for ch in ["LOC", "ROC"] if ch not in raw.ch_names]
     if missing:
         print(f"Skipping {edf_path.parent.name} {edf_path.name} - missing channels: {missing}")
         return None
 
-    # --- Set channel types ---
+    # --- 4) Set channel types ---
     raw.set_channel_types({'LOC':'eog','ROC':'eog'})
 
-    # --- Trim to lights-off/lights-on window if provided  ---
+    # --- 5) Trim to lights-off/lights-on window if provided  ---
     # We do this before staging and detection, so that staging/detection only operates on the sleep period.
+    lights_off = 0.0  # default - used later for offsetting event times
     if lights_path is not None:
-        lights_off, lights_on = parse_lights_txt(lights_path)
-        lights_off = max(0.0, lights_off)
-        lights_on  = min(lights_on, raw.times[-1])
-        raw = raw.crop(tmin=lights_off, tmax=lights_on)
-        print(f"    Trimmed to sleep period: {lights_off:.1f} [s] - {lights_on:.1f} [s].")
+        result = parse_lights_txt(lights_path)
+        if result is not None:
+            lights_off, lights_on = result
+            lights_off = max(0.0, lights_off)
+            lights_on  = min(lights_on, raw.times[-1])
+            raw = raw.crop(tmin=lights_off, tmax=lights_on)
+            print(f"    Trimmed to sleep period: {lights_off:.1f} [s] - {lights_on:.1f} [s].")
+        else:
+            print(f"    Lights times unavailable — using full recording.")
 
 
-    # --- GSCC staging EOG only ---
+    # --- 6) GSSC staging EOG only ---
     if gssc_df is None:
         gssc_df = GSSC_to_csv(edf_path, lights_path=lights_path)
     stage_map = {"W": 0, "N1": 1, "N2": 2, "N3": 3, "REM": 4}
     hypno_int = gssc_df["stage"].map(stage_map).fillna(0).astype(int).values
         
     
-    # --- Resample EDF ---
+    # --- 7) Resample EDF ---
     # If EDF is not already at 128 [Hz], resample it. 
     # This is required for the REM detection to work properly, 
     # and also ensures that the sample indices in the output 
@@ -144,12 +148,12 @@ def extract_rems_from_edf(
     print(f"    Signal length: {len(loc)} samples at {sf} [Hz] = {len(loc)/sf:.1f} [s]")
     print(f"    hypno_int epochs: {len(hypno_int)} epochs = {len(hypno_int) * 30:.1f} [s]")
     
-    # --- Upsampling hypnogram --- 
+    # --- 8) Upsampling hypnogram --- 
     # We do this to match signal length 
     samples_per_epoch = sf * 30
     hypno_up = np.repeat(hypno_int, samples_per_epoch)
     
-    # --- Trim to multiple of 2^14 for dctwt( used in detect_rem_jaec) ---
+    # --- 9) Trim to multiple of 2^14 for dctwt( used in detect_rem_jaec) ---
     factor = 2**14
     trim = (min(len(loc), len(hypno_up)) // factor) * factor
     if trim == 0:
@@ -168,14 +172,14 @@ def extract_rems_from_edf(
     print(f"    Total epochs: {len(hypno_up) / (128*30):.1f}")
 
 
-    # --- Rem detection ---
+    # --- 10) Rem detection ---
     result = detect_rem_jaec(loc, roc, hypno_up, method = 'ssc_threshold')
 
-    # --- Extract cleaned signals before artefact detection ---
+    # --- 11) Extract cleaned signals before artefact detection ---
     loc_clean = result._data_filt[0]
     roc_clean = result._data_filt[1]
 
-    # --- Create dataframe to retrun results ---
+    # --- 12) Create dataframe to retrun results ---
     df = result.summary()
 
     df['Stage'] = df['Stage'].map({
@@ -185,14 +189,14 @@ def extract_rems_from_edf(
       3:'N3', 
       4:'REM'})
     
-    # --- Remove artefacts ---
+    # --- 13) Remove artefacts ---
     # Called before the lights_off offset block below, so df['Start']/df['End']
     # are still in signal-relative time (t=0) and match the sample indices of loc/roc.
     print("\nRemoving artefacts...")
     df, loc, roc = remove_artefacts(df, loc, roc, amplitude_thresh=300.0, fs=sf)
     print(f"Clean REM events remaining: {len(df)}")
  
-    # --- Offset event times ---
+    # --- 14) Offset event times ---
     # This will allign with EOG `time_sec` (which starts at `lights_off`)
     # `detect_rem_jaec()` operates on a signal starting at 0, so we add `lights_off` 
     # to make Start, End, Peak match the absolute time reference in the EOG CSV
