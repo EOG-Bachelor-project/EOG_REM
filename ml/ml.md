@@ -34,15 +34,15 @@ In our project, a model learns which combinations of EOG features (e.g., eye mov
 ---
 
 ### Training error vs. generalization error
-For a model $\mathcal{M}_s$, the **training error** is the average error on the training set (Ch. 10.1.1):
+For a model $\mathcal{M}_s$, the **training error** is the average error on the training set (Equation 10.1):
 $$
-E^{\text{train}}_{\mathcal{M}_s} = \frac{1}{N^{\text{train}}} \sum_{i \in \mathcal{D}^{\text{train}}} L(y_i, f_{\mathcal{M}_s}(x_i, w)) \tag{10.1},
+E^{\text{train}}_{\mathcal{M}_s} = \frac{1}{N^{\text{train}}} \sum_{i \in \mathcal{D}^{\text{train}}} L(y_i, f_{\mathcal{M}_s}(x_i, w)),
 $$
 where $L$ is a loss function (e.g., squared error for regression, misclassification for classification).
 
-The **generalization error** is the expected error on all future, unseen data drawn from the true distribution (Ch. 10.1.2):
+The **generalization error** is the expected error on all future, unseen data drawn from the true distribution (Equation 10.2):
 $$
-E^{\text{gen}}_{\mathcal{M}} = \mathbb{E}_{(x,y)}[L(y, f_{\mathcal{M}}(x))] \tag{10.2}.
+E^{\text{gen}}_{\mathcal{M}} = \mathbb{E}_{(x,y)}[L(y, f_{\mathcal{M}}(x))].
 $$
 
 This is the quantity that ultimately decides which model is better. Since the training set was used to train the model, we should expect $E^{\text{train}}_{\mathcal{M}}$ to be lower than $E^{\text{gen}}_{\mathcal{M}}$. The problem is that we cannot compute $E^{\text{gen}}_{\mathcal{M}}$ directly since we don't know the true distribution of the data — this is why we need cross-validation.
@@ -98,9 +98,9 @@ In our project, with ~170 EOG features and a limited patient cohort, regularizat
 ---
 
 ### Bias-variance decomposition
-The generalization error can be decomposed into three terms (Ch. 14.2):
+The generalization error can be decomposed into three terms (Equation 14.9):
 $$
-\mathbb{E}_{\mathcal{D}}[E^{\text{gen}}] = \mathbb{E}_x\left[ \underbrace{\text{Var}_{y|x}[y]}_{\text{irreducible noise}} + \underbrace{\text{Bias}^2}_{\text{systematic error}} + \underbrace{\text{Variance}}_{\text{model sensitivity}} \right] \tag{14.9}
+\mathbb{E}_{\mathcal{D}}[E^{\text{gen}}] = \mathbb{E}_x\left[ \underbrace{\text{Var}_{y|x}[y]}_{\text{irreducible noise}} + \underbrace{\text{Bias}^2}_{\text{systematic error}} + \underbrace{\text{Variance}}_{\text{model sensitivity}} \right]
 $$
 
 $$
