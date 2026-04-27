@@ -31,7 +31,12 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
 )
- 
+
+#XGBoost imports 
+import xgboost as xgb
+from xgboost import XGBClassifier
+
+
 from ml.prepare_data import prepare
 
 
@@ -49,7 +54,7 @@ DEFAULT_SEED = 42
 # ================================================================================
 # Model definitions
 # ================================================================================
-def get_models(seed: int = DEFAULT_SEED) -> dict[str, Pipeline]:
+def get_models(seed: int = DEFAULT_SEED, mode: str = "binary") -> dict[str, Pipeline]:
     """
     Return a dictionary of named model pipelines.
  
@@ -67,6 +72,26 @@ def get_models(seed: int = DEFAULT_SEED) -> dict[str, Pipeline]:
     dict[str, Pipeline]
         Mapping of model name to sklearn Pipeline. 
     """
+
+    # XGBoost params depend on mode
+    if mode == "binary":
+        xgb_params = dict(
+            objective    = "binary:logistic",
+            eval_metric  = "logloss",
+            n_estimators = 100,
+            max_depth    = 6,
+            learning_rate= 0.1,
+            random_state = seed,
+        )
+    else:
+        xgb_params = dict(
+            objective    = "multi:softprob",
+            eval_metric  = "mlogloss",
+            n_estimators = 100,
+            max_depth    = 6,
+            learning_rate= 0.1,
+            random_state = seed,
+        )
 
     models = {
         # --- Random Forest ---
@@ -100,6 +125,14 @@ def get_models(seed: int = DEFAULT_SEED) -> dict[str, Pipeline]:
                 probability=True,
             )),
         ]),
+        # --- XGBoost ---
+        # NOTE: XGBoost does not support class_weight="balanced".
+        # Class imbalance is handled via scale_pos_weight (binary)
+        # or compute_sample_weight (multiclass) passed to fit().
+        "XGBoost": Pipeline([
+            ("scaler", StandardScaler()),
+            ("clf", XGBClassifier(**xgb_params)),
+        ]),
     }
     
     return models
@@ -113,6 +146,7 @@ def cross_validate_models(
         y_train:    pd.Series,
         n_folds:    int = 5,
         seed:       int = DEFAULT_SEED,
+        mode:       str = "binary"
         ) -> pd.DataFrame:
     """
     Run stratified k-fold cross-validation on all models.
@@ -136,7 +170,7 @@ def cross_validate_models(
         One row per model with mean and std of each metric across folds.
     """
     # ---- 1) Get models and CV splitter ----
-    models = get_models(seed)
+    models = get_models(seed, mode=mode)
     cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=seed)
     
     # ---- 2) Run cross-validation for each model ----
@@ -195,6 +229,7 @@ def evaluate_on_test(
         X_test:     pd.DataFrame,
         y_test:     pd.Series,
         seed:       int = DEFAULT_SEED,
+        mode:       str = "binary"
         ) -> pd.DataFrame:
     """
     Train all models on the full training set and evaluate on the test set.
@@ -214,7 +249,7 @@ def evaluate_on_test(
         One row per model with test set metrics.
     """
     # ---- 1) Get models ----
-    models = get_models(seed)
+    models = get_models(seed, mode=mode)
  
     print(f"\n{BOLD}Test set evaluation{RESET}")
     print(f"{'='*60}")
@@ -224,7 +259,13 @@ def evaluate_on_test(
     for name, pipeline in models.items():
         print(f"\n  {BOLD}{name}{RESET}")
  
-        pipeline.fit(X_train, y_train)
+        # XGBoost needs sample_weight for class imbalance instead of class_weight
+        if name == "XGBoost":
+            from sklearn.utils.class_weight import compute_sample_weight
+            sample_weight = compute_sample_weight("balanced", y_train)
+            pipeline.fit(X_train, y_train, clf__sample_weight=sample_weight)
+        else:
+            pipeline.fit(X_train, y_train)
         y_pred = pipeline.predict(X_test)
  
         acc  = accuracy_score(y_test, y_pred)
@@ -315,7 +356,83 @@ def get_feature_importance(
         print(f"  {r['feature']:<40s}  {r['importance']:.4f}  {bar}")
  
     return importance_df
+
+# ================================================================================
+# Feature importance (for XGBoost)
+# ================================================================================
  
+def get_xgb_feature_importance(
+        X_train:    pd.DataFrame,
+        y_train:    pd.Series,
+        top_n:      int = 20,
+        seed:       int = DEFAULT_SEED,
+        mode:       str = "binary",
+) -> pd.DataFrame:
+    """
+    Train an XGBoost model and return feature importances.
+
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        Training features.
+    y_train : pd.Series
+        Training labels.
+    top_n : int
+        Number of top features to show. Default is 20.
+    seed : int
+        Random seed. Default is 42.
+    mode : str
+        'binary' or 'multiclass'. Default is 'binary'.
+
+    Returns
+    -------
+    pd.DataFrame
+        Feature importance table sorted by importance (descending).
+    """
+    # ---- 1) Build XGBoost pipeline ----
+    if mode == "binary":
+        xgb_params = dict(
+            objective     = "binary:logistic",
+            eval_metric   = "logloss",
+            n_estimators  = 100,
+            max_depth     = 6,
+            learning_rate = 0.1,
+            random_state  = seed,
+        )
+    else:
+        xgb_params = dict(
+            objective     = "multi:softprob",
+            eval_metric   = "mlogloss",
+            n_estimators  = 100,
+            max_depth     = 6,
+            learning_rate = 0.1,
+            random_state  = seed,
+        )
+
+    xgb_pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("clf",    XGBClassifier(**xgb_params)),
+    ])
+
+    # ---- 2) Fit with sample weights to handle class imbalance ----
+    from sklearn.utils.class_weight import compute_sample_weight
+    sample_weight = compute_sample_weight("balanced", y_train)
+    xgb_pipeline.fit(X_train, y_train, clf__sample_weight=sample_weight)
+
+    # ---- 3) Extract feature importances ----
+    importances  = xgb_pipeline.named_steps["clf"].feature_importances_
+    importance_df = pd.DataFrame({
+        "feature":    X_train.columns,
+        "importance": importances,
+    }).sort_values("importance", ascending=False).reset_index(drop=True)
+
+    print(f"\n{BOLD}Top {top_n} features (XGBoost importance){RESET}")
+    print(f"{'-'*50}")
+    for _, r in importance_df.head(top_n).iterrows():
+        bar = "#" * int(r["importance"] * 200)
+        print(f"  {r['feature']:<40s}  {r['importance']:.4f}  {bar}")
+
+    return importance_df
  
 # ================================================================================
 # Full training pipeline
@@ -373,13 +490,14 @@ def run_training(
     )
  
     # ---- 2) Cross-validation ----
-    cv_results = cross_validate_models(X_train, y_train, n_folds=n_folds, seed=seed)
+    cv_results = cross_validate_models(X_train, y_train, n_folds=n_folds, seed=seed, mode=mode)
  
     # ---- 3) Test set evaluation ----
-    test_results = evaluate_on_test(X_train, y_train, X_test, y_test, seed=seed)
+    test_results = evaluate_on_test(X_train, y_train, X_test, y_test, seed=seed, mode=mode)
  
     # ---- 4) Feature importance ----
     importance_df = get_feature_importance(X_train, y_train, seed=seed)
+    xgb_importance_df = get_xgb_feature_importance(X_train, y_train, seed=seed, mode=mode)
  
     print(f"\n{'='*60}")
     print(f"  {GREEN}Training complete{RESET}")
@@ -389,6 +507,7 @@ def run_training(
         "cv_results": cv_results,
         "test_results": test_results,
         "feature_importance": importance_df,
+        "xgb_feature_importance": xgb_importance_df,
         "X_train": X_train,
         "X_test": X_test,
         "y_train": y_train,

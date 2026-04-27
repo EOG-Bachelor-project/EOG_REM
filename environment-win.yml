@@ -15,6 +15,7 @@ dependencies:
   - matplotlib
   - scikit-learn
   - openpyxl 
+  - xggboost
 
   # Sleep/EDF tooling
   - mne
