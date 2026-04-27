@@ -585,56 +585,78 @@ def extract_features_batch(
         pattern:     str = "*_merged.csv",
         ) -> pd.DataFrame:
     """
-    Run ``extract_features`` on every merged CSV in a directory and
-    collect results into a single DataFrame.
- 
+    Extract features from all merged CSV files in a directory and save to a single output CSV.
+    
     Parameters
     ----------
     merged_dir : str | Path
-        Directory containing merged CSV files (output of merge_all).
+        Directory containing merged CSV files (output of merge_all) for multiple subjects/sessions.
     output_file : str | Path | None
-        If provided, save the feature DataFrame to this CSV path.
-        Default saves to ``features_csv/features.csv``.
+        Path to save the output features CSV. If None, defaults to "features_csv/features.csv
     fs : float
-        Sampling frequency. Default is **250.0 Hz**.
+        Sampling frequency of the EOG signal in [Hz]. Default is **250.0 Hz**.
     pattern : str
-        Glob pattern to match merged CSVs. Default is ``'*_merged.csv'``.
- 
+        Glob pattern to match merged CSV files in the directory. Default is "*_merged.csv".
+    
     Returns
     -------
-    pd.DataFrame
-        One row per subject with all extracted features.
+    feature_df : pd.DataFrame
+        DataFrame containing extracted features for all subjects/sessions, including any previously existing data in the output CSV (if present).
     """
-    
+
     merged_dir = Path(merged_dir)
     files = sorted(merged_dir.glob(pattern))
- 
+
     if not files:
         raise FileNotFoundError(
             f"No files matching '{pattern}' found in {merged_dir}"
         )
- 
-    print(f"\nFound {len(files)} merged CSV(s) in {merged_dir}")
- 
-    rows = []
-    for f in files:
-        try:
-            row = extract_features(f, fs=fs)
-            rows.append(row)
-        except Exception as e:
-            print(f"  [SKIP] {f.name} — {e}")
- 
-    feature_df = pd.DataFrame(rows)
- 
+
+    # ---- Load existing CSV to skip already-processed subjects ----
     if output_file is None:
         output_file = FEATURES_DIR / "features.csv"
     output_file = Path(output_file)
+
+    existing_df = pd.DataFrame()
+    already_done = set()
+    if output_file.exists():
+        existing_df = pd.read_csv(output_file, low_memory=False)
+        if "subject_id" in existing_df.columns:
+            already_done = set(existing_df["subject_id"].astype(str).values)
+            print(f"  Found {len(already_done)} already-processed subjects in {output_file.name}")
+
+    # ---- Process only new subjects ----
+    new_rows = []
+    skipped = 0
+    for f in files:
+        sid = f.stem
+        if sid in already_done:
+            skipped += 1
+            continue
+        try:
+            row = extract_features(f, fs=fs)
+            new_rows.append(row)
+        except Exception as e:
+            print(f"  [SKIP] {f.name} — {e}")
+
+    if skipped:
+        print(f"  Skipped {skipped} already-processed subjects")
+
+    # ---- Concat old + new ----
+    new_df = pd.DataFrame(new_rows)
+    if not existing_df.empty and not new_df.empty:
+        feature_df = pd.concat([existing_df, new_df], ignore_index=True)
+    elif not new_df.empty:
+        feature_df = new_df
+    else:
+        feature_df = existing_df
+
     output_file.parent.mkdir(parents=True, exist_ok=True)
     feature_df.to_csv(output_file, index=False)
-    print(f"\nFeature table saved → {output_file}  ({feature_df.shape[0]} subjects, {feature_df.shape[1]-1} features)")
- 
+    print(f"\nFeature table saved -> {output_file}  "
+          f"({feature_df.shape[0]} subjects, {feature_df.shape[1]-1} features)")
+
     return feature_df
- 
  
 # =========================================================================================================
 # Entry point

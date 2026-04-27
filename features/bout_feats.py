@@ -17,6 +17,8 @@ from pathlib import Path
 # Constants
 # =========================================================================================================
 SUB_EPOCH_LEN_S = 4.0  # duration of each sub-epoch in seconds
+FEATURES_DIR = Path("features_csv")
+FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 
 # =========================================================================================================
 # Helpers
@@ -296,16 +298,52 @@ def extract_bout_features_batch(
     files = sorted(merged_dir.glob(pattern))
 
     if not files:
-        print(f"No files matching '{pattern}' in {merged_dir}")
-        return pd.DataFrame()
+        raise FileNotFoundError(
+            f"No files matching '{pattern}' found in {merged_dir}"
+        )
 
-    rows = [extract_bout_features(f, fs=fs) for f in files]
-    result = pd.DataFrame(rows)
+    # ---- Load existing CSV to skip already-processed subjects ----
+    if output_file is None:
+        output_file = FEATURES_DIR / "bout_features.csv"
+    output_file = Path(output_file)
 
-    if output_file is not None:
-        out = Path(output_file)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        result.to_csv(out, index=False)
-        print(f"\nBout features saved to {out}")
+    existing_df = pd.DataFrame()
+    already_done = set()
+    if output_file.exists():
+        existing_df = pd.read_csv(output_file, low_memory=False)
+        if "subject_id" in existing_df.columns:
+            already_done = set(existing_df["subject_id"].astype(str).values)
+            print(f"  Found {len(already_done)} already-processed subjects in {output_file.name}")
 
-    return result
+    # ---- Process only new subjects ----
+    new_rows = []
+    skipped = 0
+    for f in files:
+        sid = f.stem
+        if sid in already_done:
+            skipped += 1
+            continue
+        try:
+            row = extract_bout_features(f, fs=fs)
+            new_rows.append(row)
+        except Exception as e:
+            print(f"  [SKIP] {f.name} — {e}")
+
+    if skipped:
+        print(f"  Skipped {skipped} already-processed subjects")
+
+    # ---- Concat old + new ----
+    new_df = pd.DataFrame(new_rows)
+    if not existing_df.empty and not new_df.empty:
+        feature_df = pd.concat([existing_df, new_df], ignore_index=True)
+    elif not new_df.empty:
+        feature_df = new_df
+    else:
+        feature_df = existing_df
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    feature_df.to_csv(output_file, index=False)
+    print(f"\nFeature table saved -> {output_file}  "
+          f"({feature_df.shape[0]} subjects, {feature_df.shape[1]-1} features)")
+
+    return feature_df
