@@ -71,7 +71,8 @@ def _eeg_band_power_features(df: pd.DataFrame, fs: float) -> dict:
         min_len = min(len(loc), len(roc))
 
         if min_len < min_samples:
-            print(f"    {stage}: only {min_len} samples (< {min_samples}) — filling NaN")
+            print(f"    -> NaN: {stage}: only {min_len} usable samples, need {min_samples} "
+                  f"(= 10s * {fs} Hz) for reliable Welch PSD — all {stage} bands set to NaN")
             for band in EEG_BANDS:
                 feats[f"eeg__{stage.lower()}__{band}"] = np.nan
             feats[f"eeg__{stage.lower()}__total"]       = np.nan
@@ -94,6 +95,8 @@ def _eeg_band_power_features(df: pd.DataFrame, fs: float) -> dict:
             round(feats[f"eeg__{stage.lower()}__theta"] / total, 6)
             if total > 0 else np.nan
         )
+        if total == 0:
+            print(f"    -> NaN: {stage}: theta_ratio = NaN because total band power is 0 (no signal energy)")
 
         print(
             f"    {stage} ({n_samples:,} samples) — "
@@ -127,7 +130,11 @@ def _eeg_band_power_features(df: pd.DataFrame, fs: float) -> dict:
         print(f"    Overall theta/beta ratio: {feats['eeg__overall__theta_beta_ratio']:.4f}")
     else:
         feats["eeg__overall__theta_beta_ratio"] = np.nan
-        print(f"    Overall theta/beta ratio: not enough data")
+        print(f"    -> NaN: overall theta/beta ratio — only {min_len} samples, need {min_samples} for Welch PSD")
+
+    nan_feats = [k for k, v in feats.items() if isinstance(v, float) and np.isnan(v)]
+    if nan_feats:
+        print(f"    -> NaN features ({len(nan_feats)}): {', '.join(nan_feats)}")
 
     return feats
 
@@ -142,7 +149,7 @@ def extract_eeg_features_batch(
         output_file: str | Path | None = None,
         fs:          float = 128.0,
         pattern:     str = "*_merged.csv",
-) -> pd.DataFrame:
+        ) -> pd.DataFrame:
     """
     Run ``extract_eeg_features`` on every merged CSV in a directory and
     collect results into a single DataFrame.
