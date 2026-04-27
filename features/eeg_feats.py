@@ -204,24 +204,31 @@ def extract_eeg_features(
         fs:          float = 128.0,
 ) -> dict:
     """
-    Extract all EEG features from a single merged CSV file.
-
-    The merged CSV must be the output of ``merge_all()`` and contain at minimum:
-    ``time_sec``, ``stage``, ``EEG_LOC``, ``EEG_ROC``.
+    Band power features per sleep stage using Welch's method.
+    LOC and ROC signals are averaged into a single signal before computing PSD.
 
     Parameters
     ----------
-    merged_file : str | Path
-        Path to the merged CSV file for one subject/session.
-    subject_id : str | None
-        Optional subject identifier. If None, the file stem is used.
+    df : pd.DataFrame
+        Merged CSV DataFrame containing ``stage``, ``EEG_LOC``, ``EEG_ROC`` columns.
     fs : float
-        Sampling frequency of the EEG signal in [Hz]. Default is **128.0 Hz**.
+        Sampling frequency of the EEG signal in [Hz].
 
     Returns
     -------
     dict
-        Flat dictionary of feature name → value for this subject.
+        Flat dictionary of feature name → value containing:
+
+        Per stage (W, N1, N2, N3, REM): \\
+            `eeg__{stage}__delta`       — Delta band power [µV²/Hz] \\
+            `eeg__{stage}__theta`       — Theta band power [µV²/Hz] \\
+            `eeg__{stage}__alpha`       — Alpha band power [µV²/Hz] \\
+            `eeg__{stage}__beta`        — Beta band power [µV²/Hz] \\
+            `eeg__{stage}__total`       — Total band power [µV²/Hz] \\
+            `eeg__{stage}__theta_ratio` — Theta / total power ratio
+
+        Overall (all stages combined): \\
+            `eeg__overall__theta_beta_ratio` — Theta / beta power ratio
     """
     merged_file = Path(merged_file)
     sid = subject_id if subject_id is not None else merged_file.stem
