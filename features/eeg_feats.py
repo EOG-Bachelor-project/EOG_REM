@@ -61,49 +61,73 @@ def _eeg_band_power_features(df: pd.DataFrame, fs: float) -> dict:
     nperseg     = int(4.0 * fs)
     min_samples = int(10.0 * fs)
 
-    for col in EEG_COLS:
-        if col not in df.columns:
-            print(f"    {col} not found — skipping")
+    for stage in STAGES:
+        mask      = df["stage"] == stage
+        n_samples = mask.sum()
+
+        # ---- Average LOC and ROC into a single signal ----
+        loc = df.loc[mask, "EEG_LOC"].dropna().values
+        roc = df.loc[mask, "EEG_ROC"].dropna().values
+        min_len = min(len(loc), len(roc))
+
+        if min_len < min_samples:
+            print(f"    {stage}: only {min_len} samples (< {min_samples}) — filling NaN")
+            for band in EEG_BANDS:
+                feats[f"eeg__{stage.lower()}__{band}"] = np.nan
+            feats[f"eeg__{stage.lower()}__total"]       = np.nan
+            feats[f"eeg__{stage.lower()}__theta_ratio"] = np.nan
             continue
 
-        ch = col.lower()  # eeg_loc or eeg_roc
+        sig = (loc[:min_len] + roc[:min_len]) / 2.0
 
-        for stage in STAGES:
-            mask = df["stage"] == stage
-            n_samples = mask.sum()
+        f, psd = welch(sig, fs=fs, nperseg=min(nperseg, len(sig)))
 
-            if n_samples < min_samples:
-                print(f"    {col} | {stage}: only {n_samples} samples (< {min_samples}) — filling NaN")
-                for band in EEG_BANDS:
-                    feats[f"{ch}__{stage.lower()}__{band}"] = np.nan
-                feats[f"{ch}__{stage.lower()}__total"]       = np.nan
-                feats[f"{ch}__{stage.lower()}__theta_ratio"] = np.nan
-                continue
+        total = 0.0
+        for band, (lo, hi) in EEG_BANDS.items():
+            band_mask = (f >= lo) & (f <= hi)
+            power = float(np.trapz(psd[band_mask], f[band_mask]))
+            feats[f"eeg__{stage.lower()}__{band}"] = round(power, 6)
+            total += power
 
-            sig = df.loc[mask, col].dropna().values
-            f, psd = welch(sig, fs=fs, nperseg=min(nperseg, len(sig)))
+        feats[f"eeg__{stage.lower()}__total"] = round(total, 6)
+        feats[f"eeg__{stage.lower()}__theta_ratio"] = (
+            round(feats[f"eeg__{stage.lower()}__theta"] / total, 6)
+            if total > 0 else np.nan
+        )
 
-            total = 0.0
-            for band, (lo, hi) in EEG_BANDS.items():
-                band_mask = (f >= lo) & (f <= hi)
-                power = float(np.trapz(psd[band_mask], f[band_mask]))
-                feats[f"{ch}__{stage.lower()}__{band}"] = round(power, 6)
-                total += power
+        print(
+            f"    {stage} ({n_samples:,} samples) — "
+            f"delta: {feats[f'eeg__{stage.lower()}__delta']:.4f}  |  "
+            f"theta: {feats[f'eeg__{stage.lower()}__theta']:.4f}  |  "
+            f"alpha: {feats[f'eeg__{stage.lower()}__alpha']:.4f}  |  "
+            f"beta:  {feats[f'eeg__{stage.lower()}__beta']:.4f}  |  "
+            f"theta_ratio: {feats[f'eeg__{stage.lower()}__theta_ratio']:.4f}"
+        )
+        # ---- Overall theta/beta ratio (across all stages combined) ----
+    loc_all = df["EEG_LOC"].dropna().values
+    roc_all = df["EEG_ROC"].dropna().values
+    min_len = min(len(loc_all), len(roc_all))
 
-            feats[f"{ch}__{stage.lower()}__total"] = round(total, 6)
-            feats[f"{ch}__{stage.lower()}__theta_ratio"] = (
-                round(feats[f"{ch}__{stage.lower()}__theta"] / total, 6)
-                if total > 0 else np.nan
-            )
+    if min_len >= min_samples:
+        sig_all = (loc_all[:min_len] + roc_all[:min_len]) / 2.0
+        f_all, psd_all = welch(sig_all, fs=fs, nperseg=min(nperseg, len(sig_all)))
 
-            print(
-                f"    {col} | {stage} ({n_samples:,} samples) — "
-                f"delta: {feats[f'{ch}__{stage.lower()}__delta']:.4f}  |  "
-                f"theta: {feats[f'{ch}__{stage.lower()}__theta']:.4f}  |  "
-                f"alpha: {feats[f'{ch}__{stage.lower()}__alpha']:.4f}  |  "
-                f"beta:  {feats[f'{ch}__{stage.lower()}__beta']:.4f}  |  "
-                f"theta_ratio: {feats[f'{ch}__{stage.lower()}__theta_ratio']:.4f}"
-            )
+        theta_power = float(np.trapz(
+            psd_all[(f_all >= 4.0) & (f_all <= 8.0)],
+            f_all[(f_all >= 4.0) & (f_all <= 8.0)]
+        ))
+        beta_power = float(np.trapz(
+            psd_all[(f_all >= 13.0) & (f_all <= 30.0)],
+            f_all[(f_all >= 13.0) & (f_all <= 30.0)]
+        ))
+
+        feats["eeg__overall__theta_beta_ratio"] = (
+            round(theta_power / beta_power, 6) if beta_power > 0 else np.nan
+        )
+        print(f"    Overall theta/beta ratio: {feats['eeg__overall__theta_beta_ratio']:.4f}")
+    else:
+        feats["eeg__overall__theta_beta_ratio"] = np.nan
+        print(f"    Overall theta/beta ratio: not enough data")
 
     return feats
 
