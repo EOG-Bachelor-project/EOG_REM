@@ -38,6 +38,7 @@ from xgboost import XGBClassifier
 
 
 from ml.prepare_data import prepare
+from ml.evaluate import evaluate_model
 
 
 # ================================================================================
@@ -503,6 +504,28 @@ def run_training(
     print(f"  {GREEN}Training complete{RESET}")
     print(f"{'='*60}\n")
  
+    # ---- 5) Evaluation plots ----
+    
+    print(f"\n{BOLD}Generating evaluation plots{RESET}")
+    print(f"{'='*60}")
+
+    # Determine class names from y_test
+    class_names = sorted(y_test.unique().tolist())
+
+    # Re-fit each model on full training set and evaluate
+    for name, pipeline in get_models(seed=seed, mode=mode).itmes():
+        print(f"\n Evaluating: {BOLD}{name}{RESET}")
+        pipeline.fit(X_train, y_train)
+        evaluate_model(
+            model        = pipeline,
+            X_test       = X_test,
+            y_test       = y_test,
+            class_names  = class_names,
+            model_name   = name,
+            top_n        = 20,
+            save_dir     = "reports/evaluation"      
+        )
+
     return {
         "cv_results": cv_results,
         "test_results": test_results,
@@ -512,6 +535,7 @@ def run_training(
         "X_test": X_test,
         "y_train": y_train,
         "y_test": y_test,
+        "evaluation_dir": Path("reports/evaluation"),
     }
  
  

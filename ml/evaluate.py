@@ -29,6 +29,11 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.inspection import permutation_importance
 from ml.prepare_data import X_train
 
+# ANSI helpers
+BOLD  = "\033[1m"
+GREEN = "\033[92m"
+RESET = "\033[0m"
+
 # =====================================================================
 # Confusion Matrix 
 # =====================================================================
@@ -36,6 +41,7 @@ def plot_confusion_matrix(
         y_true, 
         y_pred,
         class_names:    list[str],
+        title:          str = "Confussion Matrix",
         save_path:      str | Path | None = None,
         ):
     """
@@ -49,9 +55,51 @@ def plot_confusion_matrix(
         Predicted class labels by the model.
     class_names : list of str
         Names of the classes in the same order as the labels.
+    title : str
+        Plot title. Default is 'Confusion Matrix'.
     save_path : str or Path, optional
         If provided, saves the plot to this path.
     """
+    cm = confusion_matrix(y_true, y_pred)
+    cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+
+    fig, axes = plt.subplot(1, 2, figsize=(14,5))
+    fig.suptitle(title, fontsize=13, fontweight ="bold")
+
+    for ax, data, fmt, subtitle in zip(
+        axes,
+        [cm, cm_norm],
+        ["d", "2.f"]
+        ["Counts", "Normalised (row%)"]
+    ):
+        sns.heatmap(
+            data,
+            annot=True,
+            fmt=fmt,
+            cmap="Blues",
+            xticklabels=class_names,
+            yticklabels=class_names,
+            linewidths=0.5,
+            ax=ax,
+        )
+        ax.set_xlabel("Predicted labbel", fontsize = 10)
+        ax.set_ylabel("True label", fontsize = 10)
+        ax.set_title(subtitle, fontsize = 10)
+        ax.tick_params(labelsize=9)
+    
+    plt.tight_layout
+
+    print(f"\n {BOLD}Classification report {RESET}")
+    print(classification_report(y_true, y_pred, target_names=class_names, zero_division=0))
+
+    if save_path is not None:
+        Path(save_path).parent.mkdir(Parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved: {save_path}")
+    else:
+        plt.show()
+        plt.close(fig)
 
 
 # =====================================================================
@@ -95,48 +143,210 @@ def plot_roc_curve(X_train, y_train, X_test, y_test):
     plt.show()
 
 # =====================================================================
-# Feature Importance
+# Feature Importance - MDI
 # =====================================================================
 
-def plot_feature_importance_MDI(X_train, model: None):
+def plot_feature_importance_MDI(
+        model,
+        feature_names: list[str],
+        top_n:         int = 20,
+        title:         str = "Feature Importance (MDI)",
+        save_path:     str | Path | None = None,
+) -> pd.DataFrame:
     """
-    Plots feture importance based on Mean Decrease in Impurity (MDI) from the model. 
+    Plot Mean Decrease in Impurity (MDI) feature importance from a fitted
+    Random Forest or XGBoost model.
+
+    Parameters
+    ----------
+    model : fitted sklearn Pipeline or estimator
+        Must have a ``feature_importances_`` attribute, or be a Pipeline
+        whose last step has one.
+    feature_names : list of str
+        Feature names matching the training columns.
+    top_n : int
+        Number of top features to show. Default is 20.
+    title : str
+        Plot title.
+    save_path : str | Path | None
+        If provided, saves the figure. Otherwise shows interactively.
+
+    Returns
+    -------
+    pd.DataFrame
+        Feature importance table sorted descending.
     """
-    feature_name = X_train.columns
-    MDI_importances = model.feature_importances_
-    idx_MDI_sorted = np.argsort(MDI_importances)
+    # Handle Pipeline vs raw estimator 
+    clf = model.named_steps["clf"] if hasattr(model, "named_steps") else model
+    importances = clf.features_importances_
+
+    importance_df = pd.DataFrame({
+        "feature":    feature_names,
+        "importance": importances,
+    }).sort_values("importance", ascending=False).reset_index(drop=True)
+
+    top = importance_df.head(top_n)
+
+    # Plot feature importance
+    fig, ax = plt.subplots(figsize=(10, top_n * 0.4 + 1))
+    ax.barh(top["feature"][::-1], top["importance"][::-1], color="#0E7490", alpha=0.8)
+    ax.set_xlabel("Mean Decrease in Impurity", fontsize=10)
+    ax.set_title(title, fontsize=12, fontweight="bold")
+    ax.tick_params(labelsize=9)
+    ax.grid(axis="x", alpha=0.3, linestyle="--")
+    plt.tight_layout()
+
+    if save_path is not None:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved: {save_path}")
+    else:
+        plt.show()
+        plt.close(fig)
+
+    return importance_df
+
+# =====================================================================
+# Feature Importance - Permutation
+# =====================================================================
+
+def plot_feature_importance_permutation(
+    model, 
+    X_test:       pd.DataFrame,
+    y_test,
+    top_n:        int = 20,
+    n_repeats:    int = 10,
+    scoring:      str = "balanced_accuracy",
+    title:        str = " Feature importance (permutation)",
+    save_path:    str | Path | None = None,
+)-> pd.DataFrame:
+
+    """
+    Compute and plot permutation feature importance on the test set.
+
+    Parameters
+    ----------
+    model : fitted sklearn Pipeline or estimator
+    X_test : pd.DataFrame
+        Test features.
+    y_test : array-like
+        Test labels.
+    top_n : int
+        Number of top features to show. Default is 20.
+    n_repeats : int
+        Number of permutation repeats. Default is 10.
+    scoring : str
+        Scoring metric. Default is 'balanced_accuracy'.
+    title : str
+        Plot title.
+    save_path : str | Path | None
+        If provided, saves the figure. Otherwise shows interactively.
+
+    Returns
+    -------
+    pd.DataFrame
+        Permutation importance table sorted descending by mean importance.
+    """
+    result = permutation_importance(
+        model, X_test, y_test,
+        n_repeats = n_repeats,
+        random_state = 42,
+        scoring=scoring,
+        n_jobs =-1,
+    )
+
+    importance_df = pd.DataFrame({
+        "feature": X_test.columns,
+        "mean":    result.importances_mean,
+        "std":     result.importances_std,
+    }).sort_values("mean", ascending = False).reset_index(drop=True)
+
+    top = importance_df.head(top_n).iloc[::-1].reset_index(drop=True)
 
     # Plot feature importance
 
-    plt.figure(figsize=(10, 6))
-    plt.barh(feature_name[idx_MDI_sorted], MDI_importances[idx_MDI_sorted])
-    plt.xlabel('Mean Decrease in Impurity (MDI)', fontweight='bold')
-    plt.ylabel('Feature', fontweight='bold')
-    plt.title('Feature Importance based on Mean Decrease in Impurity', fontweight='bold')
+    fig, ax = plt.subplots(figsize=(10, top_n * 0.4 + 1))
+    ax.barh(
+        top["feature"], top["mean"],
+        xerr=top["std"],
+        color="#AA3377", alpha=0.8,
+        error_kw=dict(elinewidth=0.8, capsize=3),
+    )
+    ax.axvline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
+    ax.set_xlabel(f"Permutation importance ({scoring})", fontsize=10)
+    ax.set_title(title, fontsize=12, fontweight="bold")
+    ax.tick_params(labelsize=9)
+    ax.grid(axis="x", alpha=0.3, linestyle="--")
     plt.tight_layout()
-    plt.show()
 
-def plot_feature_importance_permutation_importance(X_train, X_test, y_test, model: None):
+    if save_path is not None:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved: {save_path}")
+    else:
+        plt.show()
+        plt.close(fig)
+
+    return importance_df
+
+# =====================================================================
+# Full model evaluation
+# =====================================================================
+
+def evaluate_model(
+        model,
+        X_test:         pd.DataFrame,
+        y_test,
+        class_names:    list[str],
+        model_name:     str = "Model",
+        top_n:          int = 20,
+        save_dir:       str | Path | None = None,
+) -> None:
     """
-    Plots feature importance based on permutation importance from model.
+    Run all evaluation plots for one fitted model.
+
+    Parameters
+    ----------
+    model : fitted sklearn Pipeline
+    X_test : pd.DataFrame
+    y_test : array-like
+    class_names : list of str
+    model_name : str
+        Used in plot titles and filenames.
+    top_n : int
+        Top features to show. Default is 20.
+    save_dir : str | Path | None
+        If provided, saves all figures here. Otherwise shows interactively.
     """
+    y_pred = model.predict(X_test)
+    tag    =model_name.lower().replace(" ","_")
 
-    feature_name = X_train.columns
+    def _path(name):
+        return Path(save_dir) / f"{tag}_{name}.png" if save_dir else None
+    
+    plot_confusion_matrix(
+        y_true      = y_test,
+        y_pred      = y_pred,
+        class_names = class_names,
+        title       = f"{model_name} - Confusion Matrix",
+        save_path   = _path("confusion_matrix"),
+    )
 
-    result = permutation_importance(model, X_test, y_test, 
-    n_repeats=10, random_state=26, scoring='roc_auc')
+    plot_feature_importance_MDI(
+        model         = model,
+        feature_names = list(X_test.colums), 
+        top_n         = top_n,
+        title         = f"{model_name} - Feature Importance (MDI)",
+        save_path     = _path(f"feature_importance_mdi"),
+    )
 
-    idx_P_sorted = result.importances_mean.argsort()
-    P_importance = pd.DataFrame(result.importances[idx_P_sorted].T, 
-    columns = feature_name[idx_P_sorted])
-
-    # Plot feature importance
-
-    plt.figure(figsize=(14, 6))
-    plt.boxplot(P_importance.values, vert=False, 
-    tick_labels = P_importance.columns, widths=0.3) 
-    plt.xlabel('Permutation Importance (ROC AUC)', fontweight='bold')
-    plt.ylabel('Feature', fontweight='bold')
-    plt.title('Feature Importance based on Permutation Importance', fontweight='bold')
-    plt.tight_layout()
-    plt.show()
+    plot_feature_importance_permutation(
+        model = model,
+        X_test = X_test,
+        y_test = y_test,
+        top_n = top_n,
+        title = f"{model_name} - Feature Importance (Permutation)",
+        save_path = _path("plot_feature_importance_permutation"),
+    )
