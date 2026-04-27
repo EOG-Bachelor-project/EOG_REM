@@ -134,6 +134,10 @@ def _rem_epoch_duration_features(df: pd.DataFrame, fs: float) -> dict:
           f"std: {feats['rem_epoch_std_duration_min']}  |  "
           f"min: {feats['rem_epoch_min_duration_min']}  |  "
           f"max: {feats['rem_epoch_max_duration_min']}")
+    
+    nan_feats = [k for k, v in feats.items() if isinstance(v, float) and np.isnan(v)]
+    if nan_feats:
+        print(f"    -> NaN features ({len(nan_feats)}): {', '.join(nan_feats)}")
 
     return feats
 
@@ -223,6 +227,10 @@ def _rem_event_features(df: pd.DataFrame, fs: float) -> dict:
             feats[f"rem_event_mean_{ch}_rise_slope"] = np.nan
 
     print(f"    Rise slope  — LOC: {feats['rem_event_mean_loc_rise_slope']} [µV/s]  |  ROC: {feats['rem_event_mean_roc_rise_slope']} [µV/s]")
+
+    nan_feats = [k for k, v in feats.items() if isinstance(v, float) and np.isnan(v)]
+    if nan_feats:
+        print(f"    -> NaN features ({len(nan_feats)}): {', '.join(nan_feats)}")
  
     return feats
 
@@ -319,6 +327,10 @@ def _em_classification_features(df: pd.DataFrame, fs: float) -> dict:
             feats[f"{label}_mean_amp_uv"] = np.nan
 
     print(f"    Amplitude — SEM: {feats['sem_mean_amp_uv']} [µV]  |  REM EM: {feats['rem_em_mean_amp_uv']} [µV]")
+
+    nan_feats = [k for k, v in feats.items() if isinstance(v, float) and np.isnan(v)]
+    if nan_feats:
+        print(f"    -> NaN features ({len(nan_feats)}): {', '.join(nan_feats)}")
  
     return feats
 
@@ -380,6 +392,10 @@ def _em_stage_count_features(df: pd.DataFrame) -> dict:
     em_count_staged = sum(feats[k] for k in stage_map)
     print(f"    Sanity check - total EM events: {em_count_total}  |  staged sum: {em_count_staged}")
 
+    nan_feats = [k for k, v in feats.items() if isinstance(v, float) and np.isnan(v)]
+    if nan_feats:
+        print(f"    -> NaN features ({len(nan_feats)}): {', '.join(nan_feats)}")
+
     return feats
 
 #——————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -435,6 +451,10 @@ def _phasic_tonic_features(df: pd.DataFrame) -> dict:
 
     print(f"    Phasic: {n_phasic}  |  Tonic: {n_tonic}  |  Phasic fraction: {feats['phasic_fraction']}")
 
+    nan_feats = [k for k, v in feats.items() if isinstance(v, float) and np.isnan(v)]
+    if nan_feats:
+        print(f"    -> NaN features ({len(nan_feats)}): {', '.join(nan_feats)}")
+
     return feats
 
 #——————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -476,6 +496,10 @@ def _eog_amplitude_features(df: pd.DataFrame) -> dict:
             feats[f"rem_{label}_p95_uv"]      = np.nan
 
         print(f"    {ch} — mean: {feats[f'rem_{label}_mean_abs_uv']} [µV]  |  std: {feats[f'rem_{label}_std_uv']} [µV]  |  p95: {feats[f'rem_{label}_p95_uv']} [µV]")
+
+    nan_feats = [k for k, v in feats.items() if isinstance(v, float) and np.isnan(v)]
+    if nan_feats:
+        print(f"    -> NaN features ({len(nan_feats)}): {', '.join(nan_feats)}")
 
     return feats
 
