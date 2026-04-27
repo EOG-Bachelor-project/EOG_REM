@@ -21,31 +21,30 @@ In supervised machine learning the task is to predict a quantity based on other 
 ---
 
 ### Models and the prediction function
-In supervised learning we are given a training set ($\mathcal{D}^{\text{train}}$) comprised of $N$ observations $x_1, \ldots, x_N$ and $N$ targets $y_1, \ldots, y_N$ and we wish to predict $y$ from $x$ (Ch. 8):
-$$
-y = f(x, w) + \varepsilon,
-$$
-where $w$ is a vector of tunable parameters and $\varepsilon$ represents a noise term. Learning consists of selecting the parameters $w$ based on the training data $X, y$. A computer program which carries out this process — i.e., based on a training set $\mathcal{D}^{\text{train}}$ it constructs a function $f$ — is known as a **model** (Ch. 1.3.1). Different models are denoted $\mathcal{M}_1, \ldots, \mathcal{M}_S$.
+In supervised learning we are given a training set ($&#119967;^{\text{train}}$) comprised of $N$ observations $x_1, \ldots, x_N$ and $N$ targets $y_1, \ldots, y_N$ and we wish to predict $y$ from $x$ (Ch. 8):
 
-Once the function $f$ is learned during the **training phase**, it can be used to predict targets for new, unobserved data known as the **test set** $\mathcal{D}^{\text{test}}$ (Ch. 1.3.1).
+$$y = f(x, w) + \varepsilon,$$
+
+where $w$ is a vector of tunable parameters and $\varepsilon$ represents a noise term. Learning consists of selecting the parameters $w$ based on the training data $X, y$. A computer program which carries out this process — i.e., based on a training set $&#119967;^{\text{train}}$ it constructs a function $f$ — is known as a **model** (Ch. 1.3.1). Different models are denoted $&#120028;_1, \ldots, &#120028;_S$.
+
+Once the function $f$ is learned during the **training phase**, it can be used to predict targets for new, unobserved data known as the **test set** $&#119967;^{\text{test}}$ (Ch. 1.3.1).
 
 In our project, a model learns which combinations of EOG features (e.g., eye movement counts per sleep stage, EOG amplitude statistics, phasic/tonic epoch ratios) best distinguish RBD patients from controls using PSG recordings from the Danish Center for Sleep Medicine (DCSM).
 
 ---
 
 ### Training error vs. generalization error
-For a model $\mathcal{M}_s$, the **training error** is the average error on the training set (Equation 10.1):
-$$
-E^{\text{train}}_{\mathcal{M}_s} = \frac{1}{N^{\text{train}}} \sum_{i \in \mathcal{D}^{\text{train}}} L(y_i, f_{\mathcal{M}_s}(x_i, w)),
-$$
+For a model $&#120028;_s$, the **training error** is the average error on the training set (Equation 10.1):
+
+$$E^{\text{train}}_{&#120028;_s} = \frac{1}{N^{\text{train}}} \sum_{i \in &#119967;^{\text{train}}} L(y_i, f_{&#120028;_s}(x_i, w)),$$
+
 where $L$ is a loss function (e.g., squared error for regression, misclassification for classification).
 
 The **generalization error** is the expected error on all future, unseen data drawn from the true distribution (Equation 10.2):
-$$
-E^{\text{gen}}_{\mathcal{M}} = \mathbb{E}_{(x,y)}[L(y, f_{\mathcal{M}}(x))].
-$$
 
-This is the quantity that ultimately decides which model is better. Since the training set was used to train the model, we should expect $E^{\text{train}}_{\mathcal{M}}$ to be lower than $E^{\text{gen}}_{\mathcal{M}}$. The problem is that we cannot compute $E^{\text{gen}}_{\mathcal{M}}$ directly since we don't know the true distribution of the data — this is why we need cross-validation.
+$$E^{\text{gen}}_{&#120028;} = \mathbb{E}_{(x,y)}[L(y, f_{&#120028;}(x))].$$
+
+This is the quantity that ultimately decides which model is better. Since the training set was used to train the model, we should expect $E^{\text{train}}$ to be lower than $E^{\text{gen}}$. The problem is that we cannot compute $E^{\text{gen}}$ directly since we don't know the true distribution of the data — this is why we need cross-validation.
 
 In our project, if we train a classifier on all DCSM patients and report accuracy on those same patients, that number is misleadingly optimistic. The model may have learned patient-specific quirks rather than genuine RBD biomarkers, and its performance on new patients would likely be worse.
 
@@ -61,13 +60,14 @@ In our project, our feature pipeline extracts ~170 EOG-derived features per pati
 ### Cross-validation
 Cross-validation is the principal way of estimating the generalization error when we cannot compute it directly (Ch. 10.1.3). Three common approaches:
 
-- **Hold-out method:** Split the full dataset $\mathcal{D}$ into $\mathcal{D}^{\text{train}} \cup \mathcal{D}^{\text{test}}$, train on $\mathcal{D}^{\text{train}}$, compute the test error on $\mathcal{D}^{\text{test}}$, and use $E^{\text{gen}}_{\mathcal{M}} \approx E^{\text{test}}_{\mathcal{M}}$. Simple, but the estimate depends on the particular split.
+- **Hold-out method:** Split the full dataset $&#119967;$ into $&#119967;^{\text{train}} \cup &#119967;^{\text{test}}$, train on $&#119967;^{\text{train}}$, compute the test error on $&#119967;^{\text{test}}$, and use $E^{\text{gen}} \approx
+E^{\text{test}}$. Simple, but the estimate depends on the particular split.
 
-- **K-fold cross-validation:** Split the full dataset into $K$ pieces $\mathcal{D}_1, \ldots, \mathcal{D}_K$. For each $k$, treat $\mathcal{D}_k$ as the test set and the remaining $K-1$ pieces as the training set. The generalization error is estimated as the weighted average of the $K$ test errors. Since each data point is used once in the test set, this method is generally more precise than the hold-out method, but requires $K$ times more computation (Ch. 10.1.3).
+- **K-fold cross-validation:** Split the full dataset into $K$ pieces $&#119967;_1, \ldots, &#119967;_K$. For each $k$, treat $&#119967;_k$ as the test set and the remaining $K-1$ pieces as the training set. The generalization error is estimated as the weighted average of the $K$ test errors. Since each data point is used once in the test set, this method is generally more precise than the hold-out method, but requires $K$ times more computation (Ch. 10.1.3).
 
 - **Leave-one-out cross-validation:** K-fold CV with $K = N$. Each model is trained on all data except a single observation and tested on that observation. Uses as much data as possible for training, but requires $N$ models to be trained. Overall, 10-fold cross-validation is recommended (Ch. 10.1.3).
 
-Cross-validation can also be used for **model selection**: we estimate the generalization error ($E^{\text{gen}}_{\mathcal{M}}$) for each model $\mathcal{M}_1, \ldots, \mathcal{M}_S$ and select the one with the lowest estimated generalization error (Ch. 10.1.4).
+Cross-validation can also be used for **model selection**: we estimate the generalization error ($E^{\text{gen}}_{&#120028;}$) for each model $&#120028;_1, \ldots, &#120028;_S$ and select the one with the lowest estimated generalization error (Ch. 10.1.4).
 
 In our project, with a limited DCSM cohort split across RBD, PD, and control groups, K-fold CV (e.g., $K = 10$) is essential. A single hold-out split could, by chance, put most RBD patients in the training set and leave too few for a meaningful test, making the generalization estimate unreliable.
 
@@ -87,9 +87,7 @@ In our project, the inner loop might determine the optimal hyperparameters (e.g.
 ### Regularization
 Regularization is a general technique for controlling model complexity to prevent overfitting (Ch. 14.1). For the linear regression model, regularization adds a penalty term to the error function:
 
-$$
-E_{\text{reg}}(w) = \left|\left| y - \tilde{X}w \right|\right|^2 + \lambda \cdot w^\top w
-$$
+$$E_{\text{reg}}(w) = \left|\left| y - \tilde{X}w \right|\right|^2 + \lambda \cdot w^\top w$$
 
 The parameter $\lambda$ controls the strength of regularization: a large $\lambda$ forces $w$ toward zero (simpler model, higher bias), while $\lambda = 0$ gives the unregularized solution (more flexible, higher variance). The optimal $\lambda$ is selected using cross-validation (Ch. 14.1).
 
@@ -99,15 +97,14 @@ In our project, with ~170 EOG features and a limited patient cohort, regularizat
 
 ### Bias-variance decomposition
 The generalization error can be decomposed into three terms (Equation 14.9):
-$$
-\mathbb{E}_{\mathcal{D}}[E^{\text{gen}}] = \mathbb{E}_x\left[ \underbrace{\text{Var}_{y|x}[y]}_{\text{irreducible noise}} + \underbrace{\text{Bias}^2}_{\text{systematic error}} + \underbrace{\text{Variance}}_{\text{model sensitivity}} \right]
-$$
+
+$$&#120124;_{&#119967;}[E^{\text{gen}}] = &#120124;_x\left[ \underbrace{\text{Var}_{y|x}[y]}_{\text{irreducible noise}} + \underbrace{\text{Bias}^2}_{\text{systematic error}} + \underbrace{\text{Variance}}_{\text{model sensitivity}} \right]$$
 
 $$
 \begin{align*}
 \text{Bias} = \bar{y}(x) - \bar{f}(x) 
 \\
-\text{Variance} = \text{Var}_{\mathcal{D}}[f_{\mathcal{D}}(x)] 
+\text{Variance} = \text{Var}_{&#119967;}[f_{&#119967;}(x)] 
 \end{align*}
 $$
 
