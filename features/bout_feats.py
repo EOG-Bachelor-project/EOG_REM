@@ -212,6 +212,11 @@ def phasic_tonic_bout_features(df: pd.DataFrame, fs: float = 250.0) -> dict:
         else:
             print(f"    {label} bouts: 0")
 
+    # ---- 4) Phasic <-> Tonic transitions ----
+    transitions = (types != types.shift()).sum() - 1  # subtract 1 to get number of transitions not boundaries
+    feats["phasic_tonic_transitions"] = int(transitions) if transitions >= 0 else 0
+    print(f"    Phasic <-> Tonic transitions: {feats['phasic_tonic_transitions']}")
+
     return feats
 
 

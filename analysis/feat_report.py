@@ -550,6 +550,7 @@ FEATURE_DESCRIPTIONS = {
     "tonic_bout_median_duration_s":  "Median tonic bout duration [seconds]",
     "tonic_bout_rate_per_min":       "Tonic bouts per minute of REM sleep",
     "tonic_bout_total_duration_s":   "Total time in tonic bouts [seconds]",
+    "phasic_tonic_transitions": "Number of transitions between Phasic and Tonic REM sub-epochs",
 
     # GSSC probabilities
     "rem_mean_prob_rem":         "Mean GSSC prob(REM) during REM — high = confident staging",
@@ -646,6 +647,7 @@ FEATURE_GROUPS = [
         "tonic_bout_max_duration_s", "tonic_bout_min_duration_s",
         "tonic_bout_std_duration_s", "tonic_bout_median_duration_s",
         "tonic_bout_rate_per_min", "tonic_bout_total_duration_s",
+        "phasic_tonic_transitions",
     ]),
 
     ("GSSC Probabilities",  ["rem_mean_prob_rem", "rem_mean_prob_w",
