@@ -308,8 +308,10 @@ def parse_lights_txt(txt_path: str | Path) -> tuple[float, float]:
 
     # Guard against unset lights files (both values are 0)
     if lights_off == 0.0 and lights_on == 0.0:
-        print(f"  WARNING: lights.txt has both Lights_off and Lights_on = 0.0 — treating as missing (full recording will be used).")
-        return None  # Callers already handle None by skipping the crop
+        raise RuntimeError(
+            f"lights.txt has both Lights_off and Lights_on = 0.0 — "
+            f"sleep period is undefined, skipping session."
+            )
 
     print(f"\nLights off: {lights_off:.1f} [s]  |   Lights on {lights_on:.1f} [s] "
           f"\nsleep period: {(lights_on - lights_off)/60:.1f} [min]")

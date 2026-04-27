@@ -142,11 +142,31 @@ def _compress_intermediates(session_id: str, edf_stem: str) -> float:
             saved = size_before - size_after
             freed_bytes += saved
             f.unlink()
-            print(f"    📦 {f.name}: {size_before / (1024**2):.1f} MB → {size_after / (1024**2):.1f} MB ({saved / (1024**2):.1f} MB saved)")
+            print(f"    {f.name}: {size_before / (1024**2):.1f} MB -> {size_after / (1024**2):.1f} MB ({saved / (1024**2):.1f} MB saved)")
 
     freed_mb = freed_bytes / (1024 ** 2)
-    print(f"    ✓ Freed {freed_mb:.1f} MB for {session_id}")
+    print(f"    Freed {freed_mb:.1f} MB for {session_id}")
     return freed_mb
+
+def _check_existing_outputs(session_id, edf_stem):
+    checks = {
+        "eog":       EOG_DIR   / f"{session_id}_{edf_stem}_eog.csv",
+        "gssc":      GSSC_DIR  / f"{session_id}_gssc.csv",
+        "rems":      REMS_DIR  / f"{session_id}_extracted_rems.csv",
+        "em":        EM_DIR    / f"{session_id}_em.csv",
+        "subepochs": EM_DIR    / f"{session_id}_subepochs.csv",
+        "eeg":       EEG_DIR   / f"{session_id}_eeg.csv",
+        "merged":    MERGED_DIR / f"{session_id}_{edf_stem}_eog_merged.csv",
+    }
+
+    # Delete empty files so they are regenerated rather than causing crashes downstream
+    for name, path in checks.items():
+        if path.exists() and path.stat().st_size == 0:
+            print(f"  WARNING: {name} file is empty — deleting so it will be regenerated: {path.name}")
+            path.unlink()
+
+    return {name: (path.exists() and path.stat().st_size > 0)
+            for name, path in checks.items()}
 
 
 # =====================================================================
