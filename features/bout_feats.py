@@ -18,6 +18,7 @@ import re
 # Constants
 # =========================================================================================================
 SUB_EPOCH_LEN_S = 4.0  # duration of each sub-epoch in seconds
+_DCSM_PATTERN = re.compile(r"(DCSM_\d+_[a-zA-Z])")
 FEATURES_DIR = Path("features_csv")
 FEATURES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -252,7 +253,7 @@ def extract_bout_features(
     merged_file = Path(merged_file)
 
     raw_stem = merged_file.stem.replace(".csv", "")
-    m = re.match(r"(DCSM_\d+[a-zA-Z])", raw_stem)
+    m = _DCSM_PATTERN.match(raw_stem)
     sid = subject_id if subject_id is not None else (m.group(1) if m else raw_stem)
 
     print(f"\n{'=' * 60}")
@@ -323,7 +324,7 @@ def extract_bout_features_batch(
     new_rows = []
     skipped = 0
     for f in files:
-        m = re.match(r"(DCSM_\d+[a-zA-Z])", f.stem.replace(".csv", ""))
+        m = _DCSM_PATTERN.match(f.stem.replace(".csv", ""))
         sid = m.group(1) if m else f.stem.replace(".csv", "")
         if sid in already_done:
             skipped += 1

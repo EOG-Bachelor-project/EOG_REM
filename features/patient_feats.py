@@ -88,7 +88,9 @@ def extract_patient_features(
         Dictionary with ``subject_id`` and group label columns (1 or 0).
     """
     merged_file = Path(merged_file)
-    sid = subject_id if subject_id is not None else merged_file.stem
+    raw_stem = merged_file.stem.replace(".csv", "")
+    m = _DCSM_PATTERN.match(raw_stem)
+    sid = subject_id if subject_id is not None else (m.group(1) if m else raw_stem)
     dcsm_id = _extract_dcsm_id(sid)
 
     print(f"\n{'=' * 60}")

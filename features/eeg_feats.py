@@ -25,6 +25,7 @@ EEG_BANDS = {
 }
 EEG_COLS = ["EEG_LOC", "EEG_ROC"]
 STAGES   = ["W", "N1", "N2", "N3", "REM"]
+_DCSM_PATTERN = re.compile(r"(DCSM_\d+_[a-zA-Z])") 
 
 # =========================================================================================================
 # Helper
@@ -197,7 +198,7 @@ def extract_eeg_features_batch(
     new_rows = []
     skipped = 0
     for f in files:
-        m = re.match(r"(DCSM_\d+[a-zA-Z])", f.stem.replace(".csv", ""))
+        m = _DCSM_PATTERN.match(f.stem.replace(".csv", ""))
         sid = m.group(1) if m else f.stem.replace(".csv", "")
         if sid in already_done:
             skipped += 1
@@ -267,7 +268,7 @@ def extract_eeg_features(
     merged_file = Path(merged_file)
 
     raw_stem = merged_file.stem.replace(".csv", "")
-    m = re.match(r"(DCSM_\d+[a-zA-Z])", raw_stem)
+    m = _DCSM_PATTERN.match(raw_stem)
     sid = subject_id if subject_id is not None else (m.group(1) if m else raw_stem)
 
     print(f"\n{'=' * 60}")
