@@ -408,6 +408,30 @@ def run_extract(
 
 
 # =====================================================================
+# run_merge
+# =====================================================================
+def run_merge() -> None:
+    """Outer-join all per-module feature CSVs in features_csv/ into features.csv."""
+    csv_files = sorted(FEATURES_DIR.glob("*_features.csv"))
+    if not csv_files:
+        print(f"Error: No per-module feature CSVs found in '{FEATURES_DIR}'. Run 'extract' first.")
+        sys.exit(1)
+
+    print(f"\nMerging {len(csv_files)} module CSV(s):")
+    for f in csv_files:
+        print(f"  {f.name}")
+
+    combined = merge_feature_csvs(FEATURES_DIR, output_file=DEFAULT_FEATURE_CSV)
+
+    if combined.empty:
+        print("Error: Merge produced an empty table.")
+        sys.exit(1)
+
+    print(f"\nMerged feature CSV saved -> {DEFAULT_FEATURE_CSV}  "
+          f"({combined.shape[0]} subjects, {combined.shape[1] - 1} features)")
+
+
+# =====================================================================
 # run_report
 # =====================================================================
 def run_report() -> None:
@@ -438,6 +462,7 @@ Examples:
   python main.py extract patient_info.xlsx                    # all feature modules
   python main.py extract patient_info.xlsx --modules bout     # only bout
   python main.py extract patient_info.xlsx --force            # re-extract from scratch
+  python main.py merge                                        # merge existing module CSVs
   python main.py report                                       # HTML report
   python main.py all /data/raw patient_info.xlsx              # full pipeline
   python main.py all /data/raw patient_info.xlsx --force      # full + re-extract
@@ -460,6 +485,9 @@ Examples:
     p_ext.add_argument("--force", action="store_true",
                        help="Delete existing module CSVs before re-extracting")
 
+    # ---- merge ----
+    sub.add_parser("merge", help="Outer-join existing per-module feature CSVs into features.csv.")
+
     # ---- report ----
     sub.add_parser("report", help="Generate HTML report from cached features.csv.")
 
@@ -480,7 +508,7 @@ Examples:
 
     # ---- Back-compat: `python main.py /data/raw` → process ----
     argv = sys.argv[1:]
-    known_modes = {"process", "extract", "report", "all", "cleanup", "-h", "--help"}
+    known_modes = {"process", "extract", "merge", "report", "all", "cleanup", "-h", "--help"}
     if argv and argv[0] not in known_modes:
         argv = ["process"] + argv
 
@@ -496,6 +524,9 @@ Examples:
 
     elif args.mode == "extract":
         run_extract(Path(args.patient_excel), modules=args.modules, force=args.force)
+
+    elif args.mode == "merge":
+        run_merge()
 
     elif args.mode == "report":
         run_report()

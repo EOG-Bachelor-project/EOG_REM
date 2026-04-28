@@ -156,7 +156,7 @@ def merge_feature_csvs(
  
     # Outer join all DataFrames on subject_id
     combined = reduce(
-        lambda left, right: pd.merge(left, right, on="subject_id", how="inner", suffixes=("", "_dup")),
+        lambda left, right: pd.merge(left, right, on="subject_id", how="outer", suffixes=("", "_dup")),
         dfs
     )
  
