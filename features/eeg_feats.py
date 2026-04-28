@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from scipy.signal import welch
+import re
 
 # =========================================================================================================
 # Constants
@@ -196,7 +197,8 @@ def extract_eeg_features_batch(
     new_rows = []
     skipped = 0
     for f in files:
-        sid = f.stem
+        m = re.match(r"(DCSM_\d+[a-zA-Z])", f.stem.replace(".csv", ""))
+        sid = m.group(1) if m else f.stem.replace(".csv", "")
         if sid in already_done:
             skipped += 1
             continue
@@ -263,7 +265,10 @@ def extract_eeg_features(
             `eeg__overall__theta_beta_ratio` — Theta / beta power ratio
     """
     merged_file = Path(merged_file)
-    sid = subject_id if subject_id is not None else merged_file.stem
+
+    raw_stem = merged_file.stem.replace(".csv", "")
+    m = re.match(r"(DCSM_\d+[a-zA-Z])", raw_stem)
+    sid = subject_id if subject_id is not None else (m.group(1) if m else raw_stem)
 
     print(f"\n{'=' * 60}")
     print(f"Extracting EEG features: {merged_file.name}")

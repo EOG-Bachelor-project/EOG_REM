@@ -12,6 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import re
 
 # =========================================================================================================
 # Constants
@@ -249,7 +250,10 @@ def extract_bout_features(
         Flat dictionary of feature name → value for this subject.
     """
     merged_file = Path(merged_file)
-    sid = subject_id if subject_id is not None else merged_file.stem
+
+    raw_stem = merged_file.stem.replace(".csv", "")
+    m = re.match(r"(DCSM_\d+[a-zA-Z])", raw_stem)
+    sid = subject_id if subject_id is not None else (m.group(1) if m else raw_stem)
 
     print(f"\n{'=' * 60}")
     print(f"Extracting bout features: {merged_file.name}")
@@ -319,7 +323,8 @@ def extract_bout_features_batch(
     new_rows = []
     skipped = 0
     for f in files:
-        sid = f.stem
+        m = re.match(r"(DCSM_\d+[a-zA-Z])", f.stem.replace(".csv", ""))
+        sid = m.group(1) if m else f.stem.replace(".csv", "")
         if sid in already_done:
             skipped += 1
             continue

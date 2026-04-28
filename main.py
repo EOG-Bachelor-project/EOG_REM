@@ -50,7 +50,7 @@ from preprocessing.em_to_csv import em_to_csv
 from preprocessing.merge import merge_all
 from preprocessing.channel_standardization import build_rename_map
 from preprocessing.eeg_to_csv import eeg_to_csv
-from analysis.feat_report import collect_features, generate_report
+from analysis.feat_report import collect_features, generate_report, merge_feature_csvs
 
 # =====================================================================
 # Constants
@@ -155,8 +155,7 @@ def _check_existing_outputs(session_id, edf_stem):
         "rems":      REMS_DIR  / f"{session_id}_extracted_rems.csv",
         "em":        EM_DIR    / f"{session_id}_em.csv",
         "subepochs": EM_DIR    / f"{session_id}_subepochs.csv",
-        "eeg":       EEG_DIR   / f"{session_id}_eeg.csv",
-        "merged":    MERGED_DIR / f"{session_id}_{edf_stem}_eog_merged.csv",
+        "eeg":       EEG_DIR   / f"{session_id}_eeg.csv"
     }
 
     # Delete empty files so they are regenerated rather than causing crashes downstream
