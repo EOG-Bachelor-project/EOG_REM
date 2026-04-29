@@ -93,12 +93,12 @@ def _is_processed(session_id: str) -> bool:
 def _check_existing_outputs(session_id: str, edf_stem: str) -> dict[str, bool]:
     """Check which intermediate output files already exist for a session."""
     return {
-        "eog":       (EOG_DIR  / f"{session_id}_{edf_stem}_eog.csv").exists(),
-        "gssc":      (GSSC_DIR / f"{session_id}_gssc.csv").exists(),
-        "rems":      (REMS_DIR / f"{session_id}_extracted_rems.csv").exists(),
-        "em":        (EM_DIR   / f"{session_id}_em.csv").exists(),
-        "subepochs": (EM_DIR   / f"{session_id}_subepochs.csv").exists(),
-        "eeg":       (EEG_DIR  / f"{session_id}_eeg.csv").exists(),
+        "eog":       (EOG_DIR  / f"{session_id}_{edf_stem}_eog.csv").exists() or (EOG_DIR  / f"{session_id}_{edf_stem}_eog.csv.gz").exists(),
+        "gssc":      (GSSC_DIR / f"{session_id}_gssc.csv").exists() or (GSSC_DIR / f"{session_id}_gssc.csv.gz").exists(),
+        "rems":      (REMS_DIR / f"{session_id}_extracted_rems.csv").exists() or (REMS_DIR / f"{session_id}_extracted_rems.csv.gz").exists(),
+        "em":        (EM_DIR   / f"{session_id}_em.csv").exists() or (EM_DIR   / f"{session_id}_em.csv.gz").exists(),
+        "subepochs": (EM_DIR   / f"{session_id}_subepochs.csv").exists() or (EM_DIR   / f"{session_id}_subepochs.csv.gz").exists(),
+        "eeg":       (EEG_DIR  / f"{session_id}_eeg.csv").exists() or (EEG_DIR  / f"{session_id}_eeg.csv.gz").exists(),
     }
 
 
