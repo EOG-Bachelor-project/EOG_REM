@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from sklearn.model_selection import train_test_split
+from sklearn.impute import SimpleImputer
 
 
 # =====================================================================
@@ -87,8 +88,9 @@ def load_features(
     feature_csv : str | Path
         Path to features.csv (output of the extract step).
     drop_nan : bool
-        If True, drop subjects that have any NaN in feature columns
-        and print a warning listing them. Default is True.
+        If True, drop subjects with NaN features before imputation.
+        If False, NaN values are imputed using median imputation in split_data.
+        Default is True.
 
     Returns
     -------
@@ -99,6 +101,13 @@ def load_features(
     df = pd.read_csv(feature_csv)
     print(f"Loaded: {feature_csv}  ({df.shape[0]} subjects, {df.shape[1]} columns)")
 
+    # ---- Remove patients with invalid recordings ----
+    EXCLUDE_IDS = []  
+    if EXCLUDE_IDS:
+        before = len(df)
+        df = df[~df["subject_id"].isin(EXCLUDE_IDS)].reset_index(drop=True)
+        print(f"  Excluded {before - len(df)} patients with invalid recordings: {EXCLUDE_IDS}")
+        
     # Assign group labels
     df["group"] = _assign_group(df)
     group_counts = df["group"].value_counts()
@@ -265,6 +274,16 @@ def split_data(
     feature_cols = _get_feature_cols(df_valid) # Get feature columns from the valid subset
     X = df_valid[feature_cols]                 # Feature matrix
     y = labels_valid                           # Label vector  
+
+    imputer = SimpleImputer(strategy="median")
+    X_imputed = pd.DataFrame(
+        imputer.fit_transform(X),
+        columns=feature_cols,
+        index=X.index,
+    )
+    X = X_imputed
+    print(f"\n  Imputed NaN values using median strategy")
+    print(f"  NaN values before imputation: {X.isna().sum().sum()}")
 
     # ---- 3) Split into train/test sets ----
     X_train, X_test, y_train, y_test = train_test_split(
