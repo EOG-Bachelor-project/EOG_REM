@@ -289,7 +289,9 @@ def evaluate_on_test(
  
         # Classification report
         print(f"\nClassification report:")
-        report = classification_report(y_test, y_pred, zero_division=0)
+        label_map = {0: "Control", 1: "RBD", 2: "PD", 3: "iRBD"}
+        target_names = [label_map[c] for c in sorted(y_test.unique().tolist())]
+        report = classification_report(y_test, y_pred, target_names=target_names, zero_division=0)
         for line in report.split("\n"):
             print(f"    {line}")
  
@@ -515,20 +517,27 @@ def run_training(
     print(f"{'='*60}")
 
     # Determine class names from y_test
-    class_names = sorted(y_test.unique().tolist())
+    label_map = {0: "Control", 1: "RBD", 2: "PD", 3: "iRBD"}  # adjust to your actual labels
+    class_names = [label_map[c] for c in sorted(y_test.unique().tolist())]
 
     # Re-fit each model on full training set and evaluate
     for name, pipeline in get_models(seed=seed, mode=mode).items():
         print(f"\n Evaluating: {BOLD}{name}{RESET}")
-        pipeline.fit(X_train, y_train)
+        if name == "XGBoost":
+            from sklearn.utils.class_weight import compute_sample_weight
+            sample_weight = compute_sample_weight("balanced", y_train)
+            pipeline.fit(X_train, y_train, clf__sample_weight=sample_weight)
+        else:
+            pipeline.fit(X_train, y_train)
         evaluate_model(
-            model        = pipeline,
-            X_test       = X_test,
-            y_test       = y_test,
-            class_names  = class_names,
-            model_name   = name,
-            top_n        = 20,
-            save_dir     = "reports/evaluation"      
+            model       = pipeline,
+            X_test      = X_test,
+            y_test      = y_test,
+            class_names = class_names,
+            model_name  = name,
+            top_n       = 20,
+            save_dir    = "reports/evaluation",
+            seed        = seed,
         )
 
     return {

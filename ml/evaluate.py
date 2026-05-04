@@ -74,7 +74,7 @@ def plot_confusion_matrix(
             linewidths=0.5,
             ax=ax,
         )
-        ax.set_xlabel("Predicted labbel", fontsize = 10)
+        ax.set_xlabel("Predicted label", fontsize = 10)
         ax.set_ylabel("True label", fontsize = 10)
         ax.set_title(subtitle, fontsize = 10)
         ax.tick_params(labelsize=9)
@@ -216,6 +216,7 @@ def plot_feature_importance_permutation(
     scoring:      str = "balanced_accuracy",
     title:        str = " Feature importance (permutation)",
     save_path:    str | Path | None = None,
+    seed:         int = 42,
 )-> pd.DataFrame:
 
     """
@@ -238,6 +239,8 @@ def plot_feature_importance_permutation(
         Plot title.
     save_path : str | Path | None
         If provided, saves the figure. Otherwise shows interactively.
+    seed : int
+        Random seed for reproducibility. Default is 42.
 
     Returns
     -------
@@ -247,7 +250,7 @@ def plot_feature_importance_permutation(
     result = permutation_importance(
         model, X_test, y_test,
         n_repeats = n_repeats,
-        random_state = 42,
+        random_state = seed,
         scoring=scoring,
         n_jobs =-1,
     )
@@ -299,16 +302,21 @@ def evaluate_model(
         model_name:     str = "Model",
         top_n:          int = 20,
         save_dir:       str | Path | None = None,
-) -> None:
+        seed:           int = 42,
+        ) -> None:
     """
     Run all evaluation plots for one fitted model.
 
     Parameters
     ----------
-    model : fitted sklearn Pipeline
+    model : fitted sklearn Pipeline or estimator
+        The fitted model to evaluate. Can be a Pipeline or raw estimator.
     X_test : pd.DataFrame
+        Test features.
     y_test : array-like
+        Test labels.
     class_names : list of str
+        Names of the classes for plotting.
     model_name : str
         Used in plot titles and filenames.
     top_n : int
@@ -317,7 +325,7 @@ def evaluate_model(
         If provided, saves all figures here. Otherwise shows interactively.
     """
     y_pred = model.predict(X_test)
-    tag    =model_name.lower().replace(" ","_")
+    tag    = model_name.lower().replace(" ","_")
 
     def _path(name):
         return Path(save_dir) / f"{tag}_{name}.png" if save_dir else None
@@ -339,10 +347,11 @@ def evaluate_model(
     )
 
     plot_feature_importance_permutation(
-        model = model,
-        X_test = X_test,
-        y_test = y_test,
-        top_n = top_n,
-        title = f"{model_name} - Feature Importance (Permutation)",
-        save_path = _path("plot_feature_importance_permutation"),
+        model      = model,
+        X_test     = X_test,
+        y_test     = y_test,
+        top_n      = top_n,
+        title      = f"{model_name} - Feature Importance (Permutation)",
+        save_path  = _path("feature_importance_permutation"),
+        seed       = seed,
     )
