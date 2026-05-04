@@ -513,7 +513,7 @@ def run_training(
     class_names = sorted(y_test.unique().tolist())
 
     # Re-fit each model on full training set and evaluate
-    for name, pipeline in get_models(seed=seed, mode=mode).itmes():
+    for name, pipeline in get_models(seed=seed, mode=mode).items():
         print(f"\n Evaluating: {BOLD}{name}{RESET}")
         pipeline.fit(X_train, y_train)
         evaluate_model(

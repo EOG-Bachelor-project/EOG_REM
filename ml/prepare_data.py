@@ -78,7 +78,7 @@ def _assign_group(df: pd.DataFrame) -> pd.Series:
 # =====================================================================
 def load_features(
         feature_csv: str | Path,
-        drop_nan:    bool = True,
+        drop_nan:    bool = False,
         ) -> pd.DataFrame:
     """
     Load the feature CSV and assign group labels.
@@ -102,7 +102,7 @@ def load_features(
     print(f"Loaded: {feature_csv}  ({df.shape[0]} subjects, {df.shape[1]} columns)")
 
     # ---- Remove patients with invalid recordings ----
-    EXCLUDE_IDS = []  
+    EXCLUDE_IDS = ["DCSM_204_a", "DCSM_353_b", "DCSM_467_a"] 
     if EXCLUDE_IDS:
         before = len(df)
         df = df[~df["subject_id"].isin(EXCLUDE_IDS)].reset_index(drop=True)
