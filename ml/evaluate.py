@@ -167,8 +167,13 @@ def plot_feature_importance_MDI(
     pd.DataFrame
         Feature importance table sorted descending.
     """
-    # Handle Pipeline vs raw estimator 
+    # Handle Pipeline vs raw estimator
     clf = model.named_steps["clf"] if hasattr(model, "named_steps") else model
+
+    if not hasattr(clf, "feature_importances_"):
+        print(f"  [SKIP] MDI importance not available for {type(clf).__name__}")
+        return pd.DataFrame(columns=["feature", "importance"])
+
     importances = clf.feature_importances_
 
     importance_df = pd.DataFrame({
