@@ -107,7 +107,7 @@ def load_features(
         before = len(df)
         df = df[~df["subject_id"].isin(EXCLUDE_IDS)].reset_index(drop=True)
         print(f"  Excluded {before - len(df)} patients with invalid recordings: {EXCLUDE_IDS}")
-        
+
     # Assign group labels
     df["group"] = _assign_group(df)
     group_counts = df["group"].value_counts()
@@ -275,16 +275,6 @@ def split_data(
     X = df_valid[feature_cols]                 # Feature matrix
     y = labels_valid                           # Label vector  
 
-    imputer = SimpleImputer(strategy="median")
-    X_imputed = pd.DataFrame(
-        imputer.fit_transform(X),
-        columns=feature_cols,
-        index=X.index,
-    )
-    X = X_imputed
-    print(f"\n  Imputed NaN values using median strategy")
-    print(f"  NaN values before imputation: {X.isna().sum().sum()}")
-
     # ---- 3) Split into train/test sets ----
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
@@ -292,6 +282,14 @@ def split_data(
         random_state=seed,
         stratify=y,
     )
+
+    # ---- 4) Impute after split — fit on train only ----
+    print(f"  NaN values before imputation: {X_train.isna().sum().sum()}")
+    imputer = SimpleImputer(strategy="median")
+    X_train = pd.DataFrame(imputer.fit_transform(X_train), columns=feature_cols)
+    X_test  = pd.DataFrame(imputer.transform(X_test),      columns=feature_cols)
+    print(f"  NaN values after imputation:  {X_train.isna().sum().sum()}")
+    print(f"  Imputed using median strategy")
 
     print(f"\nTrain/test split (test_size={test_size}, seed={seed}):")
     print(f"  Train: {len(X_train)} subjects")
