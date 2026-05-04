@@ -11,6 +11,7 @@
 # Imports
 # ================================================================================
 from __future__ import annotations
+from turtle import mode
 
 import numpy as np          # for numerical operations
 import pandas as pd         # for data manipulation
@@ -506,11 +507,15 @@ def run_training(
  
     # ---- 5) Evaluation plots ----
     
+    # Determine class names from y_test
+    if mode == "binary":
+        class_names = ["Control", "Disease"]
+    else:
+        class_names = ["Control", "iRBD", "PD(-RBD)", "PD(+RBD)"]
+
     print(f"\n{BOLD}Generating evaluation plots{RESET}")
     print(f"{'='*60}")
 
-    # Determine class names from y_test
-    class_names = sorted(y_test.unique().tolist())
 
     # Re-fit each model on full training set and evaluate
     for name, pipeline in get_models(seed=seed, mode=mode).items():
