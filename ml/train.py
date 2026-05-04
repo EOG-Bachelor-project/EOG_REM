@@ -11,7 +11,6 @@
 # Imports
 # ================================================================================
 from __future__ import annotations
-from turtle import mode
 
 import numpy as np          # for numerical operations
 import pandas as pd         # for data manipulation
@@ -129,8 +128,8 @@ def get_models(seed: int = DEFAULT_SEED, mode: str = "binary") -> dict[str, Pipe
         ]),
         # --- XGBoost ---
         # NOTE: XGBoost does not support class_weight="balanced".
-        # Class imbalance is handled via scale_pos_weight (binary)
-        # or compute_sample_weight (multiclass) passed to fit().
+        #       Class imbalance is handled via scale_pos_weight (binary)
+        #       or compute_sample_weight (multiclass) passed to fit().
         "XGBoost": Pipeline([
             ("scaler", StandardScaler()),
             ("clf", XGBClassifier(**xgb_params)),
@@ -209,14 +208,14 @@ def cross_validate_models(
  
     # ---- 3) Print summary table ----
     print(f"\n{BOLD}Cross-validation summary{RESET}")
-    print(f"{'-'*60}")
-    print(f"  {'Model':<25s} {'Accuracy':>10s} {'F1':>10s} {'Precision':>10s} {'Recall':>10s}")
-    print(f"  {'-'*65}")
+    print(f"  {'-'*80}")
+    print(f"  {'Model':<22s} {'Accuracy':>16s} | {'F1':<11s} | {'Precision':<11s} | {'Recall'}")
+    print(f"  {'-'*80}")
     for _, r in results_df.iterrows():
         print(f"  {r['model']:<25s} "
-              f"{r['accuracy_mean']:>7.3f}±{r['accuracy_std']:.3f} "
-              f"{r['f1_weighted_mean']:>5.3f}±{r['f1_weighted_std']:.3f} "
-              f"{r['precision_weighted_mean']:>5.3f}±{r['precision_weighted_std']:.3f} "
+              f"{r['accuracy_mean']:>7.3f}±{r['accuracy_std']:.3f} | "
+              f"{r['f1_weighted_mean']:>5.3f}±{r['f1_weighted_std']:.3f} | "
+              f"{r['precision_weighted_mean']:>5.3f}±{r['precision_weighted_std']:.3f} | "
               f"{r['recall_weighted_mean']:>5.3f}±{r['recall_weighted_std']:.3f}")
  
     return results_df
@@ -259,7 +258,7 @@ def evaluate_on_test(
     # ---- 2) Train each model on full training set and evaluate on test set ----
     results = []
     for name, pipeline in models.items():
-        print(f"\n  {BOLD}{name}{RESET}")
+        print(f"\n{BOLD}- - - {name} - - -{RESET}")
  
         # XGBoost needs sample_weight for class imbalance instead of class_weight
         if name == "XGBoost":
@@ -283,21 +282,21 @@ def evaluate_on_test(
             "recall": rec,
         })
  
-        print(f"    Accuracy:  {acc:.3f}")
-        print(f"    F1:        {f1:.3f}")
-        print(f"    Precision: {prec:.3f}")
-        print(f"    Recall:    {rec:.3f}")
+        print(f"Accuracy:  {acc:.3f}")
+        print(f"F1:        {f1:.3f}")
+        print(f"Precision: {prec:.3f}")
+        print(f"Recall:    {rec:.3f}")
  
         # Classification report
-        print(f"\n    Classification report:")
+        print(f"\nClassification report:")
         report = classification_report(y_test, y_pred, zero_division=0)
         for line in report.split("\n"):
             print(f"    {line}")
  
         # Confusion matrix
         cm = confusion_matrix(y_test, y_pred)
-        print(f"    Confusion matrix:")
-        print(f"    {cm}")
+        print(f"Confusion matrix:")
+        print(f"{cm}")
  
     return pd.DataFrame(results)
  
@@ -312,7 +311,9 @@ def get_feature_importance(
         seed:       int = DEFAULT_SEED,
         ) -> pd.DataFrame:
     """
-    Train a Random Forest and return feature importances.
+    Train a Random Forest and return feature importances. \n
+    Prints the top_n features with a simple text-based bar chart. \n
+    Returns a DataFrame with all features sorted by importance (descending).
  
     Parameters
     ----------
@@ -344,15 +345,16 @@ def get_feature_importance(
     # ---- 2) Fit model ----
     rf.fit(X_train, y_train)
     
-    # --- 3) Extract feature importances ----
+    # ---- 3) Extract feature importances ----
     importances = rf.named_steps["clf"].feature_importances_
     importance_df = pd.DataFrame({
         "feature": X_train.columns,
         "importance": importances,
-    }).sort_values("importance", ascending=False).reset_index(drop=True)
- 
+        }).sort_values("importance", ascending=False).reset_index(drop=True)
+    
+    # ---- 4) Print top features ----
     print(f"\n{BOLD}Top {top_n} features (Random Forest importance){RESET}")
-    print(f"{'-'*50}")
+    print(f"{'-'*60}")
     for _, r in importance_df.head(top_n).iterrows():
         bar = "#" * int(r["importance"] * 200)
         print(f"  {r['feature']:<40s}  {r['importance']:.4f}  {bar}")
@@ -371,7 +373,9 @@ def get_xgb_feature_importance(
         mode:       str = "binary",
 ) -> pd.DataFrame:
     """
-    Train an XGBoost model and return feature importances.
+    Train an XGBoost model and return feature importances. \n
+    Prints the top_n features with a simple text-based bar chart. \n
+    Returns a DataFrame with feature importances sorted by importance (descending).
 
     Parameters
     ----------
@@ -426,10 +430,11 @@ def get_xgb_feature_importance(
     importance_df = pd.DataFrame({
         "feature":    X_train.columns,
         "importance": importances,
-    }).sort_values("importance", ascending=False).reset_index(drop=True)
+        }).sort_values("importance", ascending=False).reset_index(drop=True)
 
+    # ---- 4) Print top features ----
     print(f"\n{BOLD}Top {top_n} features (XGBoost importance){RESET}")
-    print(f"{'-'*50}")
+    print(f"{'-'*60}")
     for _, r in importance_df.head(top_n).iterrows():
         bar = "#" * int(r["importance"] * 200)
         print(f"  {r['feature']:<40s}  {r['importance']:.4f}  {bar}")
@@ -446,7 +451,7 @@ def run_training(
         test_size:      float = 0.2,
         n_folds:        int = 5,
         seed:           int = DEFAULT_SEED,
-        drop_nan:       bool = False,
+        drop_nan:       bool = True,
         ) -> dict:
     
     """
@@ -506,16 +511,11 @@ def run_training(
     print(f"{'='*60}\n")
  
     # ---- 5) Evaluation plots ----
-    
-    # Determine class names from y_test
-    if mode == "binary":
-        class_names = ["Control", "Disease"]
-    else:
-        class_names = ["Control", "iRBD", "PD(-RBD)", "PD(+RBD)"]
-
     print(f"\n{BOLD}Generating evaluation plots{RESET}")
     print(f"{'='*60}")
 
+    # Determine class names from y_test
+    class_names = sorted(y_test.unique().tolist())
 
     # Re-fit each model on full training set and evaluate
     for name, pipeline in get_models(seed=seed, mode=mode).items():
@@ -570,5 +570,4 @@ if __name__ == "__main__":
         test_size=args.test_size,
         n_folds=args.folds,
         seed=args.seed,
-        drop_nan=False,  # Set to False to impute instead of dropping
-    )
+        )
