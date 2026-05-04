@@ -27,7 +27,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.inspection import permutation_importance
-from ml.prepare_data import X_train
 
 # ANSI helpers
 BOLD  = "\033[1m"
@@ -69,7 +68,7 @@ def plot_confusion_matrix(
     for ax, data, fmt, subtitle in zip(
         axes,
         [cm, cm_norm],
-        ["d", "2.f"]
+        ["d", ".2f"]
         ["Counts", "Normalised (row%)"]
     ):
         sns.heatmap(
