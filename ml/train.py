@@ -446,7 +446,7 @@ def run_training(
         test_size:      float = 0.2,
         n_folds:        int = 5,
         seed:           int = DEFAULT_SEED,
-        drop_nan:       bool = True,
+        drop_nan:       bool = False,
         ) -> dict:
     
     """
@@ -570,4 +570,5 @@ if __name__ == "__main__":
         test_size=args.test_size,
         n_folds=args.folds,
         seed=args.seed,
+        drop_nan=False,  # Set to False to impute instead of dropping
     )
