@@ -453,7 +453,7 @@ def run_training(
         test_size:      float = 0.2,
         n_folds:        int = 5,
         seed:           int = DEFAULT_SEED,
-        drop_nan:       bool = True,
+        drop_nan:       bool = False,
         ) -> dict:
     
     """

@@ -317,7 +317,7 @@ def prepare(
         binary_mode:    str = "control_vs_all",
         test_size:      float = 0.2,
         seed:           int = DEFAULT_SEED,
-        drop_nan:       bool = True,
+        drop_nan:       bool = False,
         ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
     Load features, assign labels, and split — all in one call.
