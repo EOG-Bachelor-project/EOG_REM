@@ -500,6 +500,7 @@ def run_training(
         n_iter:         int = 20,
         seed:           int = DEFAULT_SEED,
         drop_nan:       bool = False,
+        imputer_strategy: str = "median",
         ) -> dict:
     """
     Full two-layer cross-validation pipeline:
@@ -574,6 +575,7 @@ def run_training(
         test_size    = test_size,
         seed         = seed,
         drop_nan     = drop_nan,
+        imputer_strategy = imputer_strategy,
     )
  
     # ---- 2) Two-layer CV — never touches X_test ----
@@ -649,6 +651,10 @@ if __name__ == "__main__":
     parser.add_argument("--n-iter",     type=int,   default=20)
     parser.add_argument("--seed",       type=int,   default=42)
     parser.add_argument("--drop-nan",   action="store_true", default=False)
+    parser.add_argument("--imputer", type=str, default="median",
+                        choices=["median", "mean", "knn", "most_frequent"],
+                        help="Imputation strategy for NaN values (default: median)")
+
  
     args = parser.parse_args()
  
@@ -662,4 +668,5 @@ if __name__ == "__main__":
         n_iter      = args.n_iter,
         seed        = args.seed,
         drop_nan    = args.drop_nan,
+        imputer_strategy = args.imputer,
     )

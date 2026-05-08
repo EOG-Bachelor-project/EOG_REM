@@ -285,11 +285,19 @@ def split_data(
 
     # ---- 4) Impute after split — fit on train only ----
     print(f"  NaN values before imputation: {X_train.isna().sum().sum()}")
-    imputer = SimpleImputer(strategy="median")
+
+    if imputer_strategy == "knn":
+        from sklearn.impute import KNNImputer
+        imputer = KNNImputer(n_neighbors=5)
+        print(f"  Imputed using KNN strategy (n_neighbors=5)")
+    else:
+        imputer = SimpleImputer(strategy=imputer_strategy)
+        print(f"  Imputed using {imputer_strategy} strategy")
+        
     X_train = pd.DataFrame(imputer.fit_transform(X_train), columns=feature_cols)
     X_test  = pd.DataFrame(imputer.transform(X_test),      columns=feature_cols)
     print(f"  NaN values after imputation:  {X_train.isna().sum().sum()}")
-    print(f"  Imputed using median strategy")
+    print(f"  Imputed using {imputer_strategy} strategy")
 
     print(f"\nTrain/test split (test_size={test_size}, seed={seed}):")
     print(f"  Train: {len(X_train)} subjects")
@@ -318,6 +326,7 @@ def prepare(
         test_size:      float = 0.2,
         seed:           int = DEFAULT_SEED,
         drop_nan:       bool = False,
+        imputer_strategy: str = "median",
         ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
     Load features, assign labels, and split — all in one call.
@@ -350,6 +359,9 @@ def prepare(
     drop_nan : bool
         Drop subjects with NaN features. If False, NaN features will be replaced with the mean. \\
         **Default is `True`**.
+    imputer_strategy : str
+        Strategy to use for imputing missing values. Options are 'mean', 'median', 'most_frequent', or 'knn'. \\
+        **Default is `'median'`**.
 
     Returns
     -------
@@ -382,7 +394,7 @@ def prepare(
     if n_dropped > 0:
         print(f"  {n_dropped} subjects excluded (don't fit this classification task)")
 
-    return split_data(df, labels, test_size=test_size, seed=seed)
+    return split_data(df, labels, test_size=test_size, seed=seed, imputer_strategy=imputer_strategy)
 
 
 # =====================================================================
