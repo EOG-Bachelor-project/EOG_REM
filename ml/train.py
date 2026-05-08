@@ -589,12 +589,13 @@ def run_training(
  
     # ---- 1) Prepare data ----
     X_train, X_test, y_train, y_test = prepare(
-        feature_csv  = feature_csv,
-        mode         = mode,
-        binary_mode  = binary_mode,
-        test_size    = test_size,
-        seed         = seed,
-        drop_nan     = drop_nan,
+        feature_csv      = feature_csv,
+        mode             = mode,
+        binary_mode      = binary_mode,
+        test_size        = test_size,
+        seed             = seed,
+        drop_nan         = drop_nan,
+        imputer_strategy = imputer_strategy,
     )
 
     # Build the run_config dict that will appear on every PDF info page
@@ -610,6 +611,7 @@ def run_training(
         "n_outer":     n_outer,
         "n_inner":     n_inner,
         "n_iter":      n_iter,
+        "imputer_strategy":  imputer_strategy,
     }
  
     # ---- 2) Two-layer CV — never touches X_test ----
@@ -827,7 +829,7 @@ def sweep_training(
 # ================================================================================
 if __name__ == "__main__":
     import argparse
- 
+
     parser = argparse.ArgumentParser(
         description="Train RBD classifiers with two-layer CV. Use --sweep for multi-config runs."
     )
@@ -843,7 +845,10 @@ if __name__ == "__main__":
     parser.add_argument("--seed",        type=int,   default=42)
     parser.add_argument("--drop-nan",    action="store_true", default=False)
     parser.add_argument("--save-dir",    type=str,   default="reports/evaluation")
- 
+    parser.add_argument("--imputer",     type=str,   default="median",
+                        choices=["median", "mean", "most_frequent"],
+                        help="Imputation strategy for NaN values (default: median)")
+
     # Sweep options
     parser.add_argument("--sweep",       action="store_true",
                         help="Run over multiple seeds/splits/modes")
@@ -851,43 +856,33 @@ if __name__ == "__main__":
     parser.add_argument("--test-sizes",  type=float, nargs="+", default=[0.2, 0.25])
     parser.add_argument("--modes",       type=str,   nargs="+", default=["binary", "multiclass"])
     parser.add_argument("--sweep-dir",   type=str,   default="reports/sweep")
-    parser.add_argument("--test-size",  type=float, default=0.2)
-    parser.add_argument("--n-outer",    type=int,   default=5)
-    parser.add_argument("--n-inner",    type=int,   default=5)
-    parser.add_argument("--n-iter",     type=int,   default=20)
-    parser.add_argument("--seed",       type=int,   default=42)
-    parser.add_argument("--drop-nan",   action="store_true", default=False)
-    parser.add_argument("--imputer", type=str, default="median",
-                        choices=["median", "mean", "knn", "most_frequent"],
-                        help="Imputation strategy for NaN values (default: median)")
 
- 
     args = parser.parse_args()
- 
+
     if args.sweep:
         sweep_training(
-            feature_csv   = args.feature_csv,
-            seeds         = args.seeds,
-            test_sizes    = args.test_sizes,
-            modes         = args.modes,
-            binary_mode   = args.binary_mode,
-            n_outer       = args.n_outer,
-            n_inner       = args.n_inner,
-            n_iter        = args.n_iter,
-            drop_nan      = args.drop_nan,
-            save_base_dir = args.sweep_dir,
+            feature_csv      = args.feature_csv,
+            seeds            = args.seeds,
+            test_sizes       = args.test_sizes,
+            modes            = args.modes,
+            binary_mode      = args.binary_mode,
+            n_outer          = args.n_outer,
+            n_inner          = args.n_inner,
+            n_iter           = args.n_iter,
+            drop_nan         = args.drop_nan,
+            save_base_dir    = args.sweep_dir,
         )
     else:
         run_training(
-            feature_csv = args.feature_csv,
-            mode        = args.mode,
-            binary_mode = args.binary_mode,
-            test_size   = args.test_size,
-            n_outer     = args.n_outer,
-            n_inner     = args.n_inner,
-            n_iter      = args.n_iter,
-            seed        = args.seed,
-            drop_nan    = args.drop_nan,
-            save_dir    = args.save_dir,
+            feature_csv      = args.feature_csv,
+            mode             = args.mode,
+            binary_mode      = args.binary_mode,
+            test_size        = args.test_size,
+            n_outer          = args.n_outer,
+            n_inner          = args.n_inner,
+            n_iter           = args.n_iter,
+            seed             = args.seed,
+            drop_nan         = args.drop_nan,
+            save_dir         = args.save_dir,
             imputer_strategy = args.imputer,
-    )
+        )
