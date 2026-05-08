@@ -681,16 +681,17 @@ def run_training(
 # Sweep — run over multiple seeds / test sizes / modes automatically
 # ================================================================================
 def sweep_training(
-        feature_csv:   str | Path,
-        seeds:         list[int]   = (42, 0, 1),
-        test_sizes:    list[float] = (0.2, 0.25),
-        modes:         list[str]   = ("binary", "multiclass"),
-        binary_mode:   str         = "control_vs_all",
-        n_outer:       int         = 5,
-        n_inner:       int         = 5,
-        n_iter:        int         = 20,
-        drop_nan:      bool        = False,
-        save_base_dir: str | Path  = "reports/sweep",
+        feature_csv:        str | Path,
+        seeds:              list[int]   = (42, 0, 1),
+        test_sizes:         list[float] = (0.2, 0.25),
+        modes:              list[str]   = ("binary", "multiclass"),
+        binary_mode:        str         = "control_vs_all",
+        n_outer:            int         = 5,
+        n_inner:            int         = 5,
+        n_iter:             int         = 20,
+        drop_nan:           bool        = False,
+        imputer_strategy:   str       = "median",
+        save_base_dir:      str | Path  = "reports/sweep",
         ) -> pd.DataFrame:
     """
     Run run_training for every combination of seed x test_size x mode.
@@ -758,6 +759,7 @@ def sweep_training(
     print(f"  {BOLD}Sweep — {n_combos} configurations{RESET}")
     print(f"  Seeds      : {list(seeds)}")
     print(f"  Test sizes : {list(test_sizes)}")
+    print(f"  Imputer    : {imputer_strategy}")
     print(f"  Modes      : {list(modes)}")
     print(f"  Output     : {base_dir}")
     print(f"{'='*60}")
@@ -784,6 +786,7 @@ def sweep_training(
                 n_iter       = n_iter,
                 seed         = seed,
                 drop_nan     = drop_nan,
+                imputer_strategy = imputer_strategy,
                 save_dir     = run_dir,
             )
  
@@ -870,6 +873,7 @@ if __name__ == "__main__":
             n_inner          = args.n_inner,
             n_iter           = args.n_iter,
             drop_nan         = args.drop_nan,
+            imputer_strategy = args.imputer,
             save_base_dir    = args.sweep_dir,
         )
     else:
