@@ -68,15 +68,28 @@ def _label_map(mode: str) -> dict[int, str]:
 # ================================================================================
 # Model + hyperparameter search space definitions
 # ================================================================================
-def get_model_search_spaces(seed: int = DEFAULT_SEED, mode: str = "binary") -> dict:
+def get_model_search_spaces(
+        seed: int = DEFAULT_SEED, 
+        mode: str = "binary"
+        ) -> dict:
     """
-    Return a dict of:
-        model_name -> {
-            "pipeline":    sklearn Pipeline,
-            "param_dist":  dict of hyperparameter distributions for RandomizedSearchCV,
-        }
- 
-    The inner CV loop will search over param_dist for each model.
+    Define the models and their hyperparameter search spaces for RandomizedSearchCV.
+
+    Parameters
+    ----------
+    seed : int
+        Random seed for reproducibility. 
+        **Default is 42**.
+    mode : str
+        'binary' or 'multiclass'. Affects model definitions and label mapping. 
+        **Default is 'binary'**.
+    
+    Returns
+    -------
+    dict
+        Dictionary of model specifications, where each key is a model name and each value is a dict containing:
+        - "pipeline": sklearn Pipeline with preprocessing and classifier.
+        - "param_dist": dict of hyperparameter distributions for RandomizedSearchCV.
     """
     xgb_objective  = "binary:logistic" if mode == "binary" else "multi:softprob"
     xgb_metric     = "logloss"         if mode == "binary" else "mlogloss"
@@ -107,7 +120,6 @@ def get_model_search_spaces(seed: int = DEFAULT_SEED, mode: str = "binary") -> d
                     random_state=seed,
                     class_weight="balanced",
                     solver="lbfgs",
-                    multi_class="auto",
                 )),
             ]),
             "param_dist": {
