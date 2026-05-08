@@ -333,6 +333,7 @@ def fit_and_evaluate_best(
         seed:       int = DEFAULT_SEED,
         mode:       str = "binary",
         save_dir:   str | Path | None = "reports/evaluation",
+        is_best:    bool = False,
         ) -> None:
     """
     Fit the best model (chosen by outer CV) on the full training set using one
@@ -365,8 +366,11 @@ def fit_and_evaluate_best(
         **Default is 'binary'**.
     save_dir : str | Path | None
         Where to write the evaluation PDF.
+    is_best : bool
+        Whether this is the best model (for display purposes).
     """
-    print(f"\n{BOLD}Final evaluation: {best_name}{RESET}")
+    marker = f"  {GREEN} <- CV best{RESET}" if is_best else ""
+    print(f"\n{BOLD}Final evaluation: {best_name}{RESET}{marker}")
     print(f"{'='*60}")
     print(f"  Fitting on full training set with inner CV "
           f"(n_inner={n_inner}, n_iter={n_iter}) ...")
@@ -587,19 +591,28 @@ def run_training(
         mode    = mode,
     )
  
-    # ---- 3) Fit best model on full train, evaluate once on test ----
-    best_model = fit_and_evaluate_best(
-        best_name = best_name,
-        X_train   = X_train,
-        y_train   = y_train,
-        X_test    = X_test,
-        y_test    = y_test,
-        n_inner   = n_inner,
-        n_iter    = n_iter,
-        seed      = seed,
-        mode      = mode,
-        save_dir  = "reports/evaluation",
-    )
+    # ---- 3) Fit all models on full train, evaluate each on test ----
+    best_model = None
+    model_specs = get_model_search_spaces(seed=seed, mode=mode)
+    lm          = _label_map(mode)
+    class_names = [lm[c] for c in sorted(y_test.unique().tolist())]
+
+    for name in model_specs:
+        model = fit_and_evaluate_best(
+            best_name = name,
+            X_train   = X_train,
+            y_train   = y_train,
+            X_test    = X_test,
+            y_test    = y_test,
+            n_inner   = n_inner,
+            n_iter    = n_iter,
+            seed      = seed,
+            mode      = mode,
+            save_dir  = "reports/evaluation",
+            is_best   = (name == best_name), 
+        )
+        if name == best_name:
+            best_model = model
  
     # ---- 4) Feature importance (informational, on training set) ----
     importance_df = print_feature_importance(
