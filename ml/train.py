@@ -690,7 +690,7 @@ def sweep_training(
         n_inner:            int         = 5,
         n_iter:             int         = 20,
         drop_nan:           bool        = False,
-        imputer_strategy:   str       = "median",
+        imputer_strategy:   str       = "knn",
         save_base_dir:      str | Path  = "reports/sweep",
         ) -> pd.DataFrame:
     """
@@ -848,9 +848,9 @@ if __name__ == "__main__":
     parser.add_argument("--seed",        type=int,   default=42)
     parser.add_argument("--drop-nan",    action="store_true", default=False)
     parser.add_argument("--save-dir",    type=str,   default="reports/evaluation")
-    parser.add_argument("--imputer",     type=str,   default="median",
-                        choices=["median", "mean", "most_frequent"],
-                        help="Imputation strategy for NaN values (default: median)")
+    parser.add_argument("--imputer",     type=str,   default="knn",
+                        choices=["median", "mean", "most_frequent", "knn"],
+                        help="Imputation strategy for NaN values (default: knn). If --drop-nan is set, this is ignored.")
 
     # Sweep options
     parser.add_argument("--sweep",       action="store_true",

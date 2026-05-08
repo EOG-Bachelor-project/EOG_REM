@@ -735,7 +735,10 @@ def evaluate_model(
         out_dir   = Path(save_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        pdf_path  = out_dir / f"{tag}_{timestamp}.pdf"
+        mode_tag   = run_config.get("mode", "") if run_config else ""
+        seed_tag = run_config.get("seed", "") if run_config else ""
+        imputer_tag = run_config.get("imputer_strategy", "") if run_config else ""
+        pdf_path = out_dir / f"{tag}_{mode_tag}_seed{seed_tag}_{imputer_tag}_{timestamp}.pdf"
 
         with pdf_backend.PdfPages(pdf_path) as pdf:
             for fig in figs:
