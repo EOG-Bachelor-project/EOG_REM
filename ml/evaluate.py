@@ -8,28 +8,202 @@
 # Imports
 # =====================================================================
 from __future__ import annotations
-
+ 
+import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pdf_backend
 import seaborn as sns
 from pathlib import Path
-
+ 
 from sklearn.metrics import (
     confusion_matrix,
     classification_report,
     roc_curve,
     auc,
+    accuracy_score,
+    balanced_accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
 )
-
 from sklearn.inspection import permutation_importance
 from sklearn.preprocessing import label_binarize
-
+ 
 # ANSI helpers
 BOLD  = "\033[1m"
 GREEN = "\033[92m"
 RESET = "\033[0m"
+
+# =====================================================================
+# Report info page  — always the first page of the PDF
+# =====================================================================
+ 
+def _plot_run_info(
+        model_name:  str,
+        class_names: list[str],
+        y_test,
+        y_pred,
+        run_config:  dict | None = None,
+        cv_results:  pd.DataFrame | None = None,
+        best_params: dict | None = None,
+        ) -> plt.Figure:
+    """
+    Build and return a summary info page for the PDF.
+ 
+    Shows:
+      - Run configuration (seed, test_size, mode, n_outer, n_inner, n_iter, timestamp)
+      - Test set metrics (accuracy, balanced accuracy, F1, precision, recall)
+      - Class distribution of the test set
+      - CV results table (mean ± std per model) if provided
+      - Best hyperparameters found for this model
+ 
+    Parameters
+    ----------
+    model_name : str
+        Name of the model (e.g., "Random Forest") — used in the title and PDF filename.
+    class_names : list[str]
+        List of class names corresponding to the label encoding (e.g., ["Wake", "NREM", "REM"]).
+    y_test : array-like      
+        True test labels.
+    y_pred : array-like      
+        Predicted test labels.
+    run_config  : dict | None
+        Keys (all optional): seed, test_size, mode, binary_mode,
+        n_outer, n_inner, n_iter, feature_csv, n_train, n_test, n_features.
+    cv_results  : pd.DataFrame | None
+        Output of two_layer_cross_validate - shown as a table.
+    best_params : dict | None
+        Best hyperparameters chosen by inner CV for this model.
+    """
+    fig = plt.figure(figsize=(12, 15))
+    fig.patch.set_facecolor("white")
+ 
+    # ── title ───────────────────────────────────────────────────────
+    fig.text(0.5, 0.97, f"Evaluation Report  —  {model_name}",
+             ha="center", va="top", fontsize=16, fontweight="bold", color="#0E7490")
+    fig.text(0.5, 0.945,
+             datetime.datetime.now().strftime("Generated %Y-%m-%d  %H:%M"),
+             ha="center", va="top", fontsize=9, color="#666666")
+ 
+    y_cursor = 0.91
+ 
+    def _section(title: str) -> None:
+        nonlocal y_cursor
+        fig.text(0.05, y_cursor, title, fontsize=11, fontweight="bold", color="#0E7490", transform=fig.transFigure)
+
+        y_cursor -= 0.022
+        fig.add_artist(
+            plt.Line2D([0.05, 0.95], 
+                       [y_cursor, y_cursor],
+                       transform=fig.transFigure,
+                       color="#0E7490", 
+                       linewidth=0.8, 
+                       alpha=0.5)
+                       )
+        y_cursor -= 0.010
+ 
+    def _row(label: str, value: str, indent: float = 0.07,
+             bold_val: bool = False, color: str = "black") -> None:
+        nonlocal y_cursor
+        fig.text(indent, y_cursor, label, fontsize=9,
+                 color="#444444", transform=fig.transFigure)
+        fig.text(0.42, y_cursor, value, fontsize=9, color=color,
+                 fontweight="bold" if bold_val else "normal",
+                 transform=fig.transFigure)
+        y_cursor -= 0.018
+ 
+    # ── 1. Run configuration ─────────────────────────────────────────
+    _section("1  Run configuration")
+    if run_config:
+        mode_str = run_config.get("mode", "—")
+        if mode_str == "binary":
+            mode_str += f"  ({run_config.get('binary_mode', '')})"
+        cfg_items = [
+            ("Feature CSV",       str(run_config.get("feature_csv", "—"))),
+            ("Mode",              mode_str),
+            ("Seed",              str(run_config.get("seed", "—"))),
+            ("Test size",         f"{run_config.get('test_size', '—')}"
+                                  f"  ({run_config.get('n_train','?')} train / "
+                                  f"{run_config.get('n_test','?')} test)"),
+            ("Features",          str(run_config.get("n_features", "—"))),
+            ("Outer CV folds",    str(run_config.get("n_outer", "—"))),
+            ("Inner CV folds",    str(run_config.get("n_inner", "—"))),
+            ("Search iterations", str(run_config.get("n_iter",  "—"))),
+            ("Classes",           ", ".join(class_names)),
+        ]
+        for label, val in cfg_items:
+            _row(label, val)
+    else:
+        _row("(no run config provided)", "—")
+    y_cursor -= 0.008
+ 
+    # ── 2. Test set metrics ──────────────────────────────────────────
+    _section("2  Test set metrics")
+    acc  = accuracy_score(y_test, y_pred)
+    bal  = balanced_accuracy_score(y_test, y_pred)
+    f1   = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+    prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+    rec  = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+    for label, val in [
+        ("Accuracy",          f"{acc:.4f}"),
+        ("Balanced accuracy", f"{bal:.4f}"),
+        ("F1 (weighted)",     f"{f1:.4f}"),
+        ("Precision",         f"{prec:.4f}"),
+        ("Recall",            f"{rec:.4f}"),
+    ]:
+        _row(label, val, bold_val=True, color="#0E7490")
+    y_cursor -= 0.008
+ 
+    # ── 3. Class distribution ────────────────────────────────────────
+    _section("3  Test set class distribution")
+    unique, counts = np.unique(y_test, return_counts=True)
+    for cls, cnt in zip(unique, counts):
+        name = class_names[cls] if cls < len(class_names) else str(cls)
+        _row(f"  {name}", f"{cnt}  ({cnt / len(y_test) * 100:.1f}%)")
+    y_cursor -= 0.008
+ 
+    # ── 4. CV summary table ──────────────────────────────────────────
+    if cv_results is not None and not cv_results.empty:
+        _section("4  Two-layer CV summary  (balanced accuracy)")
+        col_x   = [0.07, 0.42, 0.56, 0.66, 0.76]
+        headers = ["Model", "Mean", "Std", "Min", "Max"]
+        for hx, h in zip(col_x, headers):
+            fig.text(hx, y_cursor, h, fontsize=8, fontweight="bold",
+                     color="#444444", transform=fig.transFigure)
+        y_cursor -= 0.016
+ 
+        best_mean = cv_results[
+            cv_results["model"] != "Baseline (majority)"
+        ]["bal_acc_mean"].max()
+ 
+        for _, r in cv_results.iterrows():
+            is_best = (r["model"] != "Baseline (majority)"
+                       and r.get("bal_acc_mean", 0) == best_mean)
+            marker = " ←" if is_best else ""
+            vals = [
+                r["model"] + marker,
+                f"{r.get('bal_acc_mean', 0):.3f}",
+                f"{r.get('bal_acc_std',  0):.3f}",
+                f"{r.get('bal_acc_min',  0):.3f}",
+                f"{r.get('bal_acc_max',  0):.3f}",
+            ]
+            color = "#0E7490" if is_best else "black"
+            for hx, v in zip(col_x, vals):
+                fig.text(hx, y_cursor, v, fontsize=8, color=color,
+                         transform=fig.transFigure)
+            y_cursor -= 0.016
+        y_cursor -= 0.008
+ 
+    # ── 5. Best hyperparameters ──────────────────────────────────────
+    if best_params:
+        _section("5  Best hyperparameters")
+        for k, v in sorted(best_params.items()):
+            _row(f"  {k}", str(v))
+ 
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+    return fig
 
 
 # =====================================================================
@@ -466,6 +640,9 @@ def evaluate_model(
         top_n:       int = 20,
         save_dir:    str | Path | None = None,
         seed:        int = 42,
+        run_config:  dict | None = None,
+        cv_results:  pd.DataFrame | None = None,
+        best_params: dict | None = None,
         ) -> None:
     """
     Run all evaluation plots for one fitted model and collect them into a
@@ -492,6 +669,12 @@ def evaluate_model(
         Directory for the output PDF. Created if it does not exist.
     seed : int
         Random seed for permutation importance.
+    run_config : dict | None
+        Optional run configuration info to include in the first page of the PDF.
+    cv_results : pd.DataFrame | None
+        Optional CV results summary to include in the first page of the PDF.
+    best_params : dict | None
+        Optional best hyperparameters to include in the first page of the PDF.
     """
     y_pred = model.predict(X_test)
 
@@ -504,66 +687,69 @@ def evaluate_model(
     # ── build all figures ────────────────────────────────────────────
     figs: list[plt.Figure] = []
 
-    figs.append(_plot_confusion_matrix(
-        y_true      = y_test,
-        y_pred      = y_pred,
+    # Page 1 — info sheet
+    figs.append(_plot_run_info(
+        model_name  = model_name,
         class_names = class_names,
-        title       = f"{model_name} — Confusion Matrix",
+        y_test      = y_test,
+        y_pred      = y_pred,
+        run_config  = run_config,
+        cv_results  = cv_results,
+        best_params = best_params,
     ))
 
+    # Page 2 — confusion matrix
+    figs.append(_plot_confusion_matrix(
+        y_true=y_test, y_pred=y_pred, class_names=class_names,
+        title=f"{model_name} — Confusion Matrix",
+    ))
+
+    # Page 3 — ROC curves
     if y_prob is not None:
         figs.append(_plot_roc_curves(
-            y_true      = y_test,
-            y_prob      = y_prob,
-            class_names = class_names,
-            title       = f"{model_name} — ROC Curves (one-vs-rest)",
+            y_true=y_test, y_prob=y_prob, class_names=class_names,
+            title=f"{model_name} — ROC Curves (one-vs-rest)",
         ))
     else:
         print("  [SKIP] ROC curve — model has no predict_proba")
 
+    # Page 4 — MDI importance
     mdi_fig, mdi_df = _plot_feature_importance_MDI(
-        model         = model,
-        feature_names = list(X_test.columns),
-        top_n         = top_n,
-        title         = f"{model_name} — Feature Importance (MDI)",
+        model=model, feature_names=list(X_test.columns),
+        top_n=top_n, title=f"{model_name} — Feature Importance (MDI)",
     )
     if mdi_fig is not None:
         figs.append(mdi_fig)
 
+    # Page 5 — permutation importance
     perm_fig, perm_df = _plot_feature_importance_permutation(
-        model     = model,
-        X_test    = X_test,
-        y_test    = y_test,
-        top_n     = top_n,
-        title     = f"{model_name} — Feature Importance (Permutation)",
-        seed      = seed,
+        model=model, X_test=X_test, y_test=y_test,
+        top_n=top_n, title=f"{model_name} — Feature Importance (Permutation)",
+        seed=seed,
     )
     figs.append(perm_fig)
 
-    # ── save or show ────────────────────────────────────────────────
+    # ── save or show ─────────────────────────────────────────────────
     if save_dir is not None:
-        out_dir  = Path(save_dir)
+        out_dir   = Path(save_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        pdf_path = out_dir / f"{tag}.pdf"
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        pdf_path  = out_dir / f"{tag}_{timestamp}.pdf"
 
         with pdf_backend.PdfPages(pdf_path) as pdf:
             for fig in figs:
                 pdf.savefig(fig, bbox_inches="tight")
                 plt.close(fig)
-
-            # PDF metadata
             meta = pdf.infodict()
             meta["Title"]   = f"{model_name} — evaluation report"
             meta["Author"]  = "EOG_REM pipeline"
             meta["Subject"] = "Model evaluation plots"
 
-        print(f"\n{GREEN}{BOLD}Saved evaluation report → {pdf_path}{RESET}")
+        print(f"\n{GREEN}{BOLD}Saved → {pdf_path}{RESET}")
 
-        # Also print importance tables to console
         if not mdi_df.empty:
             print(f"\n{BOLD}Top-{top_n} MDI features:{RESET}")
             print(mdi_df.head(top_n).to_string(index=False))
-
         print(f"\n{BOLD}Top-{top_n} permutation features:{RESET}")
         print(perm_df.head(top_n).to_string(index=False))
 

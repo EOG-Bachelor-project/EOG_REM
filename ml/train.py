@@ -1,17 +1,21 @@
 # Filename: train.py
 # Authors: Adam Klovborg & Rasmus Kleffel
 # Description: Trains a machine learning model on the extracted features and patient labels.
-#              Supports binary and multi-class classification with cross-validation.
-
+#              Supports binary and multi-class classification with two-layer cross-validation
+#              for unbiased generalization error estimation and hyperparameter selection.
+#              Also supports sweeping over multiple seeds, test sizes and classification modes.
+ 
 # Usage:
 #       python -m ml.train features_csv/features.csv --mode binary
 #       python -m ml.train features_csv/features.csv --mode multiclass
+#       python -m ml.train features_csv/features.csv --sweep
 
 # ================================================================================
 # Imports
 # ================================================================================
 from __future__ import annotations
 
+import itertools
 import numpy as np          # for numerical operations
 import pandas as pd         # for data manipulation
 from pathlib import Path    # for handling file paths
@@ -25,7 +29,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import (
     StratifiedKFold,
     RandomizedSearchCV,
-    cross_validate,
 )
 from sklearn.metrics import (
     accuracy_score,
@@ -334,6 +337,8 @@ def fit_and_evaluate_best(
         mode:       str = "binary",
         save_dir:   str | Path | None = "reports/evaluation",
         is_best:    bool = False,
+        run_config: dict | None = None,  
+        cv_results: pd.DataFrame | None = None,
         ) -> None:
     """
     Fit the best model (chosen by outer CV) on the full training set using one
@@ -368,6 +373,10 @@ def fit_and_evaluate_best(
         Where to write the evaluation PDF.
     is_best : bool
         Whether this is the best model (for display purposes).
+    run_config : dict | None
+        Configuration for the run.
+    cv_results : pd.DataFrame | None
+        Cross-validation results.
     """
     marker = f"  {GREEN} <- CV best{RESET}" if is_best else ""
     print(f"\n{BOLD}Final evaluation: {best_name}{RESET}{marker}")
@@ -430,6 +439,9 @@ def fit_and_evaluate_best(
         top_n       = 20,
         save_dir    = save_dir,
         seed        = seed,
+        run_config  = run_config,
+        cv_results  = cv_results,
+        best_params = search.best_params_,
     )
  
     return best_model
@@ -504,6 +516,7 @@ def run_training(
         n_iter:         int = 20,
         seed:           int = DEFAULT_SEED,
         drop_nan:       bool = False,
+        save_dir:       str | Path = "reports/evaluation",
         imputer_strategy: str = "median",
         ) -> dict:
     """
@@ -550,7 +563,10 @@ def run_training(
         **Default is 42**.
     drop_nan : bool
         Whether to drop subjects with NaN features. Default False (median imputation).
- 
+    save_dir : str | Path
+        Directory where evaluation reports will be saved.
+        **Default is "reports/evaluation"**.
+
     Returns
     -------
     dict
@@ -579,8 +595,22 @@ def run_training(
         test_size    = test_size,
         seed         = seed,
         drop_nan     = drop_nan,
-        imputer_strategy = imputer_strategy,
     )
+
+    # Build the run_config dict that will appear on every PDF info page
+    run_config = {
+        "feature_csv": str(feature_csv),
+        "mode":        mode,
+        "binary_mode": binary_mode if mode == "binary" else "—",
+        "seed":        seed,
+        "test_size":   test_size,
+        "n_train":     len(X_train),
+        "n_test":      len(X_test),
+        "n_features":  X_train.shape[1],
+        "n_outer":     n_outer,
+        "n_inner":     n_inner,
+        "n_iter":      n_iter,
+    }
  
     # ---- 2) Two-layer CV — never touches X_test ----
     cv_results, best_name = two_layer_cross_validate(
@@ -610,8 +640,10 @@ def run_training(
             n_iter    = n_iter,
             seed      = seed,
             mode      = mode,
-            save_dir  = "reports/evaluation",
+            save_dir  = save_dir,
             is_best   = (name == best_name), 
+            run_config= run_config,
+            cv_results= cv_results,
         )
         if name == best_name:
             best_model = model
@@ -628,7 +660,7 @@ def run_training(
     print(f"\n{'='*60}")
     print(f"  {GREEN}{BOLD}Pipeline complete.{RESET}")
     print(f"  Best model : {best_name}")
-    print(f"  Report     : reports/evaluation/{best_name.lower().replace(' ', '_')}_*.pdf")
+    print(f"  Report     : {save_dir}/{best_name.lower().replace(' ', '_')}_*.pdf")
     print(f"{'='*60}\n")
  
     return {
@@ -640,24 +672,185 @@ def run_training(
         "y_train":        y_train,
         "y_test":         y_test,
         "importance_df":  importance_df,
-        "evaluation_dir": Path("reports/evaluation"),
+        "evaluation_dir": Path(save_dir),
     }
+
+# ================================================================================
+# Sweep — run over multiple seeds / test sizes / modes automatically
+# ================================================================================
+def sweep_training(
+        feature_csv:   str | Path,
+        seeds:         list[int]   = (42, 0, 1),
+        test_sizes:    list[float] = (0.2, 0.25),
+        modes:         list[str]   = ("binary", "multiclass"),
+        binary_mode:   str         = "control_vs_all",
+        n_outer:       int         = 5,
+        n_inner:       int         = 5,
+        n_iter:        int         = 20,
+        drop_nan:      bool        = False,
+        save_base_dir: str | Path  = "reports/sweep",
+        ) -> pd.DataFrame:
+    """
+    Run run_training for every combination of seed x test_size x mode.
+ 
+    Each combination gets its own subdirectory:
+        ``<save_base_dir>/seed{seed}_split{test_size}_{mode}/``
+ 
+    A summary CSV is written to <save_base_dir>/sweep_summary.csv.
+ 
+    Parameters
+    ----------
+    feature_csv : str | Path
+        Path to features.csv file containing extracted features and labels.
+    seeds : list[int]
+        List of random seeds to use for data splitting and model training.
+        **Default is [42, 0, 1]**.
+    test_sizes : list[float]
+        List of test set sizes (fractions) to use for train/test splitting.
+        **Default is [0.2, 0.25]**.
+    modes : list[str]
+        List of classification modes to run. Options: 'binary', 'multiclass'.
+        **Default is ['binary', 'multiclass']**.
+    binary_mode : str
+        Only used if mode='binary'. Determines how to binarize the labels:
+        - 'control_vs_all': Control (0) vs all disease (1)
+        - 'control_vs_irbd': Control (0) vs iRBD (1), excluding PD patients. \\
+        **Default is 'control_vs_all'**.        
+    n_outer : int
+        Number of outer CV folds for each run.
+        **Default is 5**.
+    n_inner : int
+        Number of inner CV folds for each run.
+        **Default is 5**.
+    n_iter : int
+        Number of RandomizedSearch iterations for each run.
+        **Default is 20**.
+    drop_nan : bool
+        Whether to drop subjects with NaN features. Default False (median imputation).
+    save_base_dir : str | Path
+        Base directory where all run subdirectories and summary CSV will be saved.
+        Each run gets its own subdirectory named:
+        ``<save_base_dir>/seed{seed}_split{test_size}_{mode}/``
+        **Default is 'reports/sweep'**. 
+ 
+    Returns
+    -------
+    pd.DataFrame
+        Summary DataFrame with one row per run, containing:
+        - run: Run index (1-based)
+        - seed: Random seed used
+        - test_size: Test set size used
+        - mode: Classification mode used
+        - best_model: Best model name from CV
+        - cv_bal_acc: Mean balanced accuracy from CV for the best model
+        - cv_bal_std: Std of balanced accuracy from CV for the best model
+        - status: "ok" or error message if the run failed
+    """
+
+    combos   = list(itertools.product(seeds, test_sizes, modes))
+    n_combos = len(combos)
+    base_dir = Path(save_base_dir)
+    base_dir.mkdir(parents=True, exist_ok=True)
+ 
+    print(f"\n{'='*60}")
+    print(f"  {BOLD}Sweep — {n_combos} configurations{RESET}")
+    print(f"  Seeds      : {list(seeds)}")
+    print(f"  Test sizes : {list(test_sizes)}")
+    print(f"  Modes      : {list(modes)}")
+    print(f"  Output     : {base_dir}")
+    print(f"{'='*60}")
+ 
+    summary_rows = []
+ 
+    for run_idx, (seed, test_size, mode) in enumerate(combos, 1):
+        tag     = f"seed{seed}_split{str(test_size).replace('.','')}_{mode}"
+        run_dir = base_dir / tag
+ 
+        print(f"\n{'─'*60}")
+        print(f"  Run {run_idx}/{n_combos}:  seed={seed}  test_size={test_size}  mode={mode}")
+        print(f"  Output → {run_dir}")
+        print(f"{'─'*60}")
+ 
+        try:
+            result = run_training(
+                feature_csv  = feature_csv,
+                mode         = mode,
+                binary_mode  = binary_mode,
+                test_size    = test_size,
+                n_outer      = n_outer,
+                n_inner      = n_inner,
+                n_iter       = n_iter,
+                seed         = seed,
+                drop_nan     = drop_nan,
+                save_dir     = run_dir,
+            )
+ 
+            cv_df    = result["cv_results"]
+            best_row = cv_df[cv_df["model"] == result["best_name"]].iloc[0]
+ 
+            summary_rows.append({
+                "run":          run_idx,
+                "seed":         seed,
+                "test_size":    test_size,
+                "mode":         mode,
+                "best_model":   result["best_name"],
+                "cv_bal_acc":   round(best_row["bal_acc_mean"], 4),
+                "cv_bal_std":   round(best_row["bal_acc_std"],  4),
+                "status":       "ok",
+            })
+ 
+        except Exception as e:
+            print(f"\n  {RED}ERROR in run {run_idx}: {e}{RESET}")
+            summary_rows.append({
+                "run": run_idx, "seed": seed, "test_size": test_size,
+                "mode": mode, "best_model": "—", "cv_bal_acc": float("nan"),
+                "cv_bal_std": float("nan"), "status": f"ERROR: {e}",
+            })
+ 
+    # ── print and save summary ────────────────────────────────────────
+    summary_df = pd.DataFrame(summary_rows)
+    summary_csv = base_dir / "sweep_summary.csv"
+    summary_df.to_csv(summary_csv, index=False)
+ 
+    print(f"\n{'='*60}")
+    print(f"  {GREEN}{BOLD}Sweep complete.{RESET}")
+    print(f"\n  Summary:")
+    print(summary_df.to_string(index=False))
+    print(f"\n  Saved summary → {summary_csv}")
+    print(f"{'='*60}\n")
+ 
+    return summary_df
  
  
 # ================================================================================
-# CLI - Command line interface
+# CLI
 # ================================================================================
 if __name__ == "__main__":
     import argparse
  
     parser = argparse.ArgumentParser(
-        description="Train classification models for RBD detection (two-layer CV)."
+        description="Train RBD classifiers with two-layer CV. Use --sweep for multi-config runs."
     )
-    parser.add_argument("feature_csv", type=str, help="Path to features.csv")
-    parser.add_argument("--mode", type=str, default="binary",
+    parser.add_argument("feature_csv", type=str)
+    parser.add_argument("--mode",        type=str,   default="binary",
                         choices=["binary", "multiclass"])
-    parser.add_argument("--binary-mode", type=str, default="control_vs_all",
+    parser.add_argument("--binary-mode", type=str,   default="control_vs_all",
                         choices=["control_vs_all", "control_vs_irbd"])
+    parser.add_argument("--test-size",   type=float, default=0.2)
+    parser.add_argument("--n-outer",     type=int,   default=5)
+    parser.add_argument("--n-inner",     type=int,   default=5)
+    parser.add_argument("--n-iter",      type=int,   default=20)
+    parser.add_argument("--seed",        type=int,   default=42)
+    parser.add_argument("--drop-nan",    action="store_true", default=False)
+    parser.add_argument("--save-dir",    type=str,   default="reports/evaluation")
+ 
+    # Sweep options
+    parser.add_argument("--sweep",       action="store_true",
+                        help="Run over multiple seeds/splits/modes")
+    parser.add_argument("--seeds",       type=int,   nargs="+", default=[42, 0, 1])
+    parser.add_argument("--test-sizes",  type=float, nargs="+", default=[0.2, 0.25])
+    parser.add_argument("--modes",       type=str,   nargs="+", default=["binary", "multiclass"])
+    parser.add_argument("--sweep-dir",   type=str,   default="reports/sweep")
     parser.add_argument("--test-size",  type=float, default=0.2)
     parser.add_argument("--n-outer",    type=int,   default=5)
     parser.add_argument("--n-inner",    type=int,   default=5)
@@ -671,15 +864,30 @@ if __name__ == "__main__":
  
     args = parser.parse_args()
  
-    run_training(
-        feature_csv = args.feature_csv,
-        mode        = args.mode,
-        binary_mode = args.binary_mode,
-        test_size   = args.test_size,
-        n_outer     = args.n_outer,
-        n_inner     = args.n_inner,
-        n_iter      = args.n_iter,
-        seed        = args.seed,
-        drop_nan    = args.drop_nan,
-        imputer_strategy = args.imputer,
+    if args.sweep:
+        sweep_training(
+            feature_csv   = args.feature_csv,
+            seeds         = args.seeds,
+            test_sizes    = args.test_sizes,
+            modes         = args.modes,
+            binary_mode   = args.binary_mode,
+            n_outer       = args.n_outer,
+            n_inner       = args.n_inner,
+            n_iter        = args.n_iter,
+            drop_nan      = args.drop_nan,
+            save_base_dir = args.sweep_dir,
+        )
+    else:
+        run_training(
+            feature_csv = args.feature_csv,
+            mode        = args.mode,
+            binary_mode = args.binary_mode,
+            test_size   = args.test_size,
+            n_outer     = args.n_outer,
+            n_inner     = args.n_inner,
+            n_iter      = args.n_iter,
+            seed        = args.seed,
+            drop_nan    = args.drop_nan,
+            save_dir    = args.save_dir,
+            imputer_strategy = args.imputer,
     )
