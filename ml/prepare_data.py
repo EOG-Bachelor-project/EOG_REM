@@ -245,6 +245,7 @@ def split_data(
         labels:     pd.Series,
         test_size:  float = 0.2,
         seed:       int = DEFAULT_SEED,
+        imputer_strategy: str = "median",
         ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
     Split features and labels into train and test sets.
