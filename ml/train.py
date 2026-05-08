@@ -11,6 +11,7 @@
 # Imports
 # ================================================================================
 from __future__ import annotations
+from turtle import mode
 
 import numpy as np          # for numerical operations
 import pandas as pd         # for data manipulation
@@ -181,6 +182,32 @@ def cross_validate_models(
     print(f"{'='*60}")
     
     results = []
+
+    # ---- Majority-class baseline ----
+    baseline_scores = {"accuracy": [], 
+                       "f1_weighted": [], 
+                       "precision_weighted": [], 
+                       "recall_weighted": []
+                       }
+    
+    for train_idx, val_idx in cv.split(X_train, y_train):
+
+        y_tr, y_val = y_train.iloc[train_idx], y_train.iloc[val_idx] # Get training and validation labels for this fold
+        majority    = y_tr.value_counts().idxmax()                   # Get majority class in training fold           
+        y_base      = np.full(len(y_val), majority)                  # Predict majority class for all validation samples
+
+        baseline_scores["accuracy"].append(accuracy_score(y_val, y_base))
+        baseline_scores["f1_weighted"].append(f1_score(y_val, y_base, average="weighted", zero_division=0))
+        baseline_scores["precision_weighted"].append(precision_score(y_val, y_base, average="weighted", zero_division=0))
+        baseline_scores["recall_weighted"].append(recall_score(y_val, y_base, average="weighted", zero_division=0))
+
+    results.append({
+        "model": "Baseline (majority)",
+        **{f"{m}_mean": np.mean(v) for m, v in baseline_scores.items()},
+        **{f"{m}_std":  np.std(v)  for m, v in baseline_scores.items()},
+        })
+    print(f"  {'Baseline (majority)':<25s} computed")
+
     for name, pipeline in models.items():
         print(f"\n  Training: {BOLD}{name}{RESET} ...", end=" ", flush=True)
  
@@ -289,7 +316,10 @@ def evaluate_on_test(
  
         # Classification report
         print(f"\nClassification report:")
-        label_map = {0: "Control", 1: "RBD", 2: "PD", 3: "iRBD"}
+        if mode == "binary":
+            label_map = {0: "Control", 1: "Disease"}
+        else:
+            label_map = {0: "Control", 1: "iRBD", 2: "PD(-RBD)", 3: "PD(+RBD)"}
         target_names = [label_map[c] for c in sorted(y_test.unique().tolist())]
         report = classification_report(y_test, y_pred, target_names=target_names, zero_division=0)
         for line in report.split("\n"):
@@ -516,8 +546,12 @@ def run_training(
     print(f"\n{BOLD}Generating evaluation plots{RESET}")
     print(f"{'='*60}")
 
-    # Determine class names from y_test
-    label_map = {0: "Control", 1: "RBD", 2: "PD", 3: "iRBD"}  # adjust to your actual labels
+    # Determine class names from y_test 
+    if mode == "binary":
+        label_map = {0: "Control", 1: "Disease"}
+    else:
+        label_map = {0: "Control", 1: "iRBD", 2: "PD(-RBD)", 3: "PD(+RBD)"}
+
     class_names = [label_map[c] for c in sorted(y_test.unique().tolist())]
 
     # Re-fit each model on full training set and evaluate
