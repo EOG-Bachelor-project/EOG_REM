@@ -128,6 +128,7 @@ def _plot_run_info(
                                   f"  ({run_config.get('n_train','?')} train / "
                                   f"{run_config.get('n_test','?')} test)"),
             ("Features",          str(run_config.get("n_features", "—"))),
+            ("Imputer strategy",  str(run_config.get("imputer_strategy", "—"))),
             ("Outer CV folds",    str(run_config.get("n_outer", "—"))),
             ("Inner CV folds",    str(run_config.get("n_inner", "—"))),
             ("Search iterations", str(run_config.get("n_iter",  "—"))),
