@@ -102,7 +102,7 @@ def _band_power(signal: np.ndarray, fs: float, fmin: float, fmax: float) -> floa
     idx = (freqs >= fmin) & (freqs <= fmax)             # Indices of frequencies within the desired band
     if idx.sum() == 0:
         return np.nan
-    return float(np.trapezoid(psd[idx], freqs[idx]))    # Integrate PSD over the band to get absolute power
+    return float(np.trapz(psd[idx], freqs[idx]))        # Integrate PSD over the band to get absolute power
 
 # ———— Get EEG signal (average LOC + ROC) ————
 def _get_eeg(df: pd.DataFrame) -> np.ndarray | None:
