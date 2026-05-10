@@ -480,7 +480,7 @@ Examples:
     p_ext = sub.add_parser("extract", help="Extract features into per-module CSVs, then merge.")
     p_ext.add_argument("patient_excel", type=str, help="Path to patient info Excel file")
     p_ext.add_argument("--modules", type=str, nargs="*", default=None,
-                       choices=["eog", "gssc", "eeg", "bout", "patient"],
+                       choices=["eog", "gssc", "eeg", "bout", "patient", "extra", "all"],
                        help="Which modules to run (default: all)")
     p_ext.add_argument("--force", action="store_true",
                        help="Delete existing module CSVs before re-extracting")

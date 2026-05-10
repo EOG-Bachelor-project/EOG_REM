@@ -23,8 +23,8 @@ from scipy.signal import welch
 # =============================================================================
 # Constants
 # =============================================================================
-_DCSM_PATTERN = re.compile(r"^(DCSM_\d+_\w+)")
-FEATURES_DIR  = Path("C:/Users/AKLO0022/EOG_REM/features_csv/features.csv") 
+_DCSM_PATTERN = re.compile(r"^(DCSM_\d+_[a-zA-Z])")
+FEATURES_DIR  = Path("C:/Users/AKLO0022/EOG_REM/features_csv") 
 
 # Frequency bands (Hz)
 BANDS = {

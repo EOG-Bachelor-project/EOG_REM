@@ -36,6 +36,20 @@ BOLD  = "\033[1m"
 GREEN = "\033[92m"
 RESET = "\033[0m"
 
+# Colors
+dtu_red = (0.6, 0, 0)
+dtublue = (0.1843, 0.2431, 0.9176)
+dtubrightgreen = (0.1216, 0.8157, 0.5098)
+dtunavy = (0.0118, 0.0588, 0.3098)
+dtuyellow = (0.9647, 0.8157, 0.3019)
+dtuorange = (0.9882, 0.4627, 0.2039)
+dtupink = (0.9686, 0.7333, 0.6941)
+dtugrey = (0.8549, 0.8549, 0.8549)
+dtured = (0.9098, 0.2471, 0.2824)
+dtugreen = (0, 0.5333, 0.2078)
+dtupurple = (0.4745, 0.1373, 0.5569)
+
+
 # =====================================================================
 # Report info page  — always the first page of the PDF
 # =====================================================================
@@ -81,35 +95,33 @@ def _plot_run_info(
     fig.patch.set_facecolor("white")
  
     # ── title ───────────────────────────────────────────────────────
-    fig.text(0.5, 0.97, f"Evaluation Report  —  {model_name}",
-             ha="center", va="top", fontsize=16, fontweight="bold", color="#0E7490")
+    fig.text(0.5, 0.97, f"Evaluation Report  for  {model_name}",
+             ha="center", va="top", fontsize=16, fontweight="bold", color=dtunavy)
     fig.text(0.5, 0.945,
              datetime.datetime.now().strftime("Generated %Y-%m-%d  %H:%M"),
-             ha="center", va="top", fontsize=9, color="#666666")
+             ha="center", va="top", fontsize=9, color=dtugrey)
  
     y_cursor = 0.91
  
     def _section(title: str) -> None:
         nonlocal y_cursor
-        fig.text(0.05, y_cursor, title, fontsize=11, fontweight="bold", color="#0E7490", transform=fig.transFigure)
+        fig.text(0.05, y_cursor, title, fontsize=11, fontweight="bold", color=dtunavy, transform=fig.transFigure)
 
         y_cursor -= 0.022
         fig.add_artist(
             plt.Line2D([0.05, 0.95], 
                        [y_cursor, y_cursor],
                        transform=fig.transFigure,
-                       color="#0E7490", 
+                       color=dtunavy, 
                        linewidth=0.8, 
                        alpha=0.5)
                        )
         y_cursor -= 0.010
  
-    def _row(label: str, value: str, indent: float = 0.07,
-             bold_val: bool = False, color: str = "black") -> None:
+    def _row(label: str, value: str, indent: float = 0.07, bold_val: bool = False, color: str = "black") -> None:
         nonlocal y_cursor
-        fig.text(indent, y_cursor, label, fontsize=9,
-                 color="#444444", transform=fig.transFigure)
-        fig.text(0.42, y_cursor, value, fontsize=9, color=color,
+        fig.text(indent, y_cursor, label, fontsize=9, color="#444444", transform=fig.transFigure)
+        fig.text(0.42, y_cursor, value, fontsize=9, color=color, 
                  fontweight="bold" if bold_val else "normal",
                  transform=fig.transFigure)
         y_cursor -= 0.018
@@ -154,7 +166,7 @@ def _plot_run_info(
         ("Precision",         f"{prec:.4f}"),
         ("Recall",            f"{rec:.4f}"),
     ]:
-        _row(label, val, bold_val=True, color="#0E7490")
+        _row(label, val, bold_val=True, color=dtunavy)
     y_cursor -= 0.008
  
     # ── 3. Class distribution ────────────────────────────────────────
@@ -190,7 +202,7 @@ def _plot_run_info(
                 f"{r.get('bal_acc_min',  0):.3f}",
                 f"{r.get('bal_acc_max',  0):.3f}",
             ]
-            color = "#0E7490" if is_best else "black"
+            color = dtugreen if is_best else "black"
             for hx, v in zip(col_x, vals):
                 fig.text(hx, y_cursor, v, fontsize=8, color=color,
                          transform=fig.transFigure)
@@ -242,7 +254,7 @@ def _plot_confusion_matrix(
 
     # ---- 2) Plot side-by-side heatmaps for counts and normalised ----
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    fig.suptitle(title, fontsize=13, fontweight="bold")
+    fig.suptitle(title, fontsize=13, fontweight="bold", color=dtunavy)
 
     for ax, data, fmt, subtitle in zip(
         axes,                           
@@ -309,7 +321,7 @@ def _plot_roc_curves(
         y_bin  = np.hstack([1 - y_bin, y_bin])
 
     # Get distinct colors for each class
-    colors = plt.cm.tab10(np.linspace(0, 0.9, n_classes))
+    colors = (dtunavy, dtublue, dtured, dtupink, dtupurple, dtubrightgreen, dtuorange, dtuyellow)
 
     # ---- 2) Compute and plot ROC curve for each class ----
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -320,13 +332,13 @@ def _plot_roc_curves(
                 label=f"{name}  (AUC = {roc_auc:.3f})")
 
     ax.plot([0, 1], [0, 1], color="grey", linewidth=0.8, linestyle="--", label="Random")
-    ax.set_xlim([0.0, 1.0])                             # x-axis limit           
-    ax.set_ylim([0.0, 1.02])                            # y-axis limit
-    ax.set_xlabel("False Positive Rate", fontsize=10)   # x-axis label
-    ax.set_ylabel("True Positive Rate",  fontsize=10)   # y-axis label
-    ax.set_title(title, fontsize=12, fontweight="bold") # title
-    ax.legend(loc="lower right", fontsize=9)            # legend
-    ax.grid(alpha=0.3, linestyle="--")                  # grid 
+    ax.set_xlim([0.0, 1.0])                                             # x-axis limit           
+    ax.set_ylim([0.0, 1.02])                                            # y-axis limit
+    ax.set_xlabel("False Positive Rate", fontsize=10)                   # x-axis label
+    ax.set_ylabel("True Positive Rate",  fontsize=10)                   # y-axis label
+    ax.set_title(title, fontsize=12, fontweight="bold", color=dtunavy)  # title
+    ax.legend(loc="lower right", fontsize=9)                            # legend
+    ax.grid(alpha=0.3, linestyle="--")                                  # grid 
     plt.tight_layout()
 
     return fig
@@ -379,9 +391,9 @@ def _plot_feature_importance_MDI(
 
     # ---- 3) Plot horizontal bar chart of top-N features ----
     fig, ax = plt.subplots(figsize=(10, top_n * 0.4 + 1))
-    ax.barh(top["feature"][::-1], top["importance"][::-1], color="#0E7490", alpha=0.8) # horizontal bars
+    ax.barh(top["feature"][::-1], top["importance"][::-1], color=dtublue, alpha=0.8)     # horizontal bars
     ax.set_xlabel("Mean Decrease in Impurity", fontsize=10)                              # x-axis label
-    ax.set_title(title, fontsize=12, fontweight="bold")                                  # title              
+    ax.set_title(title, fontsize=12, fontweight="bold", color=dtunavy)                   # title              
     ax.tick_params(labelsize=9)                                                          # tick label size                        
     ax.grid(axis="x", alpha=0.3, linestyle="--")                                         # vertical grid lines            
     plt.tight_layout()
@@ -455,12 +467,12 @@ def _plot_feature_importance_permutation(
     ax.barh(                                                                # horizontal bars with error bars
         top["feature"], top["mean"],
         xerr=top["std"],
-        color="#AA3377", alpha=0.8,
+        color=dtu_red, alpha=0.8,
         error_kw=dict(elinewidth=0.8, capsize=3),
     )
     ax.axvline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)  # vertical line at zero
     ax.set_xlabel(f"Permutation importance ({scoring})", fontsize=10)       # x-axis label
-    ax.set_title(title, fontsize=12, fontweight="bold")                     # title
+    ax.set_title(title, fontsize=12, fontweight="bold", color=dtunavy)      # title
     ax.tick_params(labelsize=9)                                             # tick label size
     ax.grid(axis="x", alpha=0.3, linestyle="--")                            # vertical grid lines
     plt.tight_layout()

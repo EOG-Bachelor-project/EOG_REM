@@ -601,6 +601,9 @@ FEATURE_DESCRIPTIONS = {
     "eeg__w__theta_ratio":            "EEG theta / total power ratio during Wake",
     "eeg__overall__theta_beta_ratio": "EEG overall theta/beta ratio (all stages)",
 
+    # Special features
+ 
+
 }
 
 # Feature grouping for the cheat sheet
