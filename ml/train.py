@@ -16,9 +16,10 @@
 from __future__ import annotations
 
 import itertools
-import numpy as np          # for numerical operations
-import pandas as pd         # for data manipulation
-from pathlib import Path    # for handling file paths
+import numpy as np              # for numerical operations
+import pandas as pd             # for data manipulation
+from pathlib import Path        # for handling file paths
+import scipy.stats as stats     # for statistical tests (e.g. McNemar's test)
 
 # Sklearn imports
 from sklearn.ensemble import RandomForestClassifier
@@ -67,6 +68,36 @@ def _label_map(mode: str) -> dict[int, str]:
     if mode == "binary":
         return {0: "Control", 1: "Disease"}
     return {0: "Control", 1: "iRBD", 2: "PD(-RBD)", 3: "PD(+RBD)"}
+
+# ================================================================================
+# McNemar helper
+# ================================================================================
+def _mcnemar_test(y_true, y_pred_a, y_pred_b) -> tuple[float, float]:
+    """
+    McNemar's test comparing two classifiers.
+    
+    Parameters  
+    ----------
+    y_true : array-like
+        True labels.
+    y_pred_a : array-like
+        Predictions from classifier A.
+    y_pred_b : array-like
+        Predictions from classifier B.
+    Returns
+    -------
+    tuple[float, float]
+        (statistic, p-value) from McNemar's test.
+    """
+    correct_a = (y_pred_a == y_true)
+    correct_b = (y_pred_b == y_true)
+    b = int(( correct_a & ~correct_b).sum())  # A correct, B wrong
+    c = int((~correct_a &  correct_b).sum())  # A wrong, B correct
+    if b + c == 0:
+        return 0.0, 1.0
+    statistic = (abs(b - c) - 1) ** 2 / (b + c)
+    p_value   = float(1 - stats.chi2.cdf(statistic, df=1))
+    return round(statistic, 4), round(p_value, 4)
 
 # ================================================================================
 # Model + hyperparameter search space definitions
@@ -444,7 +475,14 @@ def fit_and_evaluate_best(
         best_params = search.best_params_,
     )
  
-    return best_model
+    return  best_model, {
+        "test_acc":     round(acc, 4),  # test set accuracy
+        "test_bal_acc": round(bal, 4),  # test set balanced accuracy
+        "test_f1":      round(f1,  4),  # test set F1 score (weighted)
+        "test_prec":    round(prec, 4), # test set precision (weighted)
+        "test_rec":     round(rec, 4),  # test set recall (weighted)
+        "y_pred":       y_pred,         # test set predictions
+        }
 
 # ================================================================================
 # Feature importance summary (uses full training set, for reporting)
@@ -626,13 +664,14 @@ def run_training(
     )
  
     # ---- 3) Fit all models on full train, evaluate each on test ----
-    best_model = None
-    model_specs = get_model_search_spaces(seed=seed, mode=mode)
-    lm          = _label_map(mode)
-    class_names = [lm[c] for c in sorted(y_test.unique().tolist())]
+    best_model = None                                                   # will be set in loop when we get to the best model
+    model_specs = get_model_search_spaces(seed=seed, mode=mode)         # for fitting and evaluation
+    lm          = _label_map(mode)                                      # label map for class names (for evaluation report)
+    class_names = [lm[c] for c in sorted(y_test.unique().tolist())]     # for evaluation report
+    all_preds    = {}                                                   # store test set predictions for all models (for later analysis)
 
     for name in model_specs:
-        model = fit_and_evaluate_best(
+        model, test_metrics = fit_and_evaluate_best(
             best_name = name,
             X_train   = X_train,
             y_train   = y_train,
@@ -647,8 +686,10 @@ def run_training(
             run_config= run_config,
             cv_results= cv_results,
         )
+        all_preds[name] = test_metrics.pop("y_pred")  
         if name == best_name:
-            best_model = model
+            best_model   = model
+            best_metrics = test_metrics
  
     # ---- 4) Feature importance (informational, on training set) ----
     importance_df = print_feature_importance(
@@ -666,15 +707,17 @@ def run_training(
     print(f"{'='*60}\n")
  
     return {
-        "cv_results":     cv_results,
-        "best_name":      best_name,
-        "best_model":     best_model,
-        "X_train":        X_train,
-        "X_test":         X_test,
-        "y_train":        y_train,
-        "y_test":         y_test,
-        "importance_df":  importance_df,
-        "evaluation_dir": Path(save_dir),
+        "cv_results":       cv_results,
+        "best_name":        best_name,
+        "best_model":       best_model,
+        "best_metrics":     best_metrics,
+        "all_predictions":  all_preds,
+        "X_train":          X_train,
+        "X_test":           X_test,
+        "y_train":          y_train,
+        "y_test":           y_test,
+        "importance_df":    importance_df,
+        "evaluation_dir":   Path(save_dir),
     }
 
 # ================================================================================
@@ -750,10 +793,10 @@ def sweep_training(
         - status: "ok" or error message if the run failed
     """
 
-    combos   = list(itertools.product(seeds, test_sizes, modes))
-    n_combos = len(combos)
-    base_dir = Path(save_base_dir)
-    base_dir.mkdir(parents=True, exist_ok=True)
+    combos   = list(itertools.product(seeds, test_sizes, modes))    # All combinations of parameters to run
+    n_combos = len(combos)                                          # Total number of runs for progress tracking
+    base_dir = Path(save_base_dir)                                  # Base directory for all run subdirectories             
+    base_dir.mkdir(parents=True, exist_ok=True)                     # Ensure base directory exists
  
     print(f"\n{'='*60}")
     print(f"  {BOLD}Sweep — {n_combos} configurations{RESET}")
@@ -791,18 +834,44 @@ def sweep_training(
             )
  
             cv_df    = result["cv_results"]
-            best_row = cv_df[cv_df["model"] == result["best_name"]].iloc[0]
+            best_row     = cv_df[cv_df["model"] == result["best_name"]].iloc[0]
+            base_row     = cv_df[cv_df["model"] == "Baseline (majority)"].iloc[0]
+            metrics      = result["best_metrics"]
+            cv_test_diff = round(best_row["bal_acc_mean"] - metrics["test_bal_acc"], 4)
+
+            # ---- McNemar: best vs all others ----
+            preds  = result["all_predictions"]              # Test set predictions for all models
+            y_test = result["y_test"]                       # True test labels          
+            mcnemar = {}                                    # Intialise dict to hold McNemar p-values for best vs each other model
+            for name, y_pred_other in preds.items():
+                if name == result["best_name"]:
+                    continue
+                _, p = _mcnemar_test(           
+                    y_test.values,
+                    preds[result["best_name"]],
+                    y_pred_other,
+                )
+                mcnemar[f"mcnemar_p_{name.lower().replace(' ','_')}_vs_best"] = p # Store p-value for best vs this other model
  
             summary_rows.append({
-                "run":          run_idx,
-                "seed":         seed,
-                "test_size":    test_size,
-                "mode":         mode,
-                "best_model":   result["best_name"],
-                "cv_bal_acc":   round(best_row["bal_acc_mean"], 4),
-                "cv_bal_std":   round(best_row["bal_acc_std"],  4),
-                "status":       "ok",
-            })
+                "run":            run_idx,                                              # Run index (1-based)
+                "seed":           seed,                                                 # Seed used for this run
+                "test_size":      test_size,                                            # Test set size used for this run
+                "mode":           mode,                                                 # Classification mode used for this run
+                "best_model":     result["best_name"],                                  # Best model name from CV for this run
+                "cv_bal_acc":     round(best_row["bal_acc_mean"], 4),                   # Mean balanced accuracy from CV for the best model
+                "cv_bal_std":     round(best_row["bal_acc_std"],  4),                   # Std of balanced accuracy from CV for the best model
+                "test_bal_acc":   metrics["test_bal_acc"],                              # Test set balanced accuracy for the best model
+                "test_acc":       metrics["test_acc"],                                  # Test set accuracy for the best model
+                "test_f1":        metrics["test_f1"],                                   # Test set F1 score (weighted) for the best model
+                "test_prec":      metrics["test_prec"],                                 # Test set precision (weighted) for the best model
+                "test_rec":       metrics["test_rec"],                                  # Test set recall (weighted) for the best model
+                "cv_test_diff":   cv_test_diff,                                         # Difference between CV balanced accuracy and test set balanced accuracy for the best model. Flag for potential overfitting if large negative.
+                "beats_baseline": best_row["bal_acc_mean"] > base_row["bal_acc_mean"],  # Whether the best model's CV balanced accuracy beats the baseline's CV balanced accuracy
+                "baseline_acc":   round(base_row["bal_acc_mean"], 4),                   # Baseline (majority class) balanced accuracy from CV
+                **mcnemar,                                                              # Add McNemar p-values for best vs each other model
+                "status":         "ok",
+                })
  
         except Exception as e:
             print(f"\n  {RED}ERROR in run {run_idx}: {e}{RESET}")
