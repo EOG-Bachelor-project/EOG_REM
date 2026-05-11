@@ -646,18 +646,18 @@ def plot_feature_importance_permutation(
 # =====================================================================
 
 def evaluate_model(
-        model,
-        X_test:      pd.DataFrame,
-        y_test,
-        class_names: list[str],
-        model_name:  str = "Model",
-        top_n:       int = 20,
-        save_dir:    str | Path | None = None,
-        seed:        int = 42,
-        run_config:  dict | None = None,
-        cv_results:  pd.DataFrame | None = None,
+        model,  
+        X_test: pd.DataFrame,  
+        y_test,  
+        class_names: list[str],  
+        model_name: str = "Model",  
+        top_n: int = 20,  
+        save_dir: str | Path | None = None,  
+        seed: int = 42,  
+        run_config: dict | None = None,  
+        cv_results: pd.DataFrame | None = None,  
         best_params: dict | None = None,
-        ) -> None:
+        ) -> dict:
     """
     Run all evaluation plots for one fitted model and collect them into a
     single PDF file  ``<save_dir>/<model_name>.pdf``.
@@ -689,6 +689,9 @@ def evaluate_model(
         Optional CV results summary to include in the first page of the PDF.
     best_params : dict | None
         Optional best hyperparameters to include in the first page of the PDF.
+    
+    Returns
+    -------
     """
     y_pred = model.predict(X_test)
 
@@ -744,33 +747,58 @@ def evaluate_model(
     figs.append(perm_fig)
 
     # ── save or show ─────────────────────────────────────────────────
-    if save_dir is not None:
-        out_dir   = Path(save_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        mode_tag   = run_config.get("mode", "") if run_config else ""
-        seed_tag = run_config.get("seed", "") if run_config else ""
-        imputer_tag = run_config.get("imputer_strategy", "") if run_config else ""
-        pdf_path = out_dir / f"{tag}_{mode_tag}_seed{seed_tag}_{imputer_tag}_{timestamp}.pdf"
+    pdf_path = None 
+    mdi_csv_path = None  
+    permutation_csv_path = None 
 
-        with pdf_backend.PdfPages(pdf_path) as pdf:
-            for fig in figs:
-                pdf.savefig(fig, bbox_inches="tight")
-                plt.close(fig)
-            meta = pdf.infodict()
-            meta["Title"]   = f"{model_name} — evaluation report"
-            meta["Author"]  = "EOG_REM pipeline"
-            meta["Subject"] = "Model evaluation plots"
+    if save_dir is not None:  
+        out_dir = Path(save_dir)  
+        out_dir.mkdir(parents=True, exist_ok=True)  
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")  
+        mode_tag        = run_config.get("mode", "") if run_config else ""  
+        seed_tag        = run_config.get("seed", "") if run_config else ""  
+        imputer_tag     = run_config.get("imputer_strategy", "") if run_config else "" 
+        
+        # Fælles stem så PDF og CSV'er får samme navn  
+        stem = f"{tag}_{mode_tag}_seed{seed_tag}_{imputer_tag}_{timestamp}"  
+        pdf_path = out_dir / f"{stem}.pdf" 
+        #--- Write PDF --- 
+        with pdf_backend.PdfPages(pdf_path) as pdf: 
+            for fig in figs:  
+                pdf.savefig(fig, bbox_inches="tight")  
+                plt.close(fig)  
+            meta = pdf.infodict()  
+            meta["Title"]   = f"{model_name} — evaluation report" 
+            meta["Author"]  = "EOG_REM pipeline"  
+            meta["Subject"] = "Model evaluation plots" 
+        print(f"\n{GREEN}{BOLD}Saved → {pdf_path}{RESET}") 
 
-        print(f"\n{GREEN}{BOLD}Saved → {pdf_path}{RESET}")
-
-        if not mdi_df.empty:
-            print(f"\n{BOLD}Top-{top_n} MDI features:{RESET}")
-            print(mdi_df.head(top_n).to_string(index=False))
-        print(f"\n{BOLD}Top-{top_n} permutation features:{RESET}")
-        print(perm_df.head(top_n).to_string(index=False))
-
-    else:
-        for fig in figs:
-            plt.show()
-            plt.close(fig)
+        # --- Write MDI CSV ---
+        if not mdi_df.empty:  
+            mdi_csv_path = out_dir / f"{stem}_mdi.csv"  
+            mdi_df.to_csv(mdi_csv_path, index=False) 
+            print(f"{GREEN}Saved -> {mdi_csv_path}{RESET}") 
+            
+            print(f"\n{BOLD}Top-{top_n} MDI features:{RESET}") 
+            print(mdi_df.head(top_n).to_string(index=False)) 
+        
+        # --- Write permutation CSV ---  
+        permutation_csv_path = out_dir / f"{stem}_permutation.csv" 
+        perm_df.to_csv(permutation_csv_path, index=False) 
+        print(f"{GREEN}Saved -> {permutation_csv_path}{RESET}") 
+        
+        print(f"\n{BOLD}Top-{top_n} permutation features:{RESET}") 
+        print(perm_df.head(top_n).to_string(index=False)) 
+    
+    else: 
+        for fig in figs:  
+            plt.show()  
+            plt.close(fig) 
+    
+    return {
+        "mdi_df":               mdi_df, 
+        "perm_df":              perm_df, 
+        "pdf_path":             pdf_path, 
+        "mdi_csv_path":         mdi_csv_path, 
+        "permutation_csv_path": permutation_csv_path, 
+        }

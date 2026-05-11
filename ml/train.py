@@ -481,7 +481,7 @@ def fit_and_evaluate_best(
         print(f"    {line}")
  
     # ---- Evaluation PDF ----
-    evaluate_model(
+    eval_paths = evaluate_model(
         model       = best_model,
         X_test      = X_test,
         y_test      = y_test,
@@ -496,12 +496,15 @@ def fit_and_evaluate_best(
     )
  
     return  best_model, {
-        "test_acc":     round(acc, 4),  # test set accuracy
-        "test_bal_acc": round(bal, 4),  # test set balanced accuracy
-        "test_f1":      round(f1,  4),  # test set F1 score (weighted)
-        "test_prec":    round(prec, 4), # test set precision (weighted)
-        "test_rec":     round(rec, 4),  # test set recall (weighted)
-        "y_pred":       y_pred,         # test set predictions
+        "test_acc":         round(acc, 4),  # test set accuracy
+        "test_bal_acc":     round(bal, 4),  # test set balanced accuracy
+        "test_f1":          round(f1,  4),  # test set F1 score (weighted)
+        "test_prec":        round(prec, 4), # test set precision (weighted)
+        "test_rec":         round(rec, 4),  # test set recall (weighted)
+        "y_pred":           y_pred,         # test set predictions
+        "mdi_csv_path":     eval_paths.get("mdi_csv"),          # path to MDI feature importance CSV (if available)
+        "perm_csv_path":    eval_paths.get("permutation_csv"),  # path to permutation feature importance CSV (if available)
+        "pdf_path":         eval_paths.get("pdf"),              # path to evaluation PDF
         }
 
 # ================================================================================
@@ -684,11 +687,12 @@ def run_training(
     )
  
     # ---- 3) Fit all models on full train, evaluate each on test ----
-    best_model = None                                                   # will be set in loop when we get to the best model
-    model_specs = get_model_search_spaces(seed=seed, mode=mode)         # for fitting and evaluation
-    lm          = _label_map(mode)                                      # label map for class names (for evaluation report)
-    class_names = [lm[c] for c in sorted(y_test.unique().tolist())]     # for evaluation report
-    all_preds    = {}                                                   # store test set predictions for all models (for later analysis)
+    best_model = None                                                   # Will be set in loop when we get to the best model
+    model_specs = get_model_search_spaces(seed=seed, mode=mode)         # For fitting and evaluation
+    lm          = _label_map(mode)                                      # Label map for class names (for evaluation report)
+    class_names = [lm[c] for c in sorted(y_test.unique().tolist())]     # For evaluation report
+    all_preds    = {}                                                   # Store test set predictions for all models (for later analysis)
+    importance_paths = {}                                               # Store feature importance CSV paths for all models (for later analysis)
 
     for name in model_specs:
         model, test_metrics = fit_and_evaluate_best(
@@ -707,6 +711,13 @@ def run_training(
             cv_results= cv_results,
         )
         all_preds[name] = test_metrics.pop("y_pred")  
+
+        importance_paths[name] = {
+            "mdi_csv":  test_metrics.pop("mdi_csv_path", None),
+            "perm_csv": test_metrics.pop("permutation_csv_path", None),
+            "pdf_path": test_metrics.pop("pdf_path", None),
+        }
+
         if name == best_name:
             best_model   = model
             best_metrics = test_metrics
@@ -737,6 +748,7 @@ def run_training(
         "y_train":          y_train,
         "y_test":           y_test,
         "importance_df":    importance_df,
+        "importance_paths": importance_paths,
         "evaluation_dir":   Path(save_dir),
     }
 
@@ -874,24 +886,29 @@ def sweep_training(
                 key = f"mcnemar_p_{name.lower().replace(' ','_')}_vs_best"
                 mcnemar[key] = p
                 mcnemar[key.replace("_p_", "_theta_")] = round(theta_hat, 4) # Store p-value for best vs this other model
+
+            imp_paths = result["importance_paths"].get(result["best_name"], {})
  
             summary_rows.append({
-                "run":            run_idx,                                              # Run index (1-based)
-                "seed":           seed,                                                 # Seed used for this run
-                "test_size":      test_size,                                            # Test set size used for this run
-                "mode":           mode,                                                 # Classification mode used for this run
-                "best_model":     result["best_name"],                                  # Best model name from CV for this run
-                "cv_bal_acc":     round(best_row["bal_acc_mean"], 4),                   # Mean balanced accuracy from CV for the best model
-                "cv_bal_std":     round(best_row["bal_acc_std"],  4),                   # Std of balanced accuracy from CV for the best model
-                "test_bal_acc":   metrics["test_bal_acc"],                              # Test set balanced accuracy for the best model
-                "test_acc":       metrics["test_acc"],                                  # Test set accuracy for the best model
-                "test_f1":        metrics["test_f1"],                                   # Test set F1 score (weighted) for the best model
-                "test_prec":      metrics["test_prec"],                                 # Test set precision (weighted) for the best model
-                "test_rec":       metrics["test_rec"],                                  # Test set recall (weighted) for the best model
-                "cv_test_diff":   cv_test_diff,                                         # Difference between CV balanced accuracy and test set balanced accuracy for the best model. Flag for potential overfitting if large negative.
-                "beats_baseline": best_row["bal_acc_mean"] > base_row["bal_acc_mean"],  # Whether the best model's CV balanced accuracy beats the baseline's CV balanced accuracy
-                "baseline_acc":   round(base_row["bal_acc_mean"], 4),                   # Baseline (majority class) balanced accuracy from CV
-                **mcnemar,                                                              # Add McNemar p-values for best vs each other model
+                "run":            run_idx,                                                              # Run index (1-based)
+                "seed":           seed,                                                                 # Seed used for this run
+                "test_size":      test_size,                                                            # Test set size used for this run
+                "mode":           mode,                                                                 # Classification mode used for this run
+                "best_model":     result["best_name"],                                                  # Best model name from CV for this run
+                "cv_bal_acc":     round(best_row["bal_acc_mean"], 4),                                   # Mean balanced accuracy from CV for the best model
+                "cv_bal_std":     round(best_row["bal_acc_std"],  4),                                   # Std of balanced accuracy from CV for the best model
+                "test_bal_acc":   metrics["test_bal_acc"],                                              # Test set balanced accuracy for the best model
+                "test_acc":       metrics["test_acc"],                                                  # Test set accuracy for the best model
+                "test_f1":        metrics["test_f1"],                                                   # Test set F1 score (weighted) for the best model
+                "test_prec":      metrics["test_prec"],                                                 # Test set precision (weighted) for the best model
+                "test_rec":       metrics["test_rec"],                                                  # Test set recall (weighted) for the best model
+                "cv_test_diff":   cv_test_diff,                                                         # Difference between CV balanced accuracy and test set balanced accuracy for the best model. Flag for potential overfitting if large negative.
+                "beats_baseline": best_row["bal_acc_mean"] > base_row["bal_acc_mean"],                  # Whether the best model's CV balanced accuracy beats the baseline's CV balanced accuracy
+                "baseline_acc":   round(base_row["bal_acc_mean"], 4),                                   # Baseline (majority class) balanced accuracy from CV
+                "mdi_csv":        str(imp_paths.get("mdi_csv")) if imp_paths.get("mdi_csv") else "",    # Path to MDI feature importance CSV for the best model (if available)
+                "perm_csv":       str(imp_paths.get("perm_csv")) if imp_paths.get("perm_csv") else "",  # Path to permutation feature importance CSV for the best model (if available)
+                "pdf_path":       str(imp_paths.get("pdf_path")) if imp_paths.get("pdf_path") else "",  # Path to PDF visualization for the best model (if available)
+                **mcnemar,                                                                              # Add McNemar p-values for best vs each other model
                 "status":         "ok",
                 })
  
@@ -930,8 +947,8 @@ if __name__ == "__main__":
     parser.add_argument("feature_csv", type=str)
     parser.add_argument("--mode",        type=str,   default="binary",
                         choices=["binary", "multiclass"])
-    parser.add_argument("--binary-mode", type=str,   default="control_vs_all",
-                        choices=["control_vs_all", "control_vs_irbd"])
+    parser.add_argument("--binary-mode", type=str, default="control_vs_all",
+                        choices=["control_vs_all", "control_vs_irbd", "control_vs_pd"])
     parser.add_argument("--test-size",   type=float, default=0.2)
     parser.add_argument("--n-outer",     type=int,   default=5)
     parser.add_argument("--n-inner",     type=int,   default=5)

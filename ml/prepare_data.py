@@ -172,7 +172,7 @@ def _get_feature_cols(df: pd.DataFrame) -> list[str]:
 # =====================================================================
 def make_binary_labels(
         df:   pd.DataFrame,
-        mode: str = "control_vs_all",
+        mode: str = "control_vs_pd",
         ) -> pd.Series:
     """
     Create binary labels (0/1) from the group column.
@@ -184,6 +184,7 @@ def make_binary_labels(
     mode : str
         Which binary split to use:
         - 'control_vs_all'  : Control=0, all disease groups=1
+        - 'control_vs_pd'   : Control=0, PD=1 (drops iRBD subjects)
         - 'control_vs_irbd' : Control=0, iRBD=1 (drops PD subjects)
 
     Returns
@@ -197,6 +198,12 @@ def make_binary_labels(
         labels[df["group"] == "Control"] = 0
         labels[df["group"].isin(["iRBD", "PD(-RBD)", "PD(+RBD)"])] = 1
         return labels
+    
+    elif mode == "control_vs_pd":
+        labels = pd.Series(np.nan, index=df.index)
+        labels[df["group"] == "Control"] = 0
+        labels[df["group"] == "PD(+RBD)"] = 1
+        return labels
 
     elif mode == "control_vs_irbd":
         labels = pd.Series(np.nan, index=df.index)
@@ -205,7 +212,9 @@ def make_binary_labels(
         return labels
 
     else:
-        raise ValueError(f"Unknown mode: '{mode}'. Use 'control_vs_all' or 'control_vs_irbd'.")
+        raise ValueError(f"Unknown mode: '{mode}'. "
+                         f"Use 'control_vs_all', 'control_vs_irbd', or 'control_vs_pd'."
+                         )
 
 
 # =====================================================================
