@@ -64,9 +64,17 @@ DEFAULT_SEED = 42
 # ================================================================================
 # Label map helper
 # ================================================================================
-def _label_map(mode: str) -> dict[int, str]:
-    if mode == "binary":
+def _label_map(mode: str, binary_mode: str | None = None) -> dict[int, str]:
+    if mode == "binary" and binary_mode == None:
+        print(f"{YELLOW}Warning: binary_mode not specified for label mapping. "
+              f"Defaulting to 'Control' vs 'Disease'. {RESET} This only affects display of class names in reports, not the actual training.")
         return {0: "Control", 1: "Disease"}
+    if mode == "binary" and binary_mode == "control_vs_all":
+        return {0: "Control", 1: "Disease"}
+    if mode == "binary" and binary_mode == "control_vs_pd":
+        return {0: "Control", 1: "PD(+RBD)"}
+    if mode == "binary" and binary_mode == "control_vs_irbd":
+        return {0: "Control", 1: "iRBD"}
     return {0: "Control", 1: "iRBD", 2: "PD(-RBD)", 3: "PD(+RBD)"}
 
 # ================================================================================
@@ -149,6 +157,7 @@ def get_model_search_spaces(
     xgb_metric     = "logloss"         if mode == "binary" else "mlogloss"
  
     return {
+        # ——— Random Forest ——————————————————————————————
         "Random Forest": {
             "pipeline": Pipeline([
                 ("scaler", StandardScaler()),
@@ -159,13 +168,14 @@ def get_model_search_spaces(
                 )),
             ]),
             "param_dist": {
-                "clf__n_estimators": [50, 100, 200, 300],
-                "clf__max_depth":    [None, 5, 10, 20],
-                "clf__max_features": ["sqrt", "log2", 0.3, 0.5],
-                "clf__min_samples_leaf": [1, 2, 4],
+                # Classifier hyperparameters
+                "clf__n_estimators": [50, 100, 200, 300],           # Number of trees in the forest
+                "clf__max_depth":    [None, 5, 10, 20],             # Max depth of the tree (None = expand until pure, or min_samples_leaf)
+                "clf__max_features": ["sqrt", "log2", 0.3, 0.5],    # Max features to consider at each split (sqrt, log2, or fraction)
+                "clf__min_samples_leaf": [1, 2, 4],                 # Min number of samples required to be at a leaf node (controls overfitting)
             },
         },
- 
+        # ——— Logistic Regression ————————————————————————
         "Logistic Regression": {
             "pipeline": Pipeline([
                 ("scaler", StandardScaler()),
@@ -177,10 +187,11 @@ def get_model_search_spaces(
                 )),
             ]),
             "param_dist": {
-                "clf__C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0],
+                # Classifier hyperparameter
+                "clf__C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0], # Regularization strength (inverse of C)
             },
         },
- 
+        # ——— SVM ————————————————————————————————————————
         "SVM": {
             "pipeline": Pipeline([
                 ("scaler", StandardScaler()),
@@ -191,12 +202,13 @@ def get_model_search_spaces(
                 )),
             ]),
             "param_dist": {
-                "clf__C":     [0.1, 1.0, 10.0, 100.0],
-                "clf__gamma": ["scale", "auto", 0.01, 0.001],
-                "clf__kernel": ["rbf", "linear"],
-            },
+                # Classifier hyperparameters
+                "clf__C":     [0.1, 1.0, 10.0, 100.0],          # Regularization strength (inverse of C)
+                "clf__gamma": ["scale", "auto", 0.01, 0.001],   # Gamma for RBF kernel (kernel coefficient) 
+                "clf__kernel": ["rbf", "linear"],               # Kernel type (RBF or linear)
+            },      
         },
- 
+        # ——— XGBoost ————————————————————————————————————
         "XGBoost": {
             "pipeline": Pipeline([
                 ("scaler", StandardScaler()),
@@ -208,10 +220,11 @@ def get_model_search_spaces(
                 )),
             ]),
             "param_dist": {
-                "clf__n_estimators":  [50, 100, 200],
-                "clf__max_depth":     [3, 5, 6, 8],
-                "clf__learning_rate": [0.01, 0.05, 0.1, 0.2],
-                "clf__subsample":     [0.7, 0.8, 1.0],
+                # Classifier hyperparameters
+                "clf__n_estimators":  [50, 100, 200],               # Number of estimators (trees) 
+                "clf__max_depth":     [3, 5, 6, 8],                 # Maximum tree depth (controls model complexity)
+                "clf__learning_rate": [0.01, 0.05, 0.1, 0.2],       # Learning rate (shrinkage of tree contributions)
+                "clf__subsample":     [0.7, 0.8, 1.0],              # Subsample ratio of the training instances (for stochastic gradient boosting)
             },
         },
     }
@@ -286,9 +299,9 @@ def two_layer_cross_validate(
         print(f"\n  Outer fold {fold_idx}/{n_outer}  (train={len(y_tr)}, val={len(y_val)})")
  
         # ---- Baseline ----
-        majority = y_tr.value_counts().idxmax()
-        y_base   = np.full(len(y_val), majority)
-        fold_scores["Baseline (majority)"].append(
+        majority = y_tr.value_counts().idxmax()     # Most common class in the training fold
+        y_base   = np.full(len(y_val), majority)    # Predict majority class for all validation samples
+        fold_scores["Baseline (majority)"].append(  
             balanced_accuracy_score(y_val, y_base)
         )
  
@@ -301,7 +314,8 @@ def two_layer_cross_validate(
             if name == "XGBoost":
                 sw = compute_sample_weight("balanced", y_tr)
                 fit_params = {"clf__sample_weight": sw}
- 
+
+            # Inner CV with RandomizedSearchCV for hyperparameter tuning on the training fold
             search = RandomizedSearchCV(
                 estimator  = spec["pipeline"],
                 param_distributions = spec["param_dist"],
@@ -313,13 +327,13 @@ def two_layer_cross_validate(
                 n_jobs     = -1,
                 error_score= 0.0,
             )
+
+            search.fit(X_tr, y_tr, **fit_params)                        # Fit X (training fold) and y (training fold) with inner CV for hyperparameter tuning
+            best_params_per_model[name].append(search.best_params_)     # Store best hyperparameters for this fold
  
-            search.fit(X_tr, y_tr, **fit_params)
-            best_params_per_model[name].append(search.best_params_)
- 
-            y_pred = search.best_estimator_.predict(X_val)
-            score  = balanced_accuracy_score(y_val, y_pred)
-            fold_scores[name].append(score)
+            y_pred = search.best_estimator_.predict(X_val)  # Predict on the validation fold using the best model from inner CV
+            score  = balanced_accuracy_score(y_val, y_pred) # Evaluate balanced accuracy on the validation fold
+            fold_scores[name].append(score)                 # Store the score for this fold
  
             print(f"bal_acc = {score:.3f}  (best params: {search.best_params_})")
  
@@ -353,9 +367,7 @@ def two_layer_cross_validate(
     model_rows  = results_df[results_df["model"] != "Baseline (majority)"]
     best_name   = model_rows.loc[model_rows["bal_acc_mean"].idxmax(), "model"]
     best_mean   = model_rows["bal_acc_mean"].max()
-    base_mean   = results_df.loc[
-        results_df["model"] == "Baseline (majority)", "bal_acc_mean"
-    ].values[0]
+    base_mean   = results_df.loc[results_df["model"] == "Baseline (majority)", "bal_acc_mean"].values[0]
  
     print(f"\n  {GREEN}{BOLD}Best model: {best_name}  "
           f"(bal_acc = {best_mean:.3f}  vs  baseline = {base_mean:.3f}){RESET}")
@@ -642,7 +654,7 @@ def run_training(
         drop_nan         = drop_nan,
         imputer_strategy = imputer_strategy,
     )
- 
+
     run_config = {
         "feature_csv":       str(feature_csv),
         "mode":              mode,
@@ -798,9 +810,9 @@ def sweep_training(
         in itertools.product(seeds, test_sizes, modes, binary_modes)
         if not (mode == "multiclass" and binary_mode != list(binary_modes)[0])
     ]
-    n_combos = len(combos)
-    base_dir = Path(save_base_dir)
-    base_dir.mkdir(parents=True, exist_ok=True)
+    n_combos = len(combos)                      # Total number of runs to execute
+    base_dir = Path(save_base_dir)              # Base directory for all runs
+    base_dir.mkdir(parents=True, exist_ok=True) # Create base directory if it doesn't exist
  
     print(f"\n{'='*60}")
     print(f"  {BOLD}Sweep — {n_combos} configurations{RESET}")
