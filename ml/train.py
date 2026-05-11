@@ -815,10 +815,11 @@ def sweep_training(
     summary_rows = []
  
     for run_idx, (seed, test_size, mode, binary_mode) in enumerate(combos, 1):
-        tag = f"seed{seed}_split{str(test_size).replace('.','')}_{mode}"
-        if mode == "binary":
-            tag += f"_{binary_mode}"
-        run_dir = base_dir / tag
+        # Directory structure:
+        seed_dir  = base_dir / f"seed{seed}"
+        split_tag = f"split{str(test_size).replace('.','')}"
+        mode_tag  = f"{split_tag}_{mode}_{binary_mode}" if mode == "binary" else f"{split_tag}_{mode}"
+        run_dir   = seed_dir / mode_tag                                                                        
  
         print(f"\n{'─'*60}")
         print(f"  Run {run_idx}/{n_combos}:  seed={seed}  test_size={test_size}  "

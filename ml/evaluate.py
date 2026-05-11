@@ -759,9 +759,10 @@ def evaluate_model(
         seed_tag        = run_config.get("seed", "") if run_config else ""  
         imputer_tag     = run_config.get("imputer_strategy", "") if run_config else "" 
         
-        # Fælles stem så PDF og CSV'er får samme navn  
-        stem = f"{tag}_{mode_tag}_seed{seed_tag}_{imputer_tag}_{timestamp}"  
+        # Filename format:
+        stem = f"{tag}_{imputer_tag}_{timestamp}"
         pdf_path = out_dir / f"{stem}.pdf" 
+
         #--- Write PDF --- 
         with pdf_backend.PdfPages(pdf_path) as pdf: 
             for fig in figs:  
