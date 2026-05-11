@@ -277,14 +277,13 @@ def two_layer_cross_validate(
  
     best_params_per_model: dict[str, list[dict]] = {name: [] for name in model_specs}
  
-    for fold_idx, (train_idx, val_idx) in enumerate(outer_cv.split(X_train, y_train), 1):
-        X_tr = X_train.iloc[train_idx].reset_index(drop=True)
-        X_val= X_train.iloc[val_idx].reset_index(drop=True)
-        y_tr = y_train.iloc[train_idx].reset_index(drop=True)
-        y_val= y_train.iloc[val_idx].reset_index(drop=True)
+    for fold_idx, (train_idx, val_idx) in enumerate(outer_cv.split(X_train, y_train), 1): 
+        X_tr = X_train.iloc[train_idx].reset_index(drop=True)                             # Input features for training fold (inner)
+        X_val= X_train.iloc[val_idx].reset_index(drop=True)                               # Input features for validation fold (outer)
+        y_tr = y_train.iloc[train_idx].reset_index(drop=True)                             # Labels for training fold (inner)
+        y_val= y_train.iloc[val_idx].reset_index(drop=True)                               # Labels for validation fold (outer)
  
-        print(f"\n  Outer fold {fold_idx}/{n_outer}  "
-              f"(train={len(y_tr)}, val={len(y_val)})")
+        print(f"\n  Outer fold {fold_idx}/{n_outer}  (train={len(y_tr)}, val={len(y_val)})")
  
         # ---- Baseline ----
         majority = y_tr.value_counts().idxmax()
@@ -295,7 +294,7 @@ def two_layer_cross_validate(
  
         # ---- Each model ----
         for name, spec in model_specs.items():
-            print(f"    {name:<22s} ...", end=" ", flush=True)
+            print(f"    {name:<22s}: ", end=" ", flush=True)
  
             # XGBoost: pass sample_weight via fit_params
             fit_params = {}
@@ -326,9 +325,9 @@ def two_layer_cross_validate(
  
     # ---- Summarise across folds ----
     print(f"\n{BOLD}Two-layer CV summary  (metric: balanced accuracy){RESET}")
-    print(f"  {'-'*55}")
+    print(f"  {'-'*70}")
     print(f"  {'Model':<25s}  {'Mean':>8s}  {'Std':>8s}  {'Min':>8s}  {'Max':>8s}")
-    print(f"  {'-'*55}")
+    print(f"  {'-'*70}")
  
     rows = []
     for name, scores in fold_scores.items():
@@ -597,50 +596,35 @@ def run_training(
     feature_csv : str | Path
         Path to features.csv file containing extracted features and labels.
     mode : str
-        Options: 'binary' or 'multiclass'. \n
-        Determines whether to do binary or multi-class.
-        Classification mode. Affects label mapping and model definitions.
+        Options: 'binary' or 'multiclass'.
         **Default is 'binary'**.
     binary_mode : str
-        Options: 'control_vs_all' or 'control_vs_irbd'. \n
-        Only used if mode='binary'. Determines how to binarize the labels:
+        Only used if mode='binary'. Options:
         - 'control_vs_all': Control (0) vs all disease (1)
-        - 'control_vs_irbd': Control (0) vs iRBD (1), excluding PD patients. \\
+        - 'control_vs_pd':  Control (0) vs PD(+RBD) (1)
+        - 'control_vs_irbd': Control (0) vs iRBD (1)
         **Default is 'control_vs_all'**.
     test_size : float
-        Fraction of the dataset to include in the test split. 
-        **Default is 0.2**.
+        Fraction of the dataset to include in the test split. **Default is 0.2**.
     n_outer : int
-        Number of outer CV folds. 
-        **Default is 5**.
+        Number of outer CV folds. **Default is 5**.
     n_inner : int
-        Number of inner CV folds. 
-        **Default is 5**.
+        Number of inner CV folds. **Default is 5**.
     n_iter : int
-        Number of RandomizedSearch iterations per model per fold. 
-        **Default is 20**.
+        Number of RandomizedSearch iterations per model per fold. **Default is 20**.
     seed : int
-        Random seed. 
-        **Default is 42**.
+        Random seed. **Default is 42**.
     drop_nan : bool
-        Whether to drop subjects with NaN features. Default False (median imputation).
+        Whether to drop subjects with NaN features. Default False (imputation).
     save_dir : str | Path
-        Directory where evaluation reports will be saved.
-        **Default is "reports/evaluation"**.
-
+        Directory where evaluation reports will be saved. **Default is "reports/evaluation"**.
+ 
     Returns
     -------
     dict
-        Dictionary containing:
-        - "cv_results": DataFrame with CV results per model.
-        - "best_name": Name of the best model from CV.
-        - "best_model": The fitted best model on full training set.
-        - "X_train": Training features.
-        - "X_test": Test features.
-        - "y_train": Training labels.
-        - "y_test": Test labels.
-        - "importance_df": DataFrame of feature importances for the best model.
-        - "evaluation_dir": Path to the directory where evaluation report is saved.
+        Dictionary containing cv_results, best_name, best_model, best_metrics,
+        all_predictions, X_train, X_test, y_train, y_test, importance_df,
+        importance_paths, evaluation_dir.
     """
     print(f"\n{'='*60}")
     print(f"  {BOLD}RBD Classification Pipeline{RESET}")
@@ -658,20 +642,19 @@ def run_training(
         drop_nan         = drop_nan,
         imputer_strategy = imputer_strategy,
     )
-
-    # Build the run_config dict that will appear on every PDF info page
+ 
     run_config = {
-        "feature_csv": str(feature_csv),
-        "mode":        mode,
-        "binary_mode": binary_mode if mode == "binary" else "—",
-        "seed":        seed,
-        "test_size":   test_size,
-        "n_train":     len(X_train),
-        "n_test":      len(X_test),
-        "n_features":  X_train.shape[1],
-        "n_outer":     n_outer,
-        "n_inner":     n_inner,
-        "n_iter":      n_iter,
+        "feature_csv":       str(feature_csv),
+        "mode":              mode,
+        "binary_mode":       binary_mode if mode == "binary" else "—",
+        "seed":              seed,
+        "test_size":         test_size,
+        "n_train":           len(X_train),
+        "n_test":            len(X_test),
+        "n_features":        X_train.shape[1],
+        "n_outer":           n_outer,
+        "n_inner":           n_inner,
+        "n_iter":            n_iter,
         "imputer_strategy":  imputer_strategy,
     }
  
@@ -687,37 +670,37 @@ def run_training(
     )
  
     # ---- 3) Fit all models on full train, evaluate each on test ----
-    best_model = None                                                   # Will be set in loop when we get to the best model
-    model_specs = get_model_search_spaces(seed=seed, mode=mode)         # For fitting and evaluation
-    lm          = _label_map(mode)                                      # Label map for class names (for evaluation report)
-    class_names = [lm[c] for c in sorted(y_test.unique().tolist())]     # For evaluation report
-    all_preds    = {}                                                   # Store test set predictions for all models (for later analysis)
-    importance_paths = {}                                               # Store feature importance CSV paths for all models (for later analysis)
-
+    best_model       = None
+    model_specs      = get_model_search_spaces(seed=seed, mode=mode)
+    lm               = _label_map(mode)
+    class_names      = [lm[c] for c in sorted(y_test.unique().tolist())]
+    all_preds        = {}
+    importance_paths = {}
+ 
     for name in model_specs:
         model, test_metrics = fit_and_evaluate_best(
-            best_name = name,
-            X_train   = X_train,
-            y_train   = y_train,
-            X_test    = X_test,
-            y_test    = y_test,
-            n_inner   = n_inner,
-            n_iter    = n_iter,
-            seed      = seed,
-            mode      = mode,
-            save_dir  = save_dir,
-            is_best   = (name == best_name), 
-            run_config= run_config,
-            cv_results= cv_results,
+            best_name  = name,
+            X_train    = X_train,
+            y_train    = y_train,
+            X_test     = X_test,
+            y_test     = y_test,
+            n_inner    = n_inner,
+            n_iter     = n_iter,
+            seed       = seed,
+            mode       = mode,
+            save_dir   = save_dir,
+            is_best    = (name == best_name), 
+            run_config = run_config,
+            cv_results = cv_results,
         )
-        all_preds[name] = test_metrics.pop("y_pred")  
-
+        all_preds[name] = test_metrics.pop("y_pred")
+ 
         importance_paths[name] = {
             "mdi_csv":  test_metrics.pop("mdi_csv_path", None),
             "perm_csv": test_metrics.pop("permutation_csv_path", None),
             "pdf_path": test_metrics.pop("pdf_path", None),
         }
-
+ 
         if name == best_name:
             best_model   = model
             best_metrics = test_metrics
@@ -751,7 +734,7 @@ def run_training(
         "importance_paths": importance_paths,
         "evaluation_dir":   Path(save_dir),
     }
-
+ 
 # ================================================================================
 # Sweep — run over multiple seeds / test sizes / modes automatically
 # ================================================================================
@@ -760,121 +743,114 @@ def sweep_training(
         seeds:              list[int]   = (42, 0, 1),
         test_sizes:         list[float] = (0.2, 0.25),
         modes:              list[str]   = ("binary", "multiclass"),
-        binary_mode:        str         = "control_vs_all",
+        binary_modes:       list[str]   = ("control_vs_pd", "control_vs_irbd"),
         n_outer:            int         = 5,
         n_inner:            int         = 5,
         n_iter:             int         = 20,
         drop_nan:           bool        = False,
-        imputer_strategy:   str       = "knn",
+        imputer_strategy:   str         = "knn",
         save_base_dir:      str | Path  = "reports/sweep",
         ) -> pd.DataFrame:
     """
-    Run run_training for every combination of seed x test_size x mode.
+    Run run_training for every combination of seed x test_size x mode x binary_mode.
  
-    Each combination gets its own subdirectory:
-        ``<save_base_dir>/seed{seed}_split{test_size}_{mode}/``
- 
+    For multiclass, binary_mode is ignored and the run is executed only once
+    (not once per binary_mode). Each combination gets its own subdirectory.
     A summary CSV is written to <save_base_dir>/sweep_summary.csv.
  
     Parameters
     ----------
     feature_csv : str | Path
-        Path to features.csv file containing extracted features and labels.
+        Path to features.csv.
     seeds : list[int]
-        List of random seeds to use for data splitting and model training.
-        **Default is [42, 0, 1]**.
+        Random seeds. **Default is [42, 0, 1]**.
     test_sizes : list[float]
-        List of test set sizes (fractions) to use for train/test splitting.
-        **Default is [0.2, 0.25]**.
+        Test set fractions. **Default is [0.2, 0.25]**.
     modes : list[str]
-        List of classification modes to run. Options: 'binary', 'multiclass'.
+        Classification modes. Options: 'binary', 'multiclass'.
         **Default is ['binary', 'multiclass']**.
-    binary_mode : str
-        Only used if mode='binary'. Determines how to binarize the labels:
-        - 'control_vs_all': Control (0) vs all disease (1)
-        - 'control_vs_irbd': Control (0) vs iRBD (1), excluding PD patients. \\
-        **Default is 'control_vs_all'**.        
+    binary_modes : list[str]
+        Binary split modes (only used when mode='binary').
+        Options: 'control_vs_all', 'control_vs_pd', 'control_vs_irbd'.
+        **Default is ['control_vs_pd', 'control_vs_irbd']**.
     n_outer : int
-        Number of outer CV folds for each run.
-        **Default is 5**.
+        Outer CV folds. **Default is 5**.
     n_inner : int
-        Number of inner CV folds for each run.
-        **Default is 5**.
+        Inner CV folds. **Default is 5**.
     n_iter : int
-        Number of RandomizedSearch iterations for each run.
-        **Default is 20**.
+        RandomizedSearch iterations. **Default is 20**.
     drop_nan : bool
-        Whether to drop subjects with NaN features. Default False (median imputation).
+        Drop subjects with NaN features. **Default is False**.
+    imputer_strategy : str
+        Imputation strategy. **Default is 'knn'**.
     save_base_dir : str | Path
-        Base directory where all run subdirectories and summary CSV will be saved.
-        Each run gets its own subdirectory named:
-        ``<save_base_dir>/seed{seed}_split{test_size}_{mode}/``
-        **Default is 'reports/sweep'**. 
+        Base directory for all run outputs. **Default is 'reports/sweep'**.
  
     Returns
     -------
     pd.DataFrame
-        Summary DataFrame with one row per run, containing:
-        - run: Run index (1-based)
-        - seed: Random seed used
-        - test_size: Test set size used
-        - mode: Classification mode used
-        - best_model: Best model name from CV
-        - cv_bal_acc: Mean balanced accuracy from CV for the best model
-        - cv_bal_std: Std of balanced accuracy from CV for the best model
-        - status: "ok" or error message if the run failed
+        Summary DataFrame with one row per run.
     """
-
-    combos   = list(itertools.product(seeds, test_sizes, modes))    # All combinations of parameters to run
-    n_combos = len(combos)                                          # Total number of runs for progress tracking
-    base_dir = Path(save_base_dir)                                  # Base directory for all run subdirectories             
-    base_dir.mkdir(parents=True, exist_ok=True)                     # Ensure base directory exists
+    # Build combos — multiclass only runs once (binary_mode irrelevant)
+    combos = [
+        (seed, test_size, mode, binary_mode)
+        for seed, test_size, mode, binary_mode
+        in itertools.product(seeds, test_sizes, modes, binary_modes)
+        if not (mode == "multiclass" and binary_mode != list(binary_modes)[0])
+    ]
+    n_combos = len(combos)
+    base_dir = Path(save_base_dir)
+    base_dir.mkdir(parents=True, exist_ok=True)
  
     print(f"\n{'='*60}")
     print(f"  {BOLD}Sweep — {n_combos} configurations{RESET}")
-    print(f"  Seeds      : {list(seeds)}")
-    print(f"  Test sizes : {list(test_sizes)}")
-    print(f"  Imputer    : {imputer_strategy}")
-    print(f"  Modes      : {list(modes)}")
-    print(f"  Output     : {base_dir}")
+    print(f"  Seeds        : {list(seeds)}")
+    print(f"  Test sizes   : {list(test_sizes)}")
+    print(f"  Modes        : {list(modes)}")
+    print(f"  Binary modes : {list(binary_modes)}  (binary only)")
+    print(f"  Imputer      : {imputer_strategy}")
+    print(f"  Output       : {base_dir}")
     print(f"{'='*60}")
  
     summary_rows = []
  
-    for run_idx, (seed, test_size, mode) in enumerate(combos, 1):
-        tag     = f"seed{seed}_split{str(test_size).replace('.','')}_{mode}"
+    for run_idx, (seed, test_size, mode, binary_mode) in enumerate(combos, 1):
+        tag = f"seed{seed}_split{str(test_size).replace('.','')}_{mode}"
+        if mode == "binary":
+            tag += f"_{binary_mode}"
         run_dir = base_dir / tag
  
         print(f"\n{'─'*60}")
-        print(f"  Run {run_idx}/{n_combos}:  seed={seed}  test_size={test_size}  mode={mode}")
+        print(f"  Run {run_idx}/{n_combos}:  seed={seed}  test_size={test_size}  "
+              f"mode={mode}" + (f"  ({binary_mode})" if mode == "binary" else ""))
         print(f"  Output → {run_dir}")
         print(f"{'─'*60}")
  
         try:
             result = run_training(
-                feature_csv  = feature_csv,
-                mode         = mode,
-                binary_mode  = binary_mode,
-                test_size    = test_size,
-                n_outer      = n_outer,
-                n_inner      = n_inner,
-                n_iter       = n_iter,
-                seed         = seed,
-                drop_nan     = drop_nan,
+                feature_csv      = feature_csv,
+                mode             = mode,
+                binary_mode      = binary_mode,
+                test_size        = test_size,
+                n_outer          = n_outer,
+                n_inner          = n_inner,
+                n_iter           = n_iter,
+                seed             = seed,
+                drop_nan         = drop_nan,
                 imputer_strategy = imputer_strategy,
-                save_dir     = run_dir,
+                save_dir         = run_dir,
             )
  
-            cv_df    = result["cv_results"]
+            cv_df        = result["cv_results"]
             best_row     = cv_df[cv_df["model"] == result["best_name"]].iloc[0]
             base_row     = cv_df[cv_df["model"] == "Baseline (majority)"].iloc[0]
             metrics      = result["best_metrics"]
             cv_test_diff = round(best_row["bal_acc_mean"] - metrics["test_bal_acc"], 4)
-
+ 
             # ---- McNemar: best vs all others ----
-            preds  = result["all_predictions"]              # Test set predictions for all models
-            y_test = result["y_test"]                       # True test labels          
-            mcnemar = {}                                    # Intialise dict to hold McNemar p-values for best vs each other model
+            preds   = result["all_predictions"]
+            y_test  = result["y_test"]
+            mcnemar = {}
             for name, y_pred_other in preds.items():
                 if name == result["best_name"]:
                     continue
@@ -885,43 +861,45 @@ def sweep_training(
                 )
                 key = f"mcnemar_p_{name.lower().replace(' ','_')}_vs_best"
                 mcnemar[key] = p
-                mcnemar[key.replace("_p_", "_theta_")] = round(theta_hat, 4) # Store p-value for best vs this other model
-
+                mcnemar[key.replace("_p_", "_theta_")] = round(theta_hat, 4)
+ 
             imp_paths = result["importance_paths"].get(result["best_name"], {})
  
             summary_rows.append({
-                "run":            run_idx,                                                              # Run index (1-based)
-                "seed":           seed,                                                                 # Seed used for this run
-                "test_size":      test_size,                                                            # Test set size used for this run
-                "mode":           mode,                                                                 # Classification mode used for this run
-                "best_model":     result["best_name"],                                                  # Best model name from CV for this run
-                "cv_bal_acc":     round(best_row["bal_acc_mean"], 4),                                   # Mean balanced accuracy from CV for the best model
-                "cv_bal_std":     round(best_row["bal_acc_std"],  4),                                   # Std of balanced accuracy from CV for the best model
-                "test_bal_acc":   metrics["test_bal_acc"],                                              # Test set balanced accuracy for the best model
-                "test_acc":       metrics["test_acc"],                                                  # Test set accuracy for the best model
-                "test_f1":        metrics["test_f1"],                                                   # Test set F1 score (weighted) for the best model
-                "test_prec":      metrics["test_prec"],                                                 # Test set precision (weighted) for the best model
-                "test_rec":       metrics["test_rec"],                                                  # Test set recall (weighted) for the best model
-                "cv_test_diff":   cv_test_diff,                                                         # Difference between CV balanced accuracy and test set balanced accuracy for the best model. Flag for potential overfitting if large negative.
-                "beats_baseline": best_row["bal_acc_mean"] > base_row["bal_acc_mean"],                  # Whether the best model's CV balanced accuracy beats the baseline's CV balanced accuracy
-                "baseline_acc":   round(base_row["bal_acc_mean"], 4),                                   # Baseline (majority class) balanced accuracy from CV
-                "mdi_csv":        str(imp_paths.get("mdi_csv")) if imp_paths.get("mdi_csv") else "",    # Path to MDI feature importance CSV for the best model (if available)
-                "perm_csv":       str(imp_paths.get("perm_csv")) if imp_paths.get("perm_csv") else "",  # Path to permutation feature importance CSV for the best model (if available)
-                "pdf_path":       str(imp_paths.get("pdf_path")) if imp_paths.get("pdf_path") else "",  # Path to PDF visualization for the best model (if available)
-                **mcnemar,                                                                              # Add McNemar p-values for best vs each other model
+                "run":            run_idx,
+                "seed":           seed,
+                "test_size":      test_size,
+                "mode":           mode,
+                "binary_mode":    binary_mode if mode == "binary" else "",
+                "best_model":     result["best_name"],
+                "cv_bal_acc":     round(best_row["bal_acc_mean"], 4),
+                "cv_bal_std":     round(best_row["bal_acc_std"],  4),
+                "test_bal_acc":   metrics["test_bal_acc"],
+                "test_acc":       metrics["test_acc"],
+                "test_f1":        metrics["test_f1"],
+                "test_prec":      metrics["test_prec"],
+                "test_rec":       metrics["test_rec"],
+                "cv_test_diff":   cv_test_diff,
+                "beats_baseline": best_row["bal_acc_mean"] > base_row["bal_acc_mean"],
+                "baseline_acc":   round(base_row["bal_acc_mean"], 4),
+                "mdi_csv":        str(imp_paths.get("mdi_csv"))  if imp_paths.get("mdi_csv")  else "",
+                "perm_csv":       str(imp_paths.get("perm_csv")) if imp_paths.get("perm_csv") else "",
+                "pdf_path":       str(imp_paths.get("pdf_path")) if imp_paths.get("pdf_path") else "",
+                **mcnemar,
                 "status":         "ok",
-                })
+            })
  
         except Exception as e:
             print(f"\n  {RED}ERROR in run {run_idx}: {e}{RESET}")
             summary_rows.append({
                 "run": run_idx, "seed": seed, "test_size": test_size,
-                "mode": mode, "best_model": "—", "cv_bal_acc": float("nan"),
+                "mode": mode, "binary_mode": binary_mode if mode == "binary" else "",
+                "best_model": "—", "cv_bal_acc": float("nan"),
                 "cv_bal_std": float("nan"), "status": f"ERROR: {e}",
             })
  
     # ── print and save summary ────────────────────────────────────────
-    summary_df = pd.DataFrame(summary_rows)
+    summary_df  = pd.DataFrame(summary_rows)
     summary_csv = base_dir / "sweep_summary.csv"
     summary_df.to_csv(summary_csv, index=False)
  
@@ -934,20 +912,20 @@ def sweep_training(
  
     return summary_df
  
- 
+
 # ================================================================================
 # CLI
 # ================================================================================
 if __name__ == "__main__":
     import argparse
-
+ 
     parser = argparse.ArgumentParser(
         description="Train RBD classifiers with two-layer CV. Use --sweep for multi-config runs."
     )
     parser.add_argument("feature_csv", type=str)
     parser.add_argument("--mode",        type=str,   default="binary",
                         choices=["binary", "multiclass"])
-    parser.add_argument("--binary-mode", type=str, default="control_vs_all",
+    parser.add_argument("--binary-mode", type=str,   default="control_vs_all",
                         choices=["control_vs_all", "control_vs_irbd", "control_vs_pd"])
     parser.add_argument("--test-size",   type=float, default=0.2)
     parser.add_argument("--n-outer",     type=int,   default=5)
@@ -957,26 +935,28 @@ if __name__ == "__main__":
     parser.add_argument("--drop-nan",    action="store_true", default=False)
     parser.add_argument("--save-dir",    type=str,   default="reports/evaluation")
     parser.add_argument("--imputer",     type=str,   default="knn",
-                        choices=["median", "mean", "most_frequent", "knn"],
-                        help="Imputation strategy for NaN values (default: knn). If --drop-nan is set, this is ignored.")
-
+                        choices=["median", "mean", "most_frequent", "knn"])
+ 
     # Sweep options
-    parser.add_argument("--sweep",       action="store_true",
-                        help="Run over multiple seeds/splits/modes")
-    parser.add_argument("--seeds",       type=int,   nargs="+", default=[42, 0, 1])
-    parser.add_argument("--test-sizes",  type=float, nargs="+", default=[0.2, 0.25])
-    parser.add_argument("--modes",       type=str,   nargs="+", default=["binary", "multiclass"])
-    parser.add_argument("--sweep-dir",   type=str,   default="reports/sweep")
-
+    parser.add_argument("--sweep",        action="store_true")
+    parser.add_argument("--seeds",        type=int,   nargs="+", default=[42, 0, 1])
+    parser.add_argument("--test-sizes",   type=float, nargs="+", default=[0.2, 0.25])
+    parser.add_argument("--modes",        type=str,   nargs="+", default=["binary", "multiclass"],
+                        choices=["binary", "multiclass"])
+    parser.add_argument("--binary-modes", type=str,   nargs="+",
+                        default=["control_vs_pd", "control_vs_irbd"],
+                        choices=["control_vs_all", "control_vs_irbd", "control_vs_pd"])
+    parser.add_argument("--sweep-dir",    type=str,   default="reports/sweep")
+ 
     args = parser.parse_args()
-
+ 
     if args.sweep:
         sweep_training(
             feature_csv      = args.feature_csv,
             seeds            = args.seeds,
             test_sizes       = args.test_sizes,
             modes            = args.modes,
-            binary_mode      = args.binary_mode,
+            binary_modes     = args.binary_modes,
             n_outer          = args.n_outer,
             n_inner          = args.n_inner,
             n_iter           = args.n_iter,
@@ -998,3 +978,4 @@ if __name__ == "__main__":
             save_dir         = args.save_dir,
             imputer_strategy = args.imputer,
         )
+ 
