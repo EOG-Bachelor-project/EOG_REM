@@ -72,7 +72,7 @@ def _label_map(mode: str) -> dict[int, str]:
 # ================================================================================
 # McNemar helper
 # ================================================================================
-def _mcnemar_test(y_true, y_pred_a, y_pred_b) -> tuple[float, float]:
+def _mcnemar_test(y_true, y_pred_a, y_pred_b) -> tuple[float, float, float, tuple]:
     """
     McNemar's test comparing two classifiers.
     
@@ -86,18 +86,38 @@ def _mcnemar_test(y_true, y_pred_a, y_pred_b) -> tuple[float, float]:
         Predictions from classifier B.
     Returns
     -------
-    tuple[float, float]
-        (statistic, p-value) from McNemar's test.
+    tuple[float, float, int, int, tuple[float, float]]
+        - theta_hat: McNemar's statistic (difference in error rates).
+        - p_value: Two-sided p-value for the null hypothesis of equal error rates.
+        - n12: Number of samples misclassified by A but not B.
+        - n21: Number of samples misclassified by B but not A.
+        - ci: 95% confidence interval for theta_hat (lower, upper), or (None, None) if s < 5.
     """
     correct_a = (y_pred_a == y_true)
     correct_b = (y_pred_b == y_true)
-    b = int(( correct_a & ~correct_b).sum())  # A correct, B wrong
-    c = int((~correct_a &  correct_b).sum())  # A wrong, B correct
-    if b + c == 0:
-        return 0.0, 1.0
-    statistic = (abs(b - c) - 1) ** 2 / (b + c)
-    p_value   = float(1 - stats.chi2.cdf(statistic, df=1))
-    return round(statistic, 4), round(p_value, 4)
+    n12 = int(( correct_a & ~correct_b).sum())
+    n21 = int((~correct_a &  correct_b).sum())
+    n   = len(y_true)
+
+    theta_hat = (n12 - n21) / n
+    s = n12 + n21
+    m = min(n12, n21)
+    p_value = float(2 * stats.binom.cdf(m, s, 0.5)) if s > 0 else 1.0
+
+    # CI via Beta approximation (eq. 11.33), requires s >= 5
+    ci = (None, None)
+    if s >= 5:
+        E_theta = theta_hat
+        denom   = n * s - (n12 - n21) ** 2
+        Q       = (n ** 2 * (n + 1) * (E_theta + 1) * (1 - E_theta)) / denom if denom != 0 else 1
+        f = (E_theta + 1) / 2 * (Q - 1)
+        g = (1 - E_theta) / 2 * (Q - 1)
+        ci = (
+            2 * stats.beta.ppf(0.025, f, g) - 1,
+            2 * stats.beta.ppf(0.975, f, g) - 1,
+        )
+
+    return theta_hat, p_value, n12, n21, ci
 
 # ================================================================================
 # Model + hyperparameter search space definitions
@@ -846,12 +866,14 @@ def sweep_training(
             for name, y_pred_other in preds.items():
                 if name == result["best_name"]:
                     continue
-                _, p = _mcnemar_test(           
+                theta_hat, p, n12, n21, ci = _mcnemar_test(
                     y_test.values,
                     preds[result["best_name"]],
                     y_pred_other,
                 )
-                mcnemar[f"mcnemar_p_{name.lower().replace(' ','_')}_vs_best"] = p # Store p-value for best vs this other model
+                key = f"mcnemar_p_{name.lower().replace(' ','_')}_vs_best"
+                mcnemar[key] = p
+                mcnemar[key.replace("_p_", "_theta_")] = round(theta_hat, 4) # Store p-value for best vs this other model
  
             summary_rows.append({
                 "run":            run_idx,                                              # Run index (1-based)

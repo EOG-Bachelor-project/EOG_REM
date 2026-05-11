@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf as pdf_backend
 import seaborn as sns
 from pathlib import Path
- 
+
 from sklearn.metrics import (
     confusion_matrix,
     classification_report,
@@ -154,11 +154,13 @@ def _plot_run_info(
  
     # ── 2. Test set metrics ──────────────────────────────────────────
     _section("2  Test set metrics")
-    acc  = accuracy_score(y_test, y_pred)
-    bal  = balanced_accuracy_score(y_test, y_pred)
-    f1   = f1_score(y_test, y_pred, average="weighted", zero_division=0)
-    prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
-    rec  = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+
+    # Prediction metrics (weighted average for multiclass)
+    acc  = accuracy_score(y_test, y_pred)                                       # Accuracy          = (TP + TN) / (TP + TN + FP + FN)
+    bal  = balanced_accuracy_score(y_test, y_pred)                              # Balanced accuracy = (TPR + TNR) / 2
+    f1   = f1_score(y_test, y_pred, average="weighted", zero_division=0)        # f1                = 2 * (Precision * Recall) / (Precision + Recall)
+    prec = precision_score(y_test, y_pred, average="weighted", zero_division=0) # Precision         = TP / (TP + FP)
+    rec  = recall_score(y_test, y_pred, average="weighted", zero_division=0)    # Recall            = TP / (TP + FN)
     for label, val in [
         ("Accuracy",          f"{acc:.4f}"),
         ("Balanced accuracy", f"{bal:.4f}"),
@@ -638,7 +640,6 @@ def plot_feature_importance_permutation(
         plt.show()
     plt.close(fig)
     return df
-
 
 # =====================================================================
 # Full model evaluation  — all plots → one PDF
