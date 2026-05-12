@@ -388,19 +388,20 @@ def two_layer_cross_validate(
 # Final model: fit on full train, evaluate once on held-out test
 # ================================================================================
 def fit_and_evaluate_best(
-        best_name:  str,
-        X_train:    pd.DataFrame,
-        y_train:    pd.Series,
-        X_test:     pd.DataFrame,
-        y_test:     pd.Series,
-        n_inner:    int = 5,
-        n_iter:     int = 20,
-        seed:       int = DEFAULT_SEED,
-        mode:       str = "binary",
-        save_dir:   str | Path | None = "reports/evaluation",
-        is_best:    bool = False,
-        run_config: dict | None = None,  
-        cv_results: pd.DataFrame | None = None,
+        best_name:      str,
+        X_train:        pd.DataFrame,
+        y_train:        pd.Series,
+        X_test:         pd.DataFrame,
+        y_test:         pd.Series,
+        n_inner:        int = 5,
+        n_iter:         int = 20,
+        seed:           int = DEFAULT_SEED,
+        mode:           str = "binary",
+        binary_mode:    str = "control_vs_pd",
+        save_dir:       str | Path | None = "reports/evaluation",
+        is_best:        bool = False,
+        run_config:     dict | None = None,  
+        cv_results:     pd.DataFrame | None = None,
         ) -> None:
     """
     Fit the best model (chosen by outer CV) on the full training set using one
@@ -431,6 +432,10 @@ def fit_and_evaluate_best(
     mode : str
         'binary' or 'multiclass'.
         **Default is 'binary'**.
+    binary_mode : str
+        Specific binary classification mode (e.g. 'control_vs_pd').
+        Only used for label mapping in reports.
+        **Default is 'control_vs_pd'**.
     save_dir : str | Path | None
         Where to write the evaluation PDF.
     is_best : bool
@@ -476,8 +481,8 @@ def fit_and_evaluate_best(
     prec   = precision_score(y_test, y_pred, average="weighted", zero_division=0)
     rec    = recall_score(y_test, y_pred, average="weighted", zero_division=0)
  
-    lm           = _label_map(mode)
-    class_names  = [lm[c] for c in sorted(y_test.unique().tolist())]
+    lm           = _label_map(mode, binary_mode=binary_mode)
+    class_names  = [lm.get(i, str(i)) for i in sorted(y_test.unique())]
  
     print(f"\n  {BOLD}Test set results ({best_name}){RESET}")
     print(f"  {'─'*40}")
@@ -581,7 +586,7 @@ def print_feature_importance(
 def run_training(
         feature_csv:    str | Path,
         mode:           str = "binary",
-        binary_mode:    str = "control_vs_all",
+        binary_mode:    str = "control_vs_pd",
         test_size:      float = 0.2,
         n_outer:        int = 5,
         n_inner:        int = 5,
@@ -684,7 +689,7 @@ def run_training(
     # ---- 3) Fit all models on full train, evaluate each on test ----
     best_model       = None
     model_specs      = get_model_search_spaces(seed=seed, mode=mode)
-    lm               = _label_map(mode)
+    lm               = _label_map(mode, binary_mode)
     class_names      = [lm[c] for c in sorted(y_test.unique().tolist())]
     all_preds        = {}
     importance_paths = {}
