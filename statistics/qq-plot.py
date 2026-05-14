@@ -124,6 +124,8 @@ def qq_plot_feature(
         values_neg:   pd.Series,
         feature_name: str,
         out_path:     str | Path,
+        pos_label:    str = "positive",
+        neg_label:    str = "negative",
         ) -> None:
     """
     Build and save a QQ-plot for one feature with both classes side by side.
@@ -143,13 +145,17 @@ def qq_plot_feature(
         Name of the feature (used in the figure title).
     out_path : str | Path
         Where to save the PNG.
+    pos_label : str
+        Label shown in the positive class subplot title. **Default is 'positive'**.
+    neg_label : str
+        Label shown in the negative class subplot title. **Default is 'negative'**.
     """
     # ---- 1) Set up figure with two subplots, one per class ----
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
 
     for ax, vals, class_label, color in [
-        (axes[0], values_pos, "Positive class",        "tab:blue"),
-        (axes[1], values_neg, "Negative class (rest)", "tab:orange"),
+        (axes[0], values_pos, f"Positive class ({pos_label})", "tab:blue"),
+        (axes[1], values_neg, f"Negative class ({neg_label})", "tab:orange"),
     ]:
         vals = vals.dropna().values
         if len(vals) < 3:
@@ -358,7 +364,11 @@ def main() -> None:
         vals_neg  = X.loc[y_bin == 0, col]
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in col)
         out_path  = plot_dir / f"{i:03d}_{safe_name}.png"
-        qq_plot_feature(vals_pos, vals_neg, col, out_path)
+        qq_plot_feature(
+            vals_pos, vals_neg, col, out_path,
+            pos_label=str(pos_val),
+            neg_label=str(neg_val) if neg_val is not None else "rest",
+        )
         if i % 10 == 0:
             print(f"  {i}/{len(features)} ...")
 
