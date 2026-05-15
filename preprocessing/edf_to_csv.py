@@ -2,6 +2,9 @@
 # Authors: Adam Klovborg & Rasmus Kleffel
 # Description: Convert EDF recordings to CSV files by extracting and standardizing LOC and ROC channels for all indexed sessions.
 
+# NOTE: This pipeline was developed using data from the Danish Center for Sleep Medicine (DCSM).
+#       Some parts may need to be adapted if used with a different dataset or recording system.
+
 # =====================================================================
 # Imports
 # =====================================================================

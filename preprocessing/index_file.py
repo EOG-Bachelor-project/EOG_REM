@@ -2,6 +2,9 @@
 # Authors: Adam Klovborg & Rasmus Kleffel
 # Description: Indexes patient session folders matching the DCSM_x_y naming pattern, locating, EDF, CSV, and TXT files for each session.
 
+# NOTE: This pipeline was developed using data from the Danish Center for Sleep Medicine (DCSM).
+#       Some parts may need to be adapted if used with a different dataset or recording system.
+
 # =====================================================================
 # Imports
 # =====================================================================

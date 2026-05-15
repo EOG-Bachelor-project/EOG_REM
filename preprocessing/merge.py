@@ -3,6 +3,9 @@
 # Description: Utilities for merging EOG signals. GSSC sleep staging, and
 #              REM event annotations into a unifies CSV for downstream analysis.
 
+# NOTE: This pipeline was developed using data from the Danish Center for Sleep Medicine (DCSM).
+#       Some parts may need to be adapted if used with a different dataset or recording system.
+
 # =====================================================================
 # Imports
 # =====================================================================

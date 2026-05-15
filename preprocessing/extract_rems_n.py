@@ -2,6 +2,9 @@
 # Authors: Adam Klovborg & Rasmus Kleffel
 # Description: extract REM from EDF recordings and save it in a CSV file.
 
+# NOTE: This pipeline was developed using data from the Danish Center for Sleep Medicine (DCSM).
+#       Some parts may need to be adapted if used with a different dataset or recording system.
+
 # =====================================================================
 # Imports
 # =====================================================================

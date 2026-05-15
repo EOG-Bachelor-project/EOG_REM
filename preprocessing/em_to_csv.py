@@ -4,6 +4,9 @@
 #               classifies REM epochs as Phasic/Tonic, and saves the result as CSV.
 #               Mirrors the structure of edf_to_csv, GSSC_to_csv, and extract_rems_n.
 
+# NOTE: This pipeline was developed using data from the Danish Center for Sleep Medicine (DCSM).
+#       Some parts may need to be adapted if used with a different dataset or recording system.
+
 # =====================================================================
 # Imports
 # =====================================================================

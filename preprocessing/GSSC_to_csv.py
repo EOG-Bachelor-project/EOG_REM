@@ -2,6 +2,9 @@
 # Authors: Adam Klovborg & Rasmus Kleffel
 # Description: Runs GSSC sleep staging on EOG channels from EDF files and sev per-epoch stage predictions as CSV.
 
+# NOTE: This pipeline was developed using data from the Danish Center for Sleep Medicine (DCSM).
+#       Some parts may need to be adapted if used with a different dataset or recording system.
+
 # =====================================================================
 # Imports
 # =====================================================================

@@ -3,6 +3,8 @@
 # Description: Collects EOG, EEG and GSSC features from all merged CSVs and generates
 #              an HTML report with distribution plots per feature.
 
+# NOTE: This pipeline was developed using data from the Danish Center for Sleep Medicine (DCSM).
+#       Some parts may need to be adapted if used with a different dataset or recording system.
 
 # =====================================================================
 # Imports
