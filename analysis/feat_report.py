@@ -23,6 +23,7 @@ from features.gssc_feats import extract_gssc_features_batch
 from features.eeg_feats import extract_eeg_features_batch
 from features.bout_feats import extract_bout_features_batch
 from features.patient_feats import extract_patient_features
+from features.extra_feats import extract_extra_features_batch
 
 # =====================================================================
 # Module registry
@@ -37,6 +38,7 @@ MODULE_REGISTRY: dict[str, tuple[callable, str]] = {
     "gssc":    (extract_gssc_features_batch,       "gssc_features.csv"),
     "eeg":     (extract_eeg_features_batch,        "eeg_features.csv"),
     "bout":    (extract_bout_features_batch,       "bout_features.csv"),
+    "extra":   (extract_extra_features_batch,      "extra_features.csv"),
 }
  
 ALL_MODULE_NAMES = list(MODULE_REGISTRY.keys()) + ["patient"]
@@ -1154,7 +1156,7 @@ def main():
     parser.add_argument("--output", type=str, default=None, help="Output HTML path (default: reports/features_report.html)")
     parser.add_argument("--csv", type=str, default=None, help="Output merged feature CSV path")
     parser.add_argument("--modules", type=str, nargs="*", default=None,
-                       choices=["eog", "gssc", "eeg", "bout", "patient"],
+                       choices=["eog", "gssc", "eeg", "bout", "extra", "patient"],
                        help="Which modules to run (default: all)")
     parser.add_argument("--force", action="store_true",
                        help="Delete existing module CSVs before re-extracting")

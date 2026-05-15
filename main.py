@@ -497,7 +497,7 @@ Examples:
     p_all.add_argument("patient_excel", type=str, help="Path to patient info Excel file")
     p_all.add_argument("--batch-size", type=int, default=10, help="Patients per batch (default: 10)")
     p_all.add_argument("--modules", type=str, nargs="*", default=None,
-                       choices=["eog", "gssc", "eeg", "bout", "patient"],
+                       choices=["eog", "gssc", "eeg", "bout", "extra", "patient"],
                        help="Which feature modules to run (default: all)")
     p_all.add_argument("--force", action="store_true",
                        help="Delete existing module CSVs before re-extracting")
