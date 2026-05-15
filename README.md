@@ -38,12 +38,11 @@ Electrooculography (EOG) is present in essentially all PSGs and can capture both
 - Quantitative evidence for which EOG-derived markers best capture RBD/PD signatures.
 - A validated ML screening model suitable for translation to minimal-sensor wearable paradigms.
 
-
 ---
 
 ## Install
 
-![Python](https://img.shields.io/badge/python-3.10+-blue)
+![Python](https://img.shields.io/badge/python-3.11-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 Clone the repository:
@@ -66,7 +65,7 @@ conda env create -f environment-mac.yml
 conda activate BPML
 ```
 
-### 2. Run post-install script
+### 2. Install GSSC
 
 > This step is required. GSSC must be installed separately from GitHub to avoid pip overriding the pinned numpy version required by numba.
 
@@ -81,80 +80,116 @@ pip install git+https://github.com/jshanna100/gssc.git --no-deps
 pip install "numpy>=1.24,<2.0" --force-reinstall
 ```
 
-The script installs GSSC without its declared dependencies and then re-pins numpy to `>=1.24,<2.0` to remain compatible with numba. It finishes by verifying that numpy, numba, and gssc all import correctly.
-
 #### Deactivate environment
 ```bash
 conda deactivate
 ```
 
 ---
+
 ## Usage
+
 ![CPU](https://img.shields.io/badge/CPU-supported-brightgreen)
 ![CUDA](https://img.shields.io/badge/CUDA-optional-yellow)
 
 The pipeline is driven by `main.py` and runs in two phases: **preprocessing** and **feature extraction**. GSSC inference runs on CPU by default — if a CUDA-capable GPU is available, set `use_cuda=True` in `GSSC_to_csv.py` and `extract_rems_n.py` for faster staging.
 
+### Data setup
+
+> **Note:** This pipeline was developed using data from the Danish Center for Sleep Medicine (DCSM) and some parts are written with their data format in mind. If you are using a different dataset, some parts of the code may need to be adapted.
+```bash
+/data/raw/
+├── PatientMetadata.xlsx      # metadata and diagnostic labels (see format below)
+├── PATIENT_1/
+│   ├── recording.edf
+│   └── lights.txt
+├── PATIENT_2/
+│   ├── recording.edf
+│   └── lights.txt
+└── ...
+```
+The `lights.txt` files must contain the lights-off and lights-on timestamps used to trim each recording to the intended sleep period. The Excel file must contain at minimum a session ID column and a diagnostic group column matching the expected labels: `Control`, `iRBD`, `PD(+RBD)`, `PD(-RBD)`, `PLM`.
+
 ### Phase 1 — Preprocessing (`main.py process`)
 
 Processes raw EDF recordings through 7 stages per patient:
-1. Extract EOG signals (LOC, ROC) from EDF
-2. Run GSSC sleep staging
-3. Extract REM eye movement events
-4. Mask artefacts (amplitude > 300 µV)
-5. Detect & classify eye movements
-6. Extract EEG proxy signals
-7. Merge all outputs into a unified CSV
 
-The pipeline skips any stage whose output already exists. To reprocess a patient, delete its intermediate files and re-run.
+1. Index sessions from raw EDF directory
+2. Extract EOG signals (LOC, ROC) from EDF —> `eog_csv/`
+3. Run GSSC automated sleep staging —> `gssc_csv/`
+4. Extract REM eye movement events —> `extracted_rems/`
+5. Detect & classify eye movements (phasic/tonic) —> `detected_ems/`
+6. Extract EEG proxy signals via DTCWT —> `eeg_csv/`
+7. Merge all outputs into a unified CSV —> `merged_csv_eog/`
+
+The pipeline skips any stage whose output already exists. To reprocess from scratch:
 
 ```bash
-python main.py process /data/raw                  # process up to 10 patients
-python main.py process /data/raw --batch-size 5   # process 5
+rm -rf eog_csv/ gssc_csv/ extracted_rems/ detected_ems/ eeg_csv/ merged_csv_eog/
+python main.py process /data/raw --batch-size 9999
+```
+
+Otherwise:
+
+```bash
+python main.py process /data/raw                   # process up to 10 patients
+python main.py process /data/raw --batch-size 50   # process 50
 ```
 
 ### Phase 2 — Feature extraction (`main.py extract`)
 
-Extracts 115 features per subject across five modules (`eog`, `gssc`, `eeg`, `bout`, `patient`) and merges them into `features_csv/features.csv`.
+Extracts features per subject across five modules (`eog`, `gssc`, `eeg`, `bout`, `patient`) and merges them into `features_csv/features.csv`.
 
 ```bash
-python main.py extract patient_info.xlsx                    # all modules
-python main.py extract patient_info.xlsx --modules bout eog # specific modules
-python main.py extract patient_info.xlsx --force            # re-extract from scratch
+python main.py extract GlostrupRBDData.xlsx                     # all modules
+python main.py extract GlostrupRBDData.xlsx --modules bout eog  # specific modules
+python main.py extract GlostrupRBDData.xlsx --force             # re-extract from scratch
 ```
 
 ### Full pipeline
 
 ```bash
-python main.py all /data/raw patient_info.xlsx         # process + extract + report
-python main.py all /data/raw patient_info.xlsx --force # full pipeline, re-extract features
+python main.py all /data/raw GlostrupRBDData.xlsx          # process + extract + report
+python main.py all /data/raw GlostrupRBDData.xlsx --force  # full pipeline, re-extract features
 ```
 
 ### Report & cleanup
 
 ```bash
-python main.py report    # generate HTML report from features.csv
-python main.py cleanup   # compress intermediate CSVs to free disk space
-python main.py cleanup --dry-run  # preview without compressing
+python main.py report               # generate HTML report from features.csv
+python main.py cleanup              # compress intermediate CSVs to free disk space
+python main.py cleanup --dry-run    # preview without compressing
 ```
 
-### Model evaluation
+### Machine learning
 
-After feature extraction, use `evaluate.py` to assess a trained model:
-
-```python
-from evaluate import evaluate_model
-
-evaluate_model(
-    model=fitted_model,
-    X_test=X_test,
-    y_test=y_test,
-    class_names=["Control", "RBD", "PD"],
-    model_name="RandomForest",
-    save_dir="reports/",
-)
-# Saves confusion matrix, ROC curves, and feature importance plots to reports/randomforest.pdf
+```bash
+python ml/train.py --mode binary --binary-mode control_vs_irbd
+python ml/train.py --mode multiclass
 ```
+
+**Modes:**
+- `binary`: pairwise — `control_vs_irbd`, `control_vs_pd_rbd`, `control_vs_pd_nrbd`
+- `multiclass`: four-class — Control, iRBD, PD(+RBD), PD(−RBD)
+
+Results and figures are saved to `reports/evaluation/`.
+
+### Statistical analysis
+
+After model training, three scripts support the statistical analysis and interpretation of results:
+
+```bash
+# 1. Assess normality of feature distributions per class
+python ml/qq-plot.py --csv features_csv/features.csv --label-col group --positive-class iRBD --negative-class Control --out-dir reports/qq
+
+# 2. Run univariate hypothesis testing (Welch's t-test or Mann-Whitney U)
+python ml/univariate_stats.py --csv features_csv/features.csv --label-col group --out-dir reports/stats
+
+# 3. Aggregate feature importance across all sweep runs
+python ml/aggregate_importance.py --sweep-dir reports/sweep --out-dir reports/importance
+```
+
+Run in order: QQ-plots inform which test to use in the univariate step, and aggregate importance combines model results across runs.
 
 ---
 ## Features
@@ -167,6 +202,7 @@ evaluate_model(
 | `gssc` | 12 | Sleep staging probabilities and REM stability from the GSSC model |
 | `eeg` | 31 | EEG proxy band power (delta, theta, alpha, beta) per sleep stage |
 | `bout` | 17 | Phasic/tonic bout structure during REM |
+| `extra` | 30 | Spectral band power per REM context (phasic/tonic), extended phasic/tonic bout structure, EM morphology, and sleep architecture |
 | `patient` | 4 | Demographics and clinical metadata from patient records |
 
 ### Feature groups
@@ -191,11 +227,20 @@ evaluate_model(
 
 **EEG band power (31)** — delta, theta, alpha, beta, total power, and theta ratio per stage (REM, N1, N2, N3, W); overall theta/beta ratio.
 
+**Spectral band power by REM context (12)** — delta, theta, and gamma power during overall REM, phasic REM, and tonic REM; theta/delta ratio per context.
+
+**Extended phasic/tonic structure (12)** — bout duration percentiles (p25, p75, p90), longest bout, long bout fraction, and phasic/tonic transition rate; latency to first phasic bout from REM onset.
+
+**EM morphology (4)** — mean rise and fall slopes averaged across LOC and ROC channels, amplitude variance, and SEM fraction across all EM events.
+
+**Sleep architecture (2)** — REM latency from sleep onset and number of distinct REM cycles.
+
 > A full feature cheat-sheet with descriptions and distribution plots is available in the HTML report generated by `python main.py report`.
+
 ---
 ## Notebooks
 
-Two notebooks are provided for post-extraction inspection and quality control.
+Three notebooks are provided for post-extraction inspection, quality control, and results analysis.
 
 ### `feat_dashboard.ipynb`
 Feature extraction dashboard and data quality checks.
@@ -212,6 +257,15 @@ Cohort overview and per-patient inspector.
 - NaN audit: features ranked by missing rate
 - Feature distributions overlaid by diagnostic group
 - Per-patient inspector: set a `PATIENT_ID` to see all feature values, NaN flags, and a z-score comparison against the patient's group mean
+
+### `sweep_summary.ipynb`
+Model sweep results analysis. Useful for collecting and evaluating results across all training runs.
+- Summary table of all runs with CV and test balanced accuracy
+- Bar chart of test balanced accuracy by classification mode and model
+- Overfitting check: CV vs. test accuracy difference per run
+- McNemar p-value heatmaps per classification mode
+- Exports all figures to a PDF report
+
 ---
 ## License
 
