@@ -20,6 +20,7 @@ import numpy as np              # for numerical operations
 import pandas as pd             # for data manipulation
 from pathlib import Path        # for handling file paths
 import scipy.stats as stats     # for statistical tests (e.g. McNemar's test)
+import datetime                 # for timestamping reports
 
 # Sklearn imports
 from sklearn.ensemble import RandomForestClassifier
@@ -170,9 +171,9 @@ def get_model_search_spaces(
             "param_dist": {
                 # Classifier hyperparameters
                 "clf__n_estimators": [50, 100, 200, 300],           # Number of trees in the forest
-                "clf__max_depth":    [None, 5, 10, 20],             # Max depth of the tree (None = expand until pure, or min_samples_leaf)
+                "clf__max_depth":    [3, 5, 10],                    # Max depth of the tree (None = expand until pure, or min_samples_leaf)
                 "clf__max_features": ["sqrt", "log2", 0.3, 0.5],    # Max features to consider at each split (sqrt, log2, or fraction)
-                "clf__min_samples_leaf": [1, 2, 4],                 # Min number of samples required to be at a leaf node (controls overfitting)
+                "clf__min_samples_leaf": [4, 8, 16],                 # Min number of samples required to be at a leaf node (controls overfitting)
             },
         },
         # ——— Logistic Regression ————————————————————————
@@ -222,7 +223,9 @@ def get_model_search_spaces(
             "param_dist": {
                 # Classifier hyperparameters
                 "clf__n_estimators":  [50, 100, 200],               # Number of estimators (trees) 
-                "clf__max_depth":     [3, 5, 6, 8],                 # Maximum tree depth (controls model complexity)
+                "clf__reg_alpha":     [0, 0.1, 1.0],                # L1 regularization term on weights (Lasso)
+                "clf__reg_lambda":    [1.0, 5.0, 10.0],          # L2 regularization term on weights (Ridge)
+                "clf__max_depth":     [3, 4, 5],                    # Maximum tree depth (controls model complexity)
                 "clf__learning_rate": [0.01, 0.05, 0.1, 0.2],       # Learning rate (shrinkage of tree contributions)
                 "clf__subsample":     [0.7, 0.8, 1.0],              # Subsample ratio of the training instances (for stochastic gradient boosting)
             },
@@ -918,7 +921,7 @@ def sweep_training(
  
     # ── print and save summary ────────────────────────────────────────
     summary_df  = pd.DataFrame(summary_rows)
-    summary_csv = base_dir / "sweep_summary.csv"
+    summary_csv = base_dir / f"sweep_summary_{datetime.datetime.now().strftime('%d%m%Y_%H-%M')}.csv"
     summary_df.to_csv(summary_csv, index=False)
  
     print(f"\n{'='*60}")
