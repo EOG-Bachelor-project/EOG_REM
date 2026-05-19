@@ -7,13 +7,10 @@
 
 <div align="center">
     
-![Python](https://img.shields.io/badge/python-3.10+-blue)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
-![CPU](https://img.shields.io/badge/CPU-supported-brightgreen)
-![CUDA](https://img.shields.io/badge/CUDA-optional-yellow)
+![Python](https://img.shields.io/badge/python-3.11-blue) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey) ![CPU](https://img.shields.io/badge/CPU-supported-brightgreen) ![CUDA](https://img.shields.io/badge/CUDA-optional-yellow) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 </div>    
 
-#### Goal: <br>
+### Goal: <br>
 Develop and validate EOG-only markers of abnormal REM physiology and build machine-learning models to detect RBD (REM Sleep Behavior Disorder) and PD (Parkinson's Disease) in a mixed clinical cohort.
 
 ## Table of Contents
@@ -21,13 +18,21 @@ Develop and validate EOG-only markers of abnormal REM physiology and build machi
 - [Background](#background)
 - [Install](#install)
 - [Usage](#usage)
+  - [Data setup](#data-setup)
+  - [Phase 1 — Preprocessing](#phase-1--preprocessing-mainpy-process)
+  - [Phase 2 — Feature extraction](#phase-2--feature-extraction-mainpy-extract)
+  - [Full pipeline](#full-pipeline)
+  - [Report & cleanup](#report--cleanup)
+  - [Machine learning](#machine-learning)
+  - [Statistical analysis](#statistical-analysis)
 - [Features](#features)
+- [Notebooks](#notebooks)
+- [Known Limitations](#known-limitations)
 - [License](#license)
 - [Credits / Acknowledgements](#credits--acknowledgements)
 
----
-
-## Background
+<br>
+<h2 align="center"> 🔬 Background </h2>
 
 REM Sleep Behavior Disorder (RBD) is a strong prodromal marker of Parkinson's disease (PD) and related synucleinopathies. The polysomnographic hallmark of RBD is REM Sleep Without Atonia (RSWA), typically quantified using chin/limb EMG. However, many emerging wearable sleep systems do not record high-quality EMG, motivating the need for biomarkers that rely on minimal channels.
 
@@ -38,9 +43,8 @@ Electrooculography (EOG) is present in essentially all PSGs and can capture both
 - Quantitative evidence for which EOG-derived markers best capture RBD/PD signatures.
 - A validated ML screening model suitable for translation to minimal-sensor wearable paradigms.
 
----
-
-## Install
+<br>
+<h2 align="center"> 🔧 Install </h2>
 
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
@@ -85,9 +89,8 @@ pip install "numpy>=1.24,<2.0" --force-reinstall
 conda deactivate
 ```
 
----
-
-## Usage
+<br>
+<h2 align="center">🚀 Usage</h2>
 
 ![CPU](https://img.shields.io/badge/CPU-supported-brightgreen)
 ![CUDA](https://img.shields.io/badge/CUDA-optional-yellow)
@@ -100,15 +103,34 @@ The pipeline is driven by `main.py` and runs in two phases: **preprocessing** an
 ```bash
 /data/raw/
 ├── PatientMetadata.xlsx      # metadata and diagnostic labels (see format below)
+│
 ├── PATIENT_1/
 │   ├── recording.edf
 │   └── lights.txt
+│
 ├── PATIENT_2/
 │   ├── recording.edf
 │   └── lights.txt
+│
 └── ...
 ```
 The `lights.txt` files must contain the lights-off and lights-on timestamps used to trim each recording to the intended sleep period. The Excel file must contain at minimum a session ID column and a diagnostic group column matching the expected labels: `Control`, `iRBD`, `PD(+RBD)`, `PD(-RBD)`, `PLM`.
+
+### Pipeline overview
+
+```mermaid
+flowchart LR
+    A[Raw EDF recordings] --> B[1. Index sessions];
+    B --> C[2. Extract EOG signals LOC / ROC];
+    C --> D[3. GSSC sleep staging];
+    D --> E[4. Extract REM events];
+    E --> F[5. Detect and classify eye movements];
+    F --> G[6. Extract EEG proxy via DTCWT];
+    G --> H[7. Merge all outputs];
+    H --> I[Feature extraction: eog / gssc / eeg / bout / extra / patient];
+    I --> J[ML training: RF / XGBoost / SVM / LR];
+    J --> K[Statistical analysis: QQ-plots / univariate tests / feature importance];
+```
 
 ### Phase 1 — Preprocessing (`main.py process`)
 
@@ -191,10 +213,10 @@ python ml/aggregate_importance.py --sweep-dir reports/sweep --out-dir reports/im
 
 Run in order: QQ-plots inform which test to use in the univariate step, and aggregate importance combines model results across runs.
 
----
-## Features
+<br>
+<h2 align="center">📊 Features</h2>
 
-115 features are extracted per subject across five modules, saved to `features_csv/features.csv`.
+145 features are extracted per subject across five modules, saved to `features_csv/features.csv`.
 
 | Module | Features | Description |
 |--------|----------|-------------|
@@ -237,8 +259,8 @@ Run in order: QQ-plots inform which test to use in the univariate step, and aggr
 
 > A full feature cheat-sheet with descriptions and distribution plots is available in the HTML report generated by `python main.py report`.
 
----
-## Notebooks
+<br>
+<h2 align="center">📓 Notebooks</h2>
 
 Three notebooks are provided for post-extraction inspection, quality control, and results analysis.
 
@@ -266,15 +288,50 @@ Model sweep results analysis. Useful for collecting and evaluating results acros
 - McNemar p-value heatmaps per classification mode
 - Exports all figures to a PDF report
 
----
-## License
+<br>
+<h2 align="center">⚠️ Known Limitations</h2>
 
----
+- **DCSM-specific format**: the pipeline was developed using data from the Danish Center for Sleep Medicine. Folder structure, channel naming, and metadata conventions may need to be adapted for other datasets. See inline comments in: 
+    * `preprocessing/index_file.py`
+    * `preprocessing/channel_standardization.py`
+    * `preprocessing/merge.py`
+    * `preprocessing/extract_rems_n.py`
+    * `preprocessing/edf_to_csv.py`
+    * `preprocessing/GSSC_to_csv.py`
+    * `preprocessing/em_to_csv.py`
+    * `analysis/feat_report.py`
+(Some files may be missing in this list)
+- **Memory usage**: very long recordings (>8 hours) may cause out-of-memory errors during feature extraction. If this occurs, process affected recordings individually with a batch size of 1 (`python main.py extract --batch-size 1`).
+- **GSSC dependency**: GSSC must be installed manually after the conda environment is created. Skipping `post_install.bat` / the post-install step will cause silent failures during sleep staging.
+- **Intermediate files**: the pipeline skips stages whose output already exists. If a stage fails mid-run it may leave an empty CSV that is mistaken for valid output. Run `python main.py cleanup --dry-run` to inspect, or manually delete suspect files before rerunning.
+- **EOG-only setup**: the absence of EEG and EMG channels limits classification performance relative to full PSG-based systems. This is an inherent constraint of the research question, not a pipeline bug.
 
-## Credits / Acknowledgements
+### Expected runtime and disk space
+
+Approximate figures based on the DCSM dataset (recordings of 7–9 hours at 250 Hz):
+
+| Stage | Time per patient | Disk space per patient |
+|-------|-----------------|----------------------|
+| Phase 1 — Preprocessing (CPU) | 20–50 min | ~1 GB (compressed to ~200 MB after cleanup) |
+| Phase 2 — Feature extraction | 1–3 min | <1 MB |
+| ML training (binary, 5×5 CV) | 2–5 min | <10 MB per run |
+
+> GSSC staging is the bottleneck in Phase 1. Run `python main.py cleanup` after preprocessing to recover disk space.
+
+<br>
+<h2 align="center">📜 License</h2>
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.html).
+
+
+<br>
+<h2 align="center">Credits / Acknowledgements</h2>
+
 - Thanks to our supervisor and co-supervisor for their guidance and support:
     - A. Brink-Kjaer
     - P. Jenum
     - U. Hanif
-- Sleep staging powered by [GSSC](https://github.com/bdsp-core/GSSC)
-- REM event detection based on the `detect_rem_jaec` algorithm
+- The Danish Center for Sleep Medicine for providing the dataset and domain expertise.
+- Sleep staging powered by [GSSC](https://github.com/bdsp-core/GSSC).
+- REM event detection based on the `detect_rem_jaec` algorithm.
