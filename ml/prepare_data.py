@@ -46,15 +46,17 @@ def _assign_group(df: pd.DataFrame) -> pd.Series:
     """
     Derive a single diagnostic group label from the 1/0 indicator columns.
 
-    Priority order: iRBD > PD(+RBD) > PD(-RBD) > Control.
-    PLM subjects are folded into Control.
+    Priority order: iRBD > PD(+RBD) > PD(-RBD) > Control.\\
+    PLM subjects are folded into Control.\\
     Subjects with no group info get 'Unknown'.
     """
-    groups = pd.Series("Unknown", index=df.index)
-    available = [c for c in GROUP_COLS if c in df.columns]
+    groups = pd.Series("Unknown", index=df.index)           # Default to 'Unknown' for all subjects
+
+    # Check which group indicator columns are actually present in the DataFrame
+    available = [c for c in GROUP_COLS if c in df.columns]  
     if not available:
         return groups
-
+    
     has_info = df[available].notna().any(axis=1) & (df[available].sum(axis=1) > 0)
     groups[has_info] = "Control"
 
@@ -104,7 +106,10 @@ def load_features(feature_csv: str | Path) -> pd.DataFrame:
 # =====================================================================
 # Label assignment
 # =====================================================================
-def make_binary_labels(df: pd.DataFrame, mode: str = "control_vs_all") -> pd.Series:
+def make_binary_labels(
+        df: pd.DataFrame, 
+        mode: str = "control_vs_all"
+        ) -> pd.Series:
     """
     Assign binary labels (0 / 1).
 
@@ -113,8 +118,24 @@ def make_binary_labels(df: pd.DataFrame, mode: str = "control_vs_all") -> pd.Ser
     control_vs_all   : Control=0, iRBD/PD(+RBD)=1  (PD(-RBD) excluded)
     control_vs_irbd  : Control=0, iRBD=1  (PD subjects excluded)
     control_vs_pd    : Control=0, PD(+RBD)=1  (iRBD and PD(-RBD) excluded)
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing a 'group' column with diagnostic group labels.
+    mode : str
+        Which binary classification task to prepare labels for.\\
+        Options: 'control_vs_all', 'control_vs_irbd', 'control_vs_pd'.\\
+        *Default 'control_vs_all'*.
+    
+    Returns
+    -------
+    pd.Series
+        Binary label vector (0/1) aligned with the input DataFrame. 
+        Subjects with no valid label for the chosen task will have NaN.
     """
-    g = df["group"]
+    g = df["group"] # Get the 'group' column to map from    
+    
     if mode == "control_vs_all":
         mapping = {"Control": 0, "iRBD": 1, "PD(+RBD)": 1}
     elif mode == "control_vs_irbd":
