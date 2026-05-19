@@ -168,8 +168,7 @@ def _plot_confusion_matrix(
     plt.tight_layout()
 
     print(f"\n{BOLD}Classification report — {title}{RESET}")
-    print(classification_report(y_true, y_pred,
-                                target_names=class_names, zero_division=0))
+    print(classification_report(y_true, y_pred, target_names=class_names, zero_division=0))
     return fig
 
 
@@ -186,29 +185,36 @@ def _plot_roc_curves(
     One-vs-rest ROC curve per class, aggregated across all CV folds.
     Works for binary and multiclass.
     """
-    n_classes = len(class_names)
-    y_bin     = label_binarize(y_true, classes=list(range(n_classes)))
+    n_classes   = len(class_names)
+    fig, ax     = plt.subplots(figsize=(8, 6))
+    colors      = plt.cm.tab10(np.linspace(0, 1, n_classes))
 
     if n_classes == 2:
-        y_bin  = np.hstack([1 - y_bin, y_bin])  # binarize gives shape (N,1) for binary
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-    colors  = plt.cm.tab10(np.linspace(0, 1, n_classes))
-
-    for i, (name, color) in enumerate(zip(class_names, colors)):
-        fpr, tpr, _ = roc_curve(y_bin[:, i], y_prob[:, i])
+        print("plotting ROC...")
+        fpr, tpr, _ = roc_curve(y_true, y_prob[:, 1])  # use prob of positive class
         roc_auc     = auc(fpr, tpr)
-        ax.plot(fpr, tpr, color=color, lw=1.8,
-                label=f"{name}  (AUC = {roc_auc:.3f})")
+        print(f"fpr={fpr[:3]}, tpr={tpr[:3]}, auc={roc_auc:.3f}")
+        ax.plot(fpr, tpr, color=colors[1], lw=1.8, label=f"{class_names[1]} (AUC = {roc_auc:.3f})")
+
+    else:
+        y_bin = label_binarize(y_true, classes=list(range(n_classes)))
+        for i, (name, color) in enumerate(zip(class_names, colors)):
+            fpr, tpr, _ = roc_curve(y_bin[:, i], y_prob[:, i])
+            roc_auc     = auc(fpr, tpr)
+            ax.plot(fpr, tpr, color=color, lw=1.8, label=f"{name}  (AUC = {roc_auc:.3f})")
 
     ax.plot([0, 1], [0, 1], "k--", lw=0.8, alpha=0.5)  # chance line
     ax.set_xlabel("False positive rate", fontsize=11)
     ax.set_ylabel("True positive rate",  fontsize=11)
-    ax.set_title(title, fontsize=13, fontweight="bold", color=dtunavy)
+    ax.set_title(title, fontsize=13, fontweight="bold", color=dtunavy, fontdict={"family": "Arial"})
     ax.legend(fontsize=9, loc="lower right")
     ax.grid(alpha=0.3)
     plt.tight_layout()
-    return fig
+
+    print(f"y_prob type: {type(y_prob)}")
+    print(f"n_classes: {n_classes}, y_true unique: {np.unique(y_true)}, y_prob shape: {y_prob.shape}")
+    
+    return fig 
 
 
 # ================================================================================
@@ -432,4 +438,4 @@ def evaluate_all(
             run_config       = run_config,
             save_dir         = save_dir,
         )
-    return results
+    return results 

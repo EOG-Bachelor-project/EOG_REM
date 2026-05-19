@@ -78,7 +78,7 @@ def _label_map(mode: str, binary_mode: str | None = None) -> dict[int, str]:
         return {0: "Control", 1: "iRBD", 2: "PD(-RBD)", 3: "PD(+RBD)"}
     # binary
     if binary_mode == "control_vs_all":
-        return {0: "Control", 1: "Patient"}
+        return {0: "Control", 1: "iRBD + PD(+RBD)"}
     if binary_mode == "control_vs_irbd":
         return {0: "Control", 1: "iRBD"}
     if binary_mode == "control_vs_pd":
