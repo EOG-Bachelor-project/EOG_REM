@@ -466,6 +466,8 @@ if __name__ == "__main__":
             for bm in args.binary_mode:
                 runs.append((mode, bm))
  
+    all_results = []  # collects (mode, binary_mode, result) for all runs
+ 
     for mode, binary_mode in runs:
         result = run_training(
             feature_csv      = args.feature_csv,
@@ -476,11 +478,18 @@ if __name__ == "__main__":
             imputer_strategy = args.imputer,
             save_dir         = args.save_dir,
         )
+        all_results.append((mode, binary_mode, result))
  
-        if args.evaluate:
-            from ml.evaluate import evaluate_all
-            from ml.train import _label_map
+    if args.evaluate:
+        from ml.evaluate import evaluate_all
+        from ml.train import _label_map
  
+        # Group results by mode
+        binary_results = {
+            bm: r for m, bm, r in all_results if m == "binary" and bm is not None
+        }
+ 
+        for mode, binary_mode, result in all_results:
             lm          = _label_map(mode, binary_mode)
             class_names = [lm[k] for k in sorted(lm)]
  
@@ -503,5 +512,5 @@ if __name__ == "__main__":
                     "n_features":       result["X"].shape[1],
                 },
                 save_dir         = args.eval_save_dir,
+                binary_results   = binary_results if mode == "binary" else None,
             )
- 
