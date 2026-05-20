@@ -410,8 +410,8 @@ def run_training(
  
     fold_results.to_csv(fold_csv, index=False)
     summary.to_csv(summary_csv, index=False)
-    print(f"\n  Saved → {fold_csv}")
-    print(f"  Saved → {summary_csv}")
+    print(f"\n  Saved -> {fold_csv}")
+    print(f"  Saved -> {summary_csv}")
     print(f"{'='*60}\n")
  
     return {
@@ -514,3 +514,10 @@ if __name__ == "__main__":
                 save_dir         = args.eval_save_dir,
                 binary_results   = binary_results if mode == "binary" else None,
             )
+
+            if args.evaluate and len(binary_results) > 1:
+                from ml.evaluate import evaluate_binary_comparison
+                evaluate_binary_comparison(
+                    binary_results = binary_results,
+                    save_dir=args.eval_save_dir,
+                )

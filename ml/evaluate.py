@@ -42,12 +42,20 @@ from sklearn.impute import KNNImputer, SimpleImputer
 # Constants
 # ================================================================================
 
-# DTU color palette
-dtunavy  = (0.0118, 0.0588, 0.3098)
-dtured   = (0.9098, 0.2471, 0.2824)
-dtugreen = (0, 0.5333, 0.2078)
-dtugrey  = (0.8549, 0.8549, 0.8549)
-dtu_red  = (0.6, 0, 0)
+# DTU colors
+DTU_RED         = (0.6, 0, 0)
+DTUBLUE         = (0.1843, 0.2431, 0.9176)
+DTUBRIGHTGREEN  = (0.1216, 0.8157, 0.5098)
+DTUNAVY         = (0.0118, 0.0588, 0.3098)
+DTUYELLOW       = (0.9647, 0.8157, 0.3019)
+DTUORANGE       = (0.9882, 0.4627, 0.2039)
+DTUPINK         = (0.9686, 0.7333, 0.6941)
+DTUGREY         = (0.8549, 0.8549, 0.8549)
+DTURED          = (0.9098, 0.2471, 0.2824)
+DTUGREEN        = (0, 0.5333, 0.2078)
+DTUPURPLE       = (0.4745, 0.1373, 0.5569)
+
+COLORs = [DTUNAVY, DTURED, DTUBRIGHTGREEN, DTUBLUE, DTUPURPLE, DTU_RED, DTUORANGE, DTUYELLOW, DTUGREEN, DTUPINK, DTUGREY]
 
 BOLD  = "\033[1m"
 GREEN = "\033[92m"
@@ -62,7 +70,7 @@ def _plot_summary(
         summary:      pd.DataFrame,
         class_names:  list[str],
         run_config:   dict | None = None,
-) -> plt.Figure:
+        ) -> plt.Figure:
     """
     Summary page: run config and mean ± std metrics table across all models.
 
@@ -81,7 +89,7 @@ def _plot_summary(
     """
     fig = plt.figure(figsize=(11, 8.5))
     fig.suptitle(f"{model_name}  —  K-fold CV evaluation",
-                 fontsize=14, fontweight="bold", color=dtunavy, y=0.97)
+                 fontsize=14, fontweight="bold", color=DTUNAVY, y=0.97)
  
     y_cursor = 0.88
     line_h   = 0.038
@@ -89,10 +97,10 @@ def _plot_summary(
     def _section(title):
         nonlocal y_cursor
         fig.text(0.07, y_cursor, title, fontsize=10, fontweight="bold",
-                 color=dtunavy, transform=fig.transFigure)
+                 color=DTUNAVY, transform=fig.transFigure)
         y_cursor -= line_h * 0.6
         fig.add_artist(plt.Line2D([0.07, 0.93], [y_cursor, y_cursor],
-                                  color=dtunavy, linewidth=0.5,
+                                  color=DTUNAVY, linewidth=0.5,
                                   transform=fig.transFigure))
         y_cursor -= line_h * 0.5
  
@@ -102,7 +110,7 @@ def _plot_summary(
                  transform=fig.transFigure)
         fig.text(0.42, y_cursor, val, fontsize=8,
                  fontweight="bold" if bold_val else "normal",
-                 color=dtunavy if bold_val else "black",
+                 color=DTUNAVY if bold_val else "black",
                  transform=fig.transFigure)
         y_cursor -= line_h
  
@@ -133,7 +141,6 @@ def _plot_summary(
  
     for _, row in summary.iterrows():
         is_current = row["model"] == model_name
-        color = dtugreen if is_current else "black"
         marker = " ←" if is_current else ""
         vals = [
             row["model"] + marker,
@@ -144,7 +151,7 @@ def _plot_summary(
             f"{row['recall_mean']:.3f} ± {row['recall_std']:.3f}",
         ]
         for hx, v in zip(col_x, vals):
-            fig.text(hx, y_cursor, v, fontsize=7.5, color=color,
+            fig.text(hx, y_cursor, v, fontsize=7.5, color=DTUNAVY if is_current else "black",
                      transform=fig.transFigure)
         y_cursor -= line_h
  
@@ -160,7 +167,7 @@ def _plot_confusion_matrix(
         y_pred,
         class_names: list[str],
         title:       str = "Confusion matrix",
-) -> plt.Figure:
+        ) -> plt.Figure:
     """
     Counts and normalised confusion matrix side by side.
     y_true / y_pred are aggregated across all CV folds.
@@ -180,7 +187,7 @@ def _plot_confusion_matrix(
     cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
  
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    fig.suptitle(title, fontsize=13, fontweight="bold", color=dtunavy)
+    fig.suptitle(title, fontsize=13, fontweight="bold", color=DTUNAVY)
  
     for ax, data, fmt, subtitle in zip(
         axes,
@@ -189,11 +196,13 @@ def _plot_confusion_matrix(
         ["Counts", "Normalised (row %)"],
     ):
         sns.heatmap(data, annot=True, fmt=fmt, cmap="Blues",
-                    xticklabels=class_names, yticklabels=class_names,
-                    linewidths=0.5, ax=ax)
+                    xticklabels=class_names, 
+                    yticklabels=class_names,
+                    linewidths=0.5, 
+                    ax=ax)
         ax.set_xlabel("Predicted label", fontsize=10)
-        ax.set_ylabel("True label",      fontsize=10)
-        ax.set_title(subtitle,           fontsize=10)
+        ax.set_ylabel("True label", fontsize=10)
+        ax.set_title(subtitle, fontsize=10)
         ax.tick_params(labelsize=9)
  
     plt.tight_layout()
@@ -228,31 +237,32 @@ def _plot_roc_curves(
     title : str
         Title for the ROC curves page.
     """
-    n_classes = len(class_names)
-    fig, ax   = plt.subplots(figsize=(8, 6))
-    colors    = plt.cm.tab10(np.linspace(0, 1, n_classes))
- 
+     # ---- 1) Binarize labels for one-vs-rest ROC computation ---
+    n_classes  = len(class_names)
+    y_bin      = label_binarize(y_true, classes=list(range(n_classes)))
+
+    # Binary case: label_binarize returns shape (n, 1) — expand to (n, 2)
     if n_classes == 2:
-        # binary: single curve using positive class probability directly
-        fpr, tpr, _ = roc_curve(y_true, y_prob[:, 1])
+        y_bin  = np.hstack([1 - y_bin, y_bin])
+
+
+    # ---- 2) Compute and plot ROC curve for each class ----
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for i, (name, color) in enumerate(zip(class_names, COLORs)):
+        fpr, tpr, _ = roc_curve(y_bin[:, i], y_prob[:, i])
         roc_auc     = auc(fpr, tpr)
-        ax.plot(fpr, tpr, color=dtunavy, lw=1.8,
-                label=f"{class_names[1]}  (AUC = {roc_auc:.3f})")
-    else:
-        y_bin = label_binarize(y_true, classes=list(range(n_classes)))
-        for i, (name, color) in enumerate(zip(class_names, colors)):
-            fpr, tpr, _ = roc_curve(y_bin[:, i], y_prob[:, i])
-            roc_auc     = auc(fpr, tpr)
-            ax.plot(fpr, tpr, color=color, lw=1.8,
-                    label=f"{name}  (AUC = {roc_auc:.3f})")
- 
-    ax.plot([0, 1], [0, 1], "k--", lw=0.8, alpha=0.5)  # chance line
-    ax.set_xlabel("False positive rate", fontsize=11)
-    ax.set_ylabel("True positive rate",  fontsize=11)
-    ax.set_title(title, fontsize=13, fontweight="bold", color=dtunavy)
-    ax.legend(fontsize=9, loc="lower right")
-    ax.grid(alpha=0.3)
+        ax.plot(fpr, tpr, color=color, linewidth=1.8, label=f"{name}  (AUC = {roc_auc:.3f})")
+
+    ax.plot([0, 1], [0, 1], color="grey", linewidth=0.8, linestyle="--", label="Random")
+    ax.set_xlim([0.0, 1.0])                                             # x-axis limit           
+    ax.set_ylim([0.0, 1.02])                                            # y-axis limit
+    ax.set_xlabel("False Positive Rate", fontsize=10)                   # x-axis label
+    ax.set_ylabel("True Positive Rate",  fontsize=10)                   # y-axis label
+    ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)  # title
+    ax.legend(loc="lower right", fontsize=9)                            # legend
+    ax.grid(alpha=0.3, linestyle="--")                                  # grid 
     plt.tight_layout()
+
     return fig
  
  
@@ -275,7 +285,7 @@ def _plot_feature_importance_mdi(
         return None
  
     importance_df = (
-        pd.DataFrame({"feature": feature_names,
+        pd.DataFrame({"feature":    feature_names,
                       "importance": clf.feature_importances_})
         .sort_values("importance", ascending=False)
         .reset_index(drop=True)
@@ -284,9 +294,9 @@ def _plot_feature_importance_mdi(
     top = importance_df.head(top_n).iloc[::-1]
  
     fig, ax = plt.subplots(figsize=(10, top_n * 0.4 + 1))
-    ax.barh(top["feature"], top["importance"], color=dtu_red, alpha=0.8)
+    ax.barh(top["feature"], top["importance"], color=DTURED, alpha=0.8)
     ax.set_xlabel("MDI importance", fontsize=10)
-    ax.set_title(title, fontsize=12, fontweight="bold", color=dtunavy)
+    ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)
     ax.tick_params(labelsize=9)
     ax.grid(axis="x", alpha=0.3, linestyle="--")
     plt.tight_layout()
@@ -463,17 +473,15 @@ def _plot_comparison_roc_per_model(
     ax : plt.Axes
         Matplotlib Axes to plot on.
     """
-    colors = plt.cm.tab10(np.linspace(0, 1, len(binary_results)))
-    for color, (bm, result) in zip(colors, binary_results.items()):
+    for color, (bm, result) in zip(COLORs, binary_results.items()):
         preds  = result["predictions"].get(model_name)
         if preds is None or preds["y_prob"] is None:
             continue
         fpr, tpr, _ = roc_curve(preds["y_true"], preds["y_prob"][:, 1])
         roc_auc     = auc(fpr, tpr)
-        ax.plot(fpr, tpr, color=color, lw=1.8,
-                label=f"{bm}  (AUC = {roc_auc:.3f})")
+        ax.plot(fpr, tpr, color=color, lw=1.8, label=f"{bm}  (AUC = {roc_auc:.3f})")
     ax.plot([0, 1], [0, 1], "k--", lw=0.8, alpha=0.5)
-    ax.set_title(model_name, fontsize=10, fontweight="bold", color=dtunavy)
+    ax.set_title(model_name, fontsize=10, fontweight="bold", color=DTUNAVY)
     ax.set_xlabel("False positive rate", fontsize=9)
     ax.set_ylabel("True positive rate",  fontsize=9)
     ax.legend(fontsize=7, loc="lower right")
@@ -498,8 +506,7 @@ def _plot_comparison_roc_per_task(
         Matplotlib Axes to plot on.
     """
     result = binary_results[binary_mode]
-    colors = plt.cm.tab10(np.linspace(0, 1, len(result["predictions"])))
-    for color, (model_name, preds) in zip(colors, result["predictions"].items()):
+    for color, (model_name, preds) in zip(COLORs, result["predictions"].items()):
         if preds["y_prob"] is None:
             continue
         fpr, tpr, _ = roc_curve(preds["y_true"], preds["y_prob"][:, 1])
@@ -507,7 +514,7 @@ def _plot_comparison_roc_per_task(
         ax.plot(fpr, tpr, color=color, lw=1.8,
                 label=f"{model_name}  (AUC = {roc_auc:.3f})")
     ax.plot([0, 1], [0, 1], "k--", lw=0.8, alpha=0.5)
-    ax.set_title(binary_mode, fontsize=10, fontweight="bold", color=dtunavy)
+    ax.set_title(binary_mode, fontsize=10, fontweight="bold", color=DTUNAVY)
     ax.set_xlabel("False positive rate", fontsize=9)
     ax.set_ylabel("True positive rate",  fontsize=9)
     ax.legend(fontsize=7, loc="lower right")
@@ -525,11 +532,10 @@ def _plot_comparison_bar(binary_results: dict) -> plt.Figure:
  
     x      = np.arange(n_models)
     width  = 0.8 / n_modes
-    colors = plt.cm.tab10(np.linspace(0, 1, n_modes))
  
     fig, ax = plt.subplots(figsize=(12, 5))
  
-    for i, (bm, color) in enumerate(zip(binary_modes, colors)):
+    for i, (bm, color) in enumerate(zip(binary_modes, COLORs)):
         summary = binary_results[bm]["summary"]
         means   = []
         stds    = []
@@ -538,14 +544,12 @@ def _plot_comparison_bar(binary_results: dict) -> plt.Figure:
             means.append(row["balanced_accuracy_mean"].values[0] if len(row) else 0)
             stds.append(row["balanced_accuracy_std"].values[0]   if len(row) else 0)
         offset = (i - n_modes / 2 + 0.5) * width
-        ax.bar(x + offset, means, width, yerr=stds, label=bm,
-               color=color, alpha=0.8, capsize=4)
+        ax.bar(x + offset, means, width, yerr=stds, label=bm, color=color, capsize=4)
  
     ax.set_xticks(x)
     ax.set_xticklabels(model_names, fontsize=9)
     ax.set_ylabel("Balanced accuracy (mean ± std)", fontsize=10)
-    ax.set_title("Model comparison across binary tasks",
-                 fontsize=13, fontweight="bold", color=dtunavy)
+    ax.set_title("Model comparison across binary tasks", fontsize=13, fontweight="bold", color=DTUNAVY)
     ax.legend(fontsize=9)
     ax.set_ylim(0, 1)
     ax.grid(axis="y", alpha=0.3, linestyle="--")
@@ -582,8 +586,7 @@ def evaluate_binary_comparison(
     fig, axes = plt.subplots(1, n_models, figsize=(5 * n_models, 5))
     if n_models == 1:
         axes = [axes]
-    fig.suptitle("ROC curves per model — all binary tasks",
-                 fontsize=13, fontweight="bold", color=dtunavy)
+    fig.suptitle("ROC curves per model — all binary tasks", fontsize=13, fontweight="bold", color=DTUNAVY)
     for ax, model_name in zip(axes, model_names):
         _plot_comparison_roc_per_model(model_name, binary_results, ax)
     plt.tight_layout()
@@ -594,8 +597,7 @@ def evaluate_binary_comparison(
     fig, axes = plt.subplots(1, n_modes, figsize=(5 * n_modes, 5))
     if n_modes == 1:
         axes = [axes]
-    fig.suptitle("ROC curves per binary task — all models",
-                 fontsize=13, fontweight="bold", color=dtunavy)
+    fig.suptitle("ROC curves per binary task — all models", fontsize=13, fontweight="bold", color=DTUNAVY)
     for ax, bm in zip(axes, binary_modes):
         _plot_comparison_roc_per_task(bm, binary_results, ax)
     plt.tight_layout()
@@ -668,13 +670,6 @@ def evaluate_all(
             seed             = seed,
             run_config       = run_config,
             save_dir         = save_dir,
-        )
- 
-    # ---- Comparison PDF for binary ----
-    if mode == "binary" and binary_results is not None and len(binary_results) > 1:
-        evaluate_binary_comparison(
-            binary_results = binary_results,
-            save_dir       = save_dir,
         )
  
     return results
