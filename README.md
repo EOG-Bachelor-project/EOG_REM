@@ -23,10 +23,12 @@ Develop and validate EOG-only markers of abnormal REM physiology and build machi
   - [Phase 2 — Feature extraction](#phase-2--feature-extraction-mainpy-extract)
   - [Full pipeline](#full-pipeline)
   - [Report & cleanup](#report--cleanup)
+  - [WASO — Wake After Sleep Onset](#waso---wake-after-sleep-onset-add_wasopy)
   - [Machine learning](#machine-learning)
   - [Statistical analysis](#statistical-analysis)
 - [Features](#features)
 - [Notebooks](#notebooks)
+- [Repository structure](#repository-structure)
 - [Known Limitations](#known-limitations)
 - [License](#license)
 - [Credits / Acknowledgements](#credits--acknowledgements)
@@ -64,7 +66,7 @@ conda activate BPML
 ```
 
 #### macOS/Linux
-```bash
+```Terminal
 conda env create -f environment-mac.yml
 conda activate BPML
 ```
@@ -79,7 +81,7 @@ conda activate BPML
 ```
 
 #### macOS/Linux
-```bash
+```Terminal
 pip install git+https://github.com/jshanna100/gssc.git --no-deps
 pip install "numpy>=1.24,<2.0" --force-reinstall
 ```
@@ -118,19 +120,7 @@ The `lights.txt` files must contain the lights-off and lights-on timestamps used
 
 ### Pipeline overview
 
-```mermaid
-flowchart LR
-    A[Raw EDF recordings] --> B[1. Index sessions];
-    B --> C[2. Extract EOG signals LOC / ROC];
-    C --> D[3. GSSC sleep staging];
-    D --> E[4. Extract REM events];
-    E --> F[5. Detect and classify eye movements];
-    F --> G[6. Extract EEG proxy via DTCWT];
-    G --> H[7. Merge all outputs];
-    H --> I[Feature extraction: eog / gssc / eeg / bout / extra / patient];
-    I --> J[ML training: RF / XGBoost / SVM / LR];
-    J --> K[Statistical analysis: QQ-plots / univariate tests / feature importance];
-```
+![Pipeline overview diagram](images/Flowchart_1.jpg)
 
 ### Phase 1 — Preprocessing (`main.py process`)
 
@@ -146,14 +136,14 @@ Processes raw EDF recordings through 7 stages per patient:
 
 The pipeline skips any stage whose output already exists. To reprocess from scratch:
 
-```bash
+```powershell
 rm -rf eog_csv/ gssc_csv/ extracted_rems/ detected_ems/ eeg_csv/ merged_csv_eog/
 python main.py process /data/raw --batch-size 9999
 ```
 
 Otherwise:
 
-```bash
+```powershell
 python main.py process /data/raw                   # process up to 10 patients
 python main.py process /data/raw --batch-size 50   # process 50
 ```
@@ -162,56 +152,91 @@ python main.py process /data/raw --batch-size 50   # process 50
 
 Extracts features per subject across five modules (`eog`, `gssc`, `eeg`, `bout`, `patient`) and merges them into `features_csv/features.csv`.
 
-```bash
+```powershell
 python main.py extract GlostrupRBDData.xlsx                     # all modules
 python main.py extract GlostrupRBDData.xlsx --modules bout eog  # specific modules
 python main.py extract GlostrupRBDData.xlsx --force             # re-extract from scratch
 ```
 
+### WASO - Wake After Sleep Onset (`add_waso.py`)
+This is a separate step because it was added later in the project and relies on the merged CSVs from Phase 1, since redoing phase 1 is time-consuming. It extracts features related to wakefulness during the sleep period, which may be relevant for RBD/PD phenotyping.
+```powershell
+# Compute WASO and append it to an existing features.csv (no reprocessing needed)
+python add_waso.py --merged-dir merged_csv_eog/ --features-csv features_csv/features.csv --pattern "*_merged.csv.gz"
+```
+
+
 ### Full pipeline
 
-```bash
+```powershell
 python main.py all /data/raw GlostrupRBDData.xlsx          # process + extract + report
 python main.py all /data/raw GlostrupRBDData.xlsx --force  # full pipeline, re-extract features
 ```
 
 ### Report & cleanup
 
-```bash
+```powershell
 python main.py report               # generate HTML report from features.csv
 python main.py cleanup              # compress intermediate CSVs to free disk space
 python main.py cleanup --dry-run    # preview without compressing
 ```
 
-### Machine learning
+### Machine learning (`ml.train`)
 
-```bash
-python ml/train.py --mode binary --binary-mode control_vs_irbd
-python ml/train.py --mode multiclass
+```powershell
+python -m ml.train features_csv/features.csv --mode binary multiclass --binary-mode control_vs_all control_vs_irbd control_vs_pd
 ```
 
 **Modes:**
-- `binary`: pairwise — `control_vs_irbd`, `control_vs_pd_rbd`, `control_vs_pd_nrbd`
+- `binary`: pairwise — `control_vs_irbd`, `control_vs_pd`, `control_vs_all` 
 - `multiclass`: four-class — Control, iRBD, PD(+RBD), PD(−RBD)
+> Note: 
+`control_vs_pd` is only PD(+RBD)
+`control_vs_all` is iRBD + PD(+RBD)
 
 Results and figures are saved to `reports/evaluation/`.
 
 ### Statistical analysis
+To find out if our RBD-specific EOG feature extraction add value beyond what standard sleep metrics already tell you. We create a second model with only macrostructure sleep features (e.g. WASO) and EEG spectral features. We then compare the performance with bootstap AUC:
+```powershell
+python statistical_analysis\compare_models features_csv/features.csv --mode binary -binary-mode control_vs_all --evaluate
 
-After model training, three scripts support the statistical analysis and interpretation of results:
+python statistical_analysis\compare_models features_csv/features.csv --mode binary -binary-mode control_vs_pd --evaluate
 
-```bash
-# 1. Assess normality of feature distributions per class
-python ml/qq-plot.py --csv features_csv/features.csv --label-col group --positive-class iRBD --negative-class Control --out-dir reports/qq
-
-# 2. Run univariate hypothesis testing (Welch's t-test or Mann-Whitney U)
-python ml/univariate_stats.py --csv features_csv/features.csv --label-col group --out-dir reports/stats
-
-# 3. Aggregate feature importance across all sweep runs
-python ml/aggregate_importance.py --sweep-dir reports/sweep --out-dir reports/importance
+python statistical_analysis\compare_models features_csv/features.csv --mode binary -binary-mode control_vs_irbd --evaluate
 ```
 
-Run in order: QQ-plots inform which test to use in the univariate step, and aggregate importance combines model results across runs.
+>#### Group columns (`add_group_col.py`)
+>To run some of the statistical analysis, we first need to add group labels to the features CSV. This script has the path hardcoded so to run it, make sure the path to the features CSV is correct.
+>```powershell
+>python add_group_col.py
+>```
+
+```powershell
+# 1. QQ-plots for feature distributions and normality assessment
+python statistical_analysis\qq-plot.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "PD(+RBD)" --negative-class Control --out-dir reports\qq\pd_w_rbd_vs_control
+
+python statistical_analysis\qq-plot.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "PD(-RBD)" --negative-class Control --out-dir reports\qq\pd_wo_rbd_vs_control
+
+python statistical_analysis\qq-plot.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "iRBD" --negative-class Control --out-dir reports\qq\irbd_vs_control
+```
+
+
+
+```powershell
+# 2. Univariate group tests (Welch's t-test or Mann-Whitney U based on normality)
+python statistical_analysis\univariate_stats.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "PD(+RBD)" --negative-class Control --test auto --out-dir reports\stats\control_vs_pd_w_rbd
+
+python statistical_analysis\univariate_stats.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "PD(-RBD)" --negative-class Control --test auto --out-dir reports\stats\control_vs_pd_wo_rbd
+
+python statistical_analysis\univariate_stats.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "iRBD" --negative-class Control --test auto --out-dir reports\stats\control_vs_irbd
+```
+
+```powershell
+# 3. Compare effect sizes across comparisons for the top features identified in the univariate step (e.g. by absolute Cliff's delta)
+python statistical_analysis\compare_effect_sizes.py --csvs "stats\control_vs_irbd\univariate_stats.csv" "stats\control_vs_pd\univariate_stats.csv" --labels "iRBD vs HC" "PD(+RBD) vs HC" --metric abs_cliffs_delta --out-dir reports\stats\comparisons
+```
+>Note: We are only interested in iRBD and PD(+RBD) since we are looking for markers of RBD pathology. PD(−RBD) is included as a negative control group to help identify features that are specific to RBD rather than general PD pathology. Statistical comparisons between PD(−RBD) and controls can be run as well, but they are not the main focus of the analysis.
 
 <br>
 <h2 align="center">📊 Features</h2>
@@ -280,13 +305,82 @@ Cohort overview and per-patient inspector.
 - Feature distributions overlaid by diagnostic group
 - Per-patient inspector: set a `PATIENT_ID` to see all feature values, NaN flags, and a z-score comparison against the patient's group mean
 
-### `sweep_summary.ipynb`
-Model sweep results analysis. Useful for collecting and evaluating results across all training runs.
-- Summary table of all runs with CV and test balanced accuracy
-- Bar chart of test balanced accuracy by classification mode and model
-- Overfitting check: CV vs. test accuracy difference per run
-- McNemar p-value heatmaps per classification mode
-- Exports all figures to a PDF report
+<br>
+<h2 align="center">Repository structure</h2>
+
+```
+.
+├── LICENSE
+├── README.md
+├── SECURITY.md
+├── Tests
+│   ├── REM_classification_test.py
+│   ├── __init__.py
+│   ├── check_edf_units.py
+│   ├── test_eeg_signals_from_eog.py
+│   ├── test_em_in_stages.py
+│   ├── test_eog_features.py
+│   ├── test_gssc_features.py
+│   ├── test_merge.py
+│   ├── test_percentage_of_phasic&tonic.py
+│   └── test_saving_files.py
+├── __init__.py
+├── add_group_col.py
+├── add_waso.py
+├── analysis
+│   ├── detect_em.py
+│   ├── feat_report.py
+│   └── plot.py
+├── conda
+├── environment-mac.yml
+├── environment-win.yml
+├── extract_rems.py
+├── features
+│   ├── bout_feats.py
+│   ├── eeg_feats.py
+│   ├── eog_feats.py
+│   ├── extra_feats.py
+│   ├── gssc_feats.py
+│   ├── patient_feats.py
+│   └── rem_epoch_duration_feats.py
+├── images
+│   └── Flowchart_1.jpg
+│   
+├── main.py
+├── ml
+│   ├── evaluate.py
+│   ├── model2.py
+│   ├── prepare_data.py
+│   └── train.py
+├── notebooks
+│   ├── feat_dashboard.ipynb
+│   └── feat_inspect.ipynb
+├── post_install.bat
+├── preprocessing
+│   ├── GSSC_to_csv.py
+│   ├── __init__.py
+│   ├── channel_standardization.py
+│   ├── edf_to_csv.py
+│   ├── eeg_to_csv.py
+│   ├── em_to_csv.py
+│   ├── extract_rems_n.py
+│   ├── index_file.py
+│   ├── inspect_channel.py
+│   ├── merge.py
+│   ├── merge_patient_info.py
+│   ├── remove_artefacts.py
+│   └── upsample.py
+├── remerge.py
+└── statistical_analysis
+    ├── aggregate_importance.py
+    ├── compare_effect_sizes.py
+    ├── compare_models.py
+    ├── delong_test.py
+    ├── qq-plot.py
+    └── univariate_stats.py
+
+9 directories, 63 files
+```
 
 <br>
 <h2 align="center">⚠️ Known Limitations</h2>
@@ -314,7 +408,7 @@ Approximate figures based on the DCSM dataset (recordings of 7–9 hours at 250 
 |-------|-----------------|----------------------|
 | Phase 1 — Preprocessing (CPU) | 20–50 min | ~1 GB (compressed to ~200 MB after cleanup) |
 | Phase 2 — Feature extraction | 1–3 min | <1 MB |
-| ML training (binary, 5×5 CV) | 2–5 min | <10 MB per run |
+
 
 > GSSC staging is the bottleneck in Phase 1. Run `python main.py cleanup` after preprocessing to recover disk space.
 
