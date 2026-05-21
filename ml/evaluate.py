@@ -269,7 +269,7 @@ def _plot_roc_curves(
 
     return fig
  
- # ================================================================================
+# ================================================================================
 # Page 4 — Probability strip plot
 # ================================================================================
 def _plot_probability_strip(
@@ -299,7 +299,6 @@ def _plot_probability_strip(
         return None
  
     n_classes = len(class_names)
-    colors    = plt.cm.tab10(np.linspace(0, 1, n_classes))
     rng       = np.random.default_rng(42)
  
     # For binary use prob of positive class; for multiclass use max prob
@@ -312,7 +311,7 @@ def _plot_probability_strip(
  
     fig, ax = plt.subplots(figsize=(10, 3.5))
  
-    for i, (name, color) in enumerate(zip(class_names, colors)):
+    for i, (name, color) in enumerate(zip(class_names, COLORs)):
         mask   = y_true == i
         jitter = rng.uniform(-0.15, 0.15, mask.sum())
         ax.scatter(
@@ -325,13 +324,12 @@ def _plot_probability_strip(
             zorder = 3,
         )
  
-    ax.axvline(0.5, color="black", lw=1, linestyle="--", alpha=0.5, label="Decision boundary (0.5)")
+    ax.axvline(0.5, color="black", lw=1, linestyle="--", alpha=0.7, label="Decision boundary (0.5)")
     ax.set_xlabel(x_label,  fontsize=10)
     ax.set_yticks([])
     ax.set_xlim(-0.02, 1.02)
     ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)
     ax.legend(fontsize=9, loc="upper left")
-    ax.grid(axis="x", alpha=0.3, linestyle="--")
     plt.tight_layout()
     return fig
 
@@ -354,8 +352,7 @@ def _plot_feature_importance_mdi(
         return None
  
     importance_df = (
-        pd.DataFrame({"feature":    feature_names,
-                      "importance": clf.feature_importances_})
+        pd.DataFrame({"feature":    feature_names, "importance": clf.feature_importances_})
         .sort_values("importance", ascending=False)
         .reset_index(drop=True)
     )
@@ -400,7 +397,6 @@ def _plot_pca_decision_boundary(
     from sklearn.base import clone
  
     n_classes = len(class_names)
-    colors    = plt.cm.tab10(np.linspace(0, 1, n_classes))
  
     # ---- 1) PCA to 2D ----
     scaler = StandardScaler()
@@ -429,12 +425,12 @@ def _plot_pca_decision_boundary(
     fig, ax = plt.subplots(figsize=(9, 7))
  
     # Background regions
-    cmap_bg = plt.cm.get_cmap("tab10", n_classes)
-    ax.contourf(xx, yy, Z, alpha=0.15, cmap=cmap_bg, levels=np.arange(-0.5, n_classes + 0.5, 1))
+    cmap_bg = plt.cm.get_cmap("bwr", n_classes)
+    ax.contourf(xx, yy, Z, alpha=0.5, cmap=cmap_bg, levels=np.arange(-0.5, n_classes + 0.5, 1))
     ax.contour(xx, yy, Z, colors="white", linewidths=0.5, alpha=0.5,levels=np.arange(-0.5, n_classes + 0.5, 1))
  
     # Subject scatter
-    for i, (name, color) in enumerate(zip(class_names, colors)):
+    for i, (name, color) in enumerate(zip(class_names, COLORs)):
         mask = np.array(y) == i
         ax.scatter(X_pca[mask, 0], X_pca[mask, 1],
                    color=color, 
