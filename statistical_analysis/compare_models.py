@@ -123,7 +123,7 @@ def bootstrap_auc_comparison(
     auc_1 = _auc(y_true_1, y_prob_1) # Compute AUC for Model 1
     auc_2 = _auc(y_true_2, y_prob_2) # Compute AUC for Model 2
     delta_obs = auc_1 - auc_2        # Observed difference in AUC between the two models
-    print(f"Observed AUCs: Model 1 = {auc_1:.3f}, Model 2 = {auc_2:.3f}, $\Delta$ AUC = {delta_obs:.3f}")
+    print(f"Observed AUCs: Model 1 = {auc_1:.3f}, Model 2 = {auc_2:.3f}, Delta AUC = {delta_obs:.3f}")
 
     # --- Bootstrap ---
     n = len(y_true_1)               # Number of subjects (should be same for both models)
@@ -139,7 +139,7 @@ def bootstrap_auc_comparison(
     p_value  = np.mean(deltas <= 0)                         # p-value = fraction of bootstrap samples where Model 1 is not better than Model 2
     ci_lower = np.percentile(deltas, 2.5)                   # 2.5th percentile of bootstrapped Delta AUC for lower bound of 95% CI 
     ci_upper = np.percentile(deltas, 97.5)                  # 97.5th percentile of bootstrapped Delta AUC for upper bound of 95% CI
-    print(f"Bootstrap results: p-value = {p_value:.4f}, 95% CI for $\Delta$ AUC = [{ci_lower:.3f}, {ci_upper:.3f}]")
+    print(fr"Bootstrap results: p-value = {p_value:.4f}, 95% CI for Delta AUC = [{ci_lower:.3f}, {ci_upper:.3f}]")
 
     return {
         "auc_1":             auc_1,
@@ -183,11 +183,11 @@ def _plot_bootstrap_delta(
     # --- Plot ---
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.hist(deltas, bins=60, color=DTUNAVY, alpha=0.7, edgecolor="white", linewidth=0.3)                                # Histogram of bootstrapped Delta AUC values
-    ax.axvline(delta_obs, color=DTURED,    lw=2,   label=f"Observed $\Delta$AUC = {delta_obs:.3f}")                     # Vertical line for observed Delta AUC
+    ax.axvline(delta_obs, color=DTURED,    lw=2,   label=f"Observed Delta AUC = {delta_obs:.3f}")                       # Vertical line for observed Delta AUC
     ax.axvline(ci_lower,  color="grey",    lw=1.5, linestyle="--", label=f"95% CI [{ci_lower:.3f}, {ci_upper:.3f}]")    # Lower bound of 95% CI 
     ax.axvline(ci_upper,  color="grey",    lw=1.5, linestyle="--")                                                      # Upper bound of 95% CI 
-    ax.axvline(0,         color="black",   lw=1,   linestyle=":", alpha=0.5, label="No difference ($\Delta$AUC=0)")     # Vertical line at 0 for reference
-    ax.set_xlabel("$\Delta$ AUC  (Model 1 - Model 2)", fontsize=11)                                                     # X-axis label
+    ax.axvline(0,         color="black",   lw=1,   linestyle=":", alpha=0.5, label="No difference (Delta AUC=0)")       # Vertical line at 0 for reference
+    ax.set_xlabel("Delta AUC  (Model 1 - Model 2)", fontsize=11)                                                        # X-axis label
     ax.set_ylabel("Bootstrap frequency", fontsize=11)                                                                   # Y-axis label
     ax.set_title(f"{model_name}  —  {title}\np = {p_value:.4f}", fontsize=12, fontweight="bold", color=DTUNAVY)         # Title
     ax.legend(fontsize=9)                                                                                               # Legend

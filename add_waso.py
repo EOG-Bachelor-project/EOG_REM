@@ -75,7 +75,7 @@ def add_waso_to_features(
         merged_dir:   str | Path,
         features_csv: str | Path,
         fs:           float = 250.0,
-        pattern:      str   = "*_merged.csv",
+        pattern:      str   = "*_merged.csv.gz",
         overwrite:    bool  = False,
         ) -> pd.DataFrame:
     """
@@ -159,13 +159,13 @@ if __name__ == "__main__":
         description="Compute WASO from merged CSVs and add to features.csv."
     )
     parser.add_argument("--merged-dir", type=str, required=True,
-                        help="Directory containing *_merged.csv files")
+                        help="Directory containing *_merged.csv.gz files")
     parser.add_argument("--features-csv", type=str, default="features_csv/features.csv",
                         help="Path to features.csv. Default: features_csv/features.csv")
     parser.add_argument("--fs", type=float, default=250.0,
                         help="Sampling frequency in Hz. Default: 250.0")
-    parser.add_argument("--pattern", type=str, default="*_merged.csv",
-                        help="Glob pattern for merged CSVs. Default: '*_merged.csv'")
+    parser.add_argument("--pattern", type=str, default="*_merged.csv.gz",
+                        help="Glob pattern for merged CSVs. Default: '*_merged.csv.gz'")
     parser.add_argument("--overwrite", action="store_true",
                         help="Recompute waso_min even if column already exists")
 

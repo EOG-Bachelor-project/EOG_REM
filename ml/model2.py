@@ -52,6 +52,8 @@ EEG_SPECTRAL_FEATURES = [
     "eeg_theta_delta_ratio_phasic",
     "eeg_delta_tonic_power", "eeg_theta_tonic_power", "eeg_gamma_tonic_power",
     "eeg_theta_delta_ratio_tonic",
+    # WASO
+    "waso_min",
 ]
 
 # ---- Sleep macrostructure features ----
