@@ -8,11 +8,12 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # 1. Receive fold_results, predictions, summary, X, y from train.py
 # 2. For each model:
-#       a. Summary page  — mean ± std of all metrics across folds
-#       b. Confusion matrix — aggregated y_true / y_pred across all folds
-#       c. ROC curves — aggregated probabilities across all folds
-#       d. MDI feature importance — refit model on full X to get importances
-#          (RF and XGBoost only; skipped for LR and SVM)
+#       a. Summary page        — mean ± std of all metrics across folds
+#       b. Confusion matrix    — aggregated y_true / y_pred across all folds
+#       c. ROC curves          — aggregated probabilities across all folds
+#       d. Probability strip   — per-subject predicted probability, colored by true label
+#       e. PCA decision boundary — 2D PCA projection with decision boundary and variance explained
+#       f. MDI feature importance — refit model on full X (RF and XGBoost only)
 # 3. Save one PDF per model to save_dir
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -35,8 +36,11 @@ from sklearn.metrics import (
     roc_curve,
     auc,
 )
-from sklearn.preprocessing import label_binarize
+from sklearn.preprocessing import label_binarize, StandardScaler
+from sklearn.decomposition import PCA
 from sklearn.impute import KNNImputer, SimpleImputer
+from sklearn.pipeline import Pipeline
+import matplotlib.patches as mpatches
 
 # ================================================================================
 # Constants
@@ -265,7 +269,72 @@ def _plot_roc_curves(
 
     return fig
  
+ # ================================================================================
+# Page 4 — Probability strip plot
+# ================================================================================
+def _plot_probability_strip(
+        y_true:      np.ndarray,
+        y_prob:      np.ndarray,
+        class_names: list[str],
+        title:       str = "Predicted probability strip",
+        ) -> plt.Figure | None:
+    """
+    Horizontal strip plot of predicted probabilities per subject, colored by true label.
+    Each dot is one subject. X-axis = predicted probability of the positive class (binary)
+    or the highest class probability (multiclass). Vertical jitter for readability.
+
+    Parameters
+    ----------
+    y_true : array-like
+        True labels (aggregated across all CV folds).
+    y_prob : array-like
+        Predicted probabilities (aggregated across all CV folds). Shape (n_samples, n_classes).
+    class_names : list[str]
+        Human-readable class labels in label order.
+    title : str
+        Title for the probability strip plot page.\\
+        **Default**: "Predicted probability strip"
+    """
+    if y_prob is None:
+        return None
  
+    n_classes = len(class_names)
+    colors    = plt.cm.tab10(np.linspace(0, 1, n_classes))
+    rng       = np.random.default_rng(42)
+ 
+    # For binary use prob of positive class; for multiclass use max prob
+    if n_classes == 2:
+        probs      = y_prob[:, 1]
+        x_label    = f"Predicted probability  ({class_names[1]})"
+    else:
+        probs      = y_prob.max(axis=1)
+        x_label    = "Predicted probability  (most likely class)"
+ 
+    fig, ax = plt.subplots(figsize=(10, 3.5))
+ 
+    for i, (name, color) in enumerate(zip(class_names, colors)):
+        mask   = y_true == i
+        jitter = rng.uniform(-0.15, 0.15, mask.sum())
+        ax.scatter(
+            probs[mask],
+            jitter,
+            color  = color,
+            alpha  = 0.6,
+            s      = 18,
+            label  = f"{name}  (n={mask.sum()})",
+            zorder = 3,
+        )
+ 
+    ax.axvline(0.5, color="black", lw=1, linestyle="--", alpha=0.5, label="Decision boundary (0.5)")
+    ax.set_xlabel(x_label,  fontsize=10)
+    ax.set_yticks([])
+    ax.set_xlim(-0.02, 1.02)
+    ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)
+    ax.legend(fontsize=9, loc="upper left")
+    ax.grid(axis="x", alpha=0.3, linestyle="--")
+    plt.tight_layout()
+    return fig
+
 # ================================================================================
 # Page 4 — MDI feature importance
 # ================================================================================
@@ -299,6 +368,87 @@ def _plot_feature_importance_mdi(
     ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)
     ax.tick_params(labelsize=9)
     ax.grid(axis="x", alpha=0.3, linestyle="--")
+    plt.tight_layout()
+    return fig
+ 
+# ================================================================================
+# Page 5 — PCA decision boundary
+# ================================================================================
+def _plot_pca_decision_boundary(
+        pipeline:    object,
+        X_imp:       pd.DataFrame,
+        y:           pd.Series,
+        class_names: list[str],
+        title:       str = "PCA decision boundary",
+        ) -> plt.Figure:
+    """
+    Project X to 2D with PCA, refit the classifier in PCA space,
+    and draw the decision boundary. Variance explained shown on axes.
+ 
+    Parameters
+    ----------
+    pipeline : fitted sklearn Pipeline
+        Used to extract the classifier; refitted in PCA space.
+    X_imp : pd.DataFrame
+        Imputed full feature matrix (already scaled not needed — PCA + scaler inside).
+    y : pd.Series
+        True labels.
+    class_names : list[str]
+        Human-readable class labels.
+    title : str
+    """
+    from sklearn.base import clone
+ 
+    n_classes = len(class_names)
+    colors    = plt.cm.tab10(np.linspace(0, 1, n_classes))
+ 
+    # ---- 1) PCA to 2D ----
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X_imp)
+ 
+    pca = PCA(n_components=2, random_state=42)
+    X_pca = pca.fit_transform(X_scaled)
+    var1, var2 = pca.explained_variance_ratio_ * 100
+ 
+    # ---- 2) Refit classifier in 2D PCA space ----
+    clf_2d = clone(pipeline.named_steps["clf"])
+    clf_2d.fit(X_pca, y)
+ 
+    # ---- 3) Decision boundary mesh ----
+    pad  = 0.5
+    x_min, x_max = X_pca[:, 0].min() - pad, X_pca[:, 0].max() + pad
+    y_min, y_max = X_pca[:, 1].min() - pad, X_pca[:, 1].max() + pad
+    xx, yy = np.meshgrid(
+        np.linspace(x_min, x_max, 300),
+        np.linspace(y_min, y_max, 300),
+    )
+    Z = clf_2d.predict(np.c_[xx.ravel(), yy.ravel()])
+    Z = Z.reshape(xx.shape)
+ 
+    # ---- 4) Plot ----
+    fig, ax = plt.subplots(figsize=(9, 7))
+ 
+    # Background regions
+    cmap_bg = plt.cm.get_cmap("tab10", n_classes)
+    ax.contourf(xx, yy, Z, alpha=0.15, cmap=cmap_bg, levels=np.arange(-0.5, n_classes + 0.5, 1))
+    ax.contour(xx, yy, Z, colors="white", linewidths=0.5, alpha=0.5,levels=np.arange(-0.5, n_classes + 0.5, 1))
+ 
+    # Subject scatter
+    for i, (name, color) in enumerate(zip(class_names, colors)):
+        mask = np.array(y) == i
+        ax.scatter(X_pca[mask, 0], X_pca[mask, 1],
+                   color=color, 
+                   edgecolors="white", 
+                   linewidths=0.4,
+                   s=40, 
+                   label=name, 
+                   zorder=4)
+ 
+    ax.set_xlabel(f"PC1  ({var1:.1f}% variance explained)", fontsize=10)
+    ax.set_ylabel(f"PC2  ({var2:.1f}% variance explained)", fontsize=10)
+    ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)
+    ax.legend(fontsize=9, loc="upper right")
+    ax.grid(alpha=0.2)
     plt.tight_layout()
     return fig
  
@@ -402,7 +552,16 @@ def evaluate_model(
     else:
         print(f"  [SKIP] ROC curves — {model_name} has no predict_proba")
  
-    # ---- Page 4: MDI feature importance (refit on full data) ----
+    # ---- Page 4: probability strip plot ----
+    if y_prob is not None:
+        figs.append(_plot_probability_strip(
+            y_true      = y_true,
+            y_prob      = y_prob,
+            class_names = class_names,
+            title       = f"{model_name}  —  Predicted probability strip (aggregated CV folds)",
+        ))
+ 
+    # ---- Page 5 & 6: MDI + PCA (refit on full data) ----
     model_specs = get_models(seed=seed, mode=mode)
     if model_name in model_specs:
         pipeline = model_specs[model_name]
@@ -416,6 +575,7 @@ def evaluate_model(
         X_imp = pd.DataFrame(imputer.fit_transform(X), columns=X.columns)
         pipeline.fit(X_imp, y)
  
+        # ---- MDI feature importance ----
         mdi_fig = _plot_feature_importance_mdi(
             model         = pipeline,
             feature_names = list(X.columns),
@@ -426,6 +586,15 @@ def evaluate_model(
             figs.append(mdi_fig)
         else:
             print(f"  [SKIP] MDI importance — not available for {model_name}")
+ 
+        # ---- PCA decision boundary ----
+        figs.append(_plot_pca_decision_boundary(
+            pipeline    = pipeline,
+            X_imp       = X_imp,
+            y           = y,
+            class_names = class_names,
+            title       = f"{model_name}  —  PCA decision boundary (refit on all data)",
+        ))
  
     # ---- Save PDF ----
     if save_dir is None:
@@ -452,6 +621,7 @@ def evaluate_model(
     return pdf_path
  
  
+
 # ================================================================================
 # Comparison PDF — all binary modes × all models
 # ================================================================================
