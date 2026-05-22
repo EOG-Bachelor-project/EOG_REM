@@ -56,6 +56,53 @@ def load_stats(csv_path: str | Path, label: str, metric: str) -> pd.DataFrame:
                          f"Available: {list(df.columns)}")
     return df[["feature", metric]].rename(columns={metric: label})
 
+# ===================================================================
+# Helper plot function
+# ===================================================================
+def plot_top_per_group(
+        merged:   pd.DataFrame,
+        label:    str,
+        metric:   str,
+        out_path: Path,
+        top_n:    int = 20,
+        ) -> None:
+    """
+    Save a horizontal bar chart of the top-N features for one specific group.
+
+    Unlike plot_grouped_bars (which ranks features by max effect across all
+    groups), this ranks features purely by the chosen group's effect size,
+    making it easy to see which features matter most for that specific comparison.
+
+    Parameters
+    ----------
+    merged : pd.DataFrame
+        Wide DataFrame with 'feature' column and one column per comparison label.
+    label : str
+        Which comparison column to rank by (e.g. 'iRBD vs HC').
+    metric : str
+        Name of the effect size metric (used in axis label and title).
+    out_path : Path
+        Where to save the PNG.
+    top_n : int
+        Number of top features to show. **Default is 20**.
+    """
+    df = (merged.dropna(subset=[label])
+                .sort_values(label, ascending=False)
+                .head(top_n)
+                .sort_values(label, ascending=True)
+                .reset_index(drop=True))
+
+    fig, ax = plt.subplots(figsize=(9, max(5, 0.4 * len(df))))
+    ax.barh(df["feature"], df[label], color="tab:blue", alpha=0.85)
+    ax.set_xlabel(metric.replace("_", " ").title(), fontsize=11)
+    ax.set_title(f"Top {top_n} features — {label}\n({metric})", fontsize=12)
+    ax.axvline(0, color="black", linewidth=0.5)
+    ax.grid(axis="x", alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved → {out_path}")
+
 
 # =====================================================================
 # Plotting
@@ -252,6 +299,12 @@ def main() -> None:
                       out_dir / "grouped_bars.png", top_n=args.top_n)
     plot_heatmap(merged, args.labels, args.metric,
                  out_dir / "heatmap.png", top_n=args.top_n)
+    
+    # One bar chart per group, ranked by that group's effect size
+    for label in args.labels:
+        safe = label.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("+", "plus").replace("-", "minus")
+        plot_top_per_group(merged, label, args.metric,
+                           out_dir / f"top20_{safe}.png", top_n=20)
 
     print(f"\n{GREEN}{BOLD}Done. All outputs in: {out_dir}{RESET}")
     print(f"\nInterpretation guide:")
