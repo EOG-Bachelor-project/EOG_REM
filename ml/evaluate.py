@@ -1,20 +1,21 @@
 # Filename: evaluate.py
 # Authors: Adam Klovborg & Rasmus Kleffel
-# Description: Generates evaluation plots from K-fold CV results produced by train.py.
-#              Saves one PDF per model containing a summary page, confusion matrix,
-#              ROC curves, and MDI feature importance (RF and XGBoost only).
+# Description: Generates evaluation plots from K-fold or nested CV results produced
+#              by train.py. Saves one PDF per model containing a summary page,
+#              confusion matrix, ROC curves, probability strip, PCA decision boundary,
+#              and MDI feature importance (RF and XGBoost only).
 
 # Pipeline overview:
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # 1. Receive fold_results, predictions, summary, X, y from train.py
 # 2. For each model:
-#       a. Summary page        — mean ± std of all metrics across folds
-#       b. Confusion matrix    — aggregated y_true / y_pred across all folds
-#       c. ROC curves          — aggregated probabilities across all folds
+#       a. Summary page        — run config + mean ± std of all metrics across folds
+#       b. Confusion matrix    — aggregated y_true / y_pred across all outer folds
+#       c. ROC curves          — aggregated probabilities across all outer folds
 #       d. Probability strip   — per-subject predicted probability, colored by true label
 #       e. PCA decision boundary — 2D PCA projection with decision boundary and variance explained
 #       f. MDI feature importance — refit model on full X (RF and XGBoost only)
-# 3. Save one PDF per model to save_dir
+# 3. Save one PDF per model: {method}_{mode}_{binary_mode}_{model_name}.pdf
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # ================================================================================
@@ -179,9 +180,9 @@ def _plot_confusion_matrix(
     Parameters
     ----------
     y_true : array-like
-        True labels (aggregated across all CV folds).
+        True labels.
     y_pred : array-like
-        Predicted labels (aggregated across all CV folds).
+        Predicted labels.
     class_names : list[str]
         Human-readable class labels in label order.
     title : str
@@ -233,9 +234,9 @@ def _plot_roc_curves(
     Parameters
     ----------
     y_true : array-like
-        True labels (aggregated across all CV folds).
+        True labels.
     y_prob : array-like
-        Predicted probabilities (aggregated across all CV folds). Shape (n_samples, n_classes).
+        Predicted probabilities. Shape (n_samples, n_classes).
     class_names : list[str]
         Human-readable class labels in label order.
     title : str
@@ -260,8 +261,8 @@ def _plot_roc_curves(
     ax.plot([0, 1], [0, 1], color="grey", linewidth=0.8, linestyle="--", label="Random")
     ax.set_xlim([0.0, 1.0])                                             # x-axis limit           
     ax.set_ylim([0.0, 1.02])                                            # y-axis limit
-    ax.set_xlabel("False Positive Rate", fontsize=10)                   # x-axis label
-    ax.set_ylabel("True Positive Rate",  fontsize=10)                   # y-axis label
+    ax.set_xlabel("FPR (False Positive Rate)", fontsize=10)             # x-axis label
+    ax.set_ylabel("TPR (True Positive Rate)",  fontsize=10)             # y-axis label
     ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)  # title
     ax.legend(loc="lower right", fontsize=9)                            # legend
     ax.grid(alpha=0.3, linestyle="--")                                  # grid 
@@ -286,9 +287,9 @@ def _plot_probability_strip(
     Parameters
     ----------
     y_true : array-like
-        True labels (aggregated across all CV folds).
+        True labels.
     y_prob : array-like
-        Predicted probabilities (aggregated across all CV folds). Shape (n_samples, n_classes).
+        Predicted probabilities. Shape (n_samples, n_classes).
     class_names : list[str]
         Human-readable class labels in label order.
     title : str
@@ -534,7 +535,7 @@ def evaluate_model(
         y_true      = y_true,
         y_pred      = y_pred,
         class_names = class_names,
-        title       = f"{model_name}  —  Confusion matrix (aggregated CV folds)",
+        title       = f"{model_name}  —  Confusion matrix",
     ))
  
     # ---- Page 3: ROC curves ----
@@ -543,7 +544,7 @@ def evaluate_model(
             y_true      = y_true,
             y_prob      = y_prob,
             class_names = class_names,
-            title       = f"{model_name}  —  ROC curves (aggregated CV folds)",
+            title       = f"{model_name}  —  ROC curves",
         ))
     else:
         print(f"  [SKIP] ROC curves — {model_name} has no predict_proba")
@@ -554,7 +555,7 @@ def evaluate_model(
             y_true      = y_true,
             y_prob      = y_prob,
             class_names = class_names,
-            title       = f"{model_name}  —  Predicted probability strip (aggregated CV folds)",
+            title       = f"{model_name}  —  Predicted probability strip",
         ))
  
     # ---- Page 5 & 6: MDI + PCA (refit on full data) ----
@@ -601,9 +602,12 @@ def evaluate_model(
  
     out_dir   = Path(save_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    tag       = model_name.lower().replace(" ", "_")
-    pdf_path  = out_dir / f"{tag}_{timestamp}.pdf"
+    method      = run_config.get("method", "kfold")
+    mode        = run_config.get("mode", "binary")
+    binary_mode = run_config.get("binary_mode", "").replace(" ", "_")
+    tag         = model_name.lower().replace(" ", "_")
+
+    pdf_path = out_dir / f"{method}_{mode}_{binary_mode}_{tag}.pdf"
  
     with pdf_backend.PdfPages(pdf_path) as pdf:
         for fig in figs:
@@ -613,7 +617,7 @@ def evaluate_model(
         meta["Title"]   = f"{model_name} — evaluation report"
         meta["Author"]  = "EOG_REM pipeline"
  
-    print(f"{GREEN}{BOLD}Saved → {pdf_path}{RESET}")
+    print(f"{GREEN}{BOLD}Saved -> {pdf_path}{RESET}")
     return pdf_path
  
  
@@ -621,6 +625,7 @@ def evaluate_model(
 # ================================================================================
 # Comparison PDF — all binary modes × all models
 # ================================================================================
+#  - - - - - ROC curves per model: all binary modes on one page (one subplot per model) - - - - - 
 def _plot_comparison_roc_per_model(
         model_name:      str,
         binary_results:  dict,
@@ -653,7 +658,7 @@ def _plot_comparison_roc_per_model(
     ax.legend(fontsize=7, loc="lower right")
     ax.grid(alpha=0.3)
  
- 
+#  - - - - - ROC curves per task: all models on one page (one subplot per task) - - - - - 
 def _plot_comparison_roc_per_task(
         binary_mode:     str,
         binary_results:  dict,
@@ -686,7 +691,7 @@ def _plot_comparison_roc_per_task(
     ax.legend(fontsize=7, loc="lower right")
     ax.grid(alpha=0.3)
  
- 
+#  - - - - - Bar chart - - - - - 
 def _plot_comparison_bar(binary_results: dict) -> plt.Figure:
     """
     Grouped bar chart: balanced accuracy mean ± std for all models * all binary modes.
@@ -722,7 +727,7 @@ def _plot_comparison_bar(binary_results: dict) -> plt.Figure:
     plt.tight_layout()
     return fig
  
- 
+#  - - - - - Binary comparison evaluation - - - - - 
 def evaluate_binary_comparison(
         binary_results: dict,
         save_dir:       str | Path = "reports/evaluation",
@@ -775,7 +780,7 @@ def evaluate_binary_comparison(
     # ---- Save ----
     out_dir   = Path(save_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.datetime.now().strftime("%H%M%S_%Y%M%D")
     pdf_path  = out_dir / f"binary_comparison_{timestamp}.pdf"
  
     with pdf_backend.PdfPages(pdf_path) as pdf:
@@ -785,7 +790,7 @@ def evaluate_binary_comparison(
         meta          = pdf.infodict()
         meta["Title"] = "Binary mode comparison"
  
-    print(f"{GREEN}{BOLD}Saved → {pdf_path}{RESET}")
+    print(f"{GREEN}{BOLD}Saved -> {pdf_path}{RESET}")
     return pdf_path
  
  
