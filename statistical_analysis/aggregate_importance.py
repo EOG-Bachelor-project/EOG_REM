@@ -198,7 +198,7 @@ def plot_stability_bars(
     summary : pd.DataFrame
         Output of `aggregate` — must contain 'feature', 'median_rank', 'std_rank'.
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     kind : str
         Importance type label used in the plot title ('mdi' or 'permutation').
     top_k : int
@@ -243,7 +243,7 @@ def plot_rank_heatmap(
     summary : pd.DataFrame
         Output of `aggregate` — used to select the top-K features by median rank.
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     kind : str
         Importance type label used in the plot title.
     top_k : int
@@ -289,7 +289,7 @@ def plot_frac_top_k(
     summary : pd.DataFrame
         Output of `aggregate` — must contain 'feature' and 'frac_top_k'.
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     kind : str
         Importance type label used in the plot title.
     top_k : int
@@ -395,12 +395,12 @@ def main() -> None:
             print(f"  Rank matrix:    {matrix_csv}")
 
         # Save plots
-        plot_stability_bars(summary, out_dir / f"top_features_stability_{kind}.png",
+        plot_stability_bars(summary, out_dir / f"top_features_stability_{kind}.pdf",
                             kind, args.top_k)
         plot_rank_heatmap(rank_matrix, summary,
-                          out_dir / f"heatmap_top_features_{kind}.png",
+                          out_dir / f"heatmap_top_features_{kind}.pdf",
                           kind, args.top_k)
-        plot_frac_top_k(summary, out_dir / f"frac_top_k_{kind}.png",
+        plot_frac_top_k(summary, out_dir / f"frac_top_k_{kind}.pdf",
                         kind, args.top_k)
 
         print(f"\n  Top-{args.top_k} most stable features ({kind}):")

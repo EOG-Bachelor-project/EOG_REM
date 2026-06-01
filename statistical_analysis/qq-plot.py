@@ -144,7 +144,7 @@ def qq_plot_feature(
     feature_name : str
         Name of the feature (used in the figure title).
     out_path : str | Path
-        Where to save the PNG.
+        Where to save the pdf.
     pos_label : str
         Label shown in the positive class subplot title. **Default is 'positive'**.
     neg_label : str
@@ -300,7 +300,7 @@ def main() -> None:
       1. Load the feature CSV and extract numeric features.
       2. Build a binary 0/1 label vector from the chosen positive (and
          optionally negative) class.
-      3. Save one QQ-plot PNG per feature to <out_dir>/plots/.
+      3. Save one QQ-plot pdf per feature to <out_dir>/plots/.
       4. Compute a tidy Shapiro-Wilk table for all (feature, class) pairs
          and a per-feature normality overview, both saved as CSV.
     """
@@ -363,7 +363,7 @@ def main() -> None:
         vals_pos  = X.loc[y_bin == 1, col]
         vals_neg  = X.loc[y_bin == 0, col]
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in col)
-        out_path  = plot_dir / f"{i:03d}_{safe_name}.png"
+        out_path  = plot_dir / f"{i:03d}_{safe_name}.pdf"
         qq_plot_feature(
             vals_pos, vals_neg, col, out_path,
             pos_label=str(pos_val),

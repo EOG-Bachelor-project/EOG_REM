@@ -363,7 +363,7 @@ def plot_roc_comparison(
     result : dict
         Output of `delong_test`.
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     """
     fpr_a, tpr_a, _ = roc_curve(y_true, y_score_a)
     fpr_b, tpr_b, _ = roc_curve(y_true, y_score_b)
@@ -490,7 +490,7 @@ def main() -> None:
         y_true, y_score_a, y_score_b,
         args.name_a, args.name_b,
         result,
-        out_dir / "roc_comparison.png",
+        out_dir / "roc_comparison.pdf",
     )
 
     print(f"\n{GREEN}{BOLD}Done. All outputs in: {out_dir}{RESET}")

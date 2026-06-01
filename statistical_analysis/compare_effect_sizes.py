@@ -82,7 +82,7 @@ def plot_top_per_group(
     metric : str
         Name of the effect size metric (used in axis label and title).
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     top_n : int
         Number of top features to show. **Default is 20**.
     """
@@ -130,7 +130,7 @@ def plot_grouped_bars(
     metric : str
         Name of the effect size metric (used in axis label and title).
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     top_n : int
         Number of top features to show. **Default is 25**.
     """
@@ -196,7 +196,7 @@ def plot_heatmap(
     metric : str
         Name of the effect size metric (used in the title).
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     top_n : int
         Number of top features to show. **Default is 30**.
     """
@@ -296,15 +296,15 @@ def main() -> None:
     # ---- 5) Save plots ----
     print(f"\nGenerating plots ...")
     plot_grouped_bars(merged, args.labels, args.metric,
-                      out_dir / "grouped_bars.png", top_n=args.top_n)
+                      out_dir / "grouped_bars.pdf", top_n=args.top_n)
     plot_heatmap(merged, args.labels, args.metric,
-                 out_dir / "heatmap.png", top_n=args.top_n)
+                 out_dir / "heatmap.pdf", top_n=args.top_n)
     
     # One bar chart per group, ranked by that group's effect size
     for label in args.labels:
         safe = label.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("+", "plus").replace("-", "minus")
         plot_top_per_group(merged, label, args.metric,
-                           out_dir / f"top20_{safe}.png", top_n=20)
+                           out_dir / f"top20_{safe}.pdf", top_n=20)
 
     print(f"\n{GREEN}{BOLD}Done. All outputs in: {out_dir}{RESET}")
     print(f"\nInterpretation guide:")

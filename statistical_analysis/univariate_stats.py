@@ -561,7 +561,7 @@ def plot_top_features(
     title : str
         Plot title.
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     top_n : int
         Number of top features to show. **Default is 20**.
     """
@@ -607,7 +607,7 @@ def plot_rank_scatter(
     y_col : str
         Rank column for the y-axis (e.g., 'rank_abs_d').
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     label_top : int
         Number of top features to label. **Default is 10**.
     """
@@ -656,7 +656,7 @@ def plot_volcano(
     merged : pd.DataFrame
         Merged stats table — must contain 'cohens_d', 'p', and 'p_bh_fdr'.
     out_path : Path
-        Where to save the PNG.
+        Where to save the pdf.
     """
     df = merged.dropna(subset=["cohens_d", "p"]).copy()
     if df.empty:
@@ -789,38 +789,38 @@ def main() -> None:
     print(f"\nGenerating plots in {plot_dir} ...")
 
     plot_top_features(merged, "abs_cohens_d", "Top features — |Cohen's d|",
-                      plot_dir / "top_cohens_d.png")
+                      plot_dir / "top_cohens_d.pdf")
     plot_top_features(merged, "abs_cliffs_delta", "Top features — |Cliff's delta|",
-                      plot_dir / "top_cliffs_delta.png")
+                      plot_dir / "top_cliffs_delta.pdf")
     plot_top_features(merged, "auc", "Top features — AUC (univariate)",
-                      plot_dir / "top_auc.png")
+                      plot_dir / "top_auc.pdf")
 
     if "mdi" in merged.columns:
         plot_top_features(merged, "mdi", "Top features — MDI",
-                          plot_dir / "top_mdi.png")
+                          plot_dir / "top_mdi.pdf")
     if "permutation" in merged.columns:
         plot_top_features(merged, "permutation", "Top features — Permutation importance",
-                          plot_dir / "top_permutation.png")
+                          plot_dir / "top_permutation.pdf")
 
-    plot_volcano(merged, plot_dir / "volcano.png")
+    plot_volcano(merged, plot_dir / "volcano.pdf")
 
     if "rank_mdi" in merged.columns:
         plot_rank_scatter(merged, "rank_mdi", "rank_abs_d",
-                          plot_dir / "scatter_mdi_vs_cohens_d.png")
+                          plot_dir / "scatter_mdi_vs_cohens_d.pdf")
         plot_rank_scatter(merged, "rank_mdi", "rank_abs_delta",
-                          plot_dir / "scatter_mdi_vs_cliffs.png")
+                          plot_dir / "scatter_mdi_vs_cliffs.pdf")
         plot_rank_scatter(merged, "rank_mdi", "rank_auc",
-                          plot_dir / "scatter_mdi_vs_auc.png")
+                          plot_dir / "scatter_mdi_vs_auc.pdf")
     if "rank_permutation" in merged.columns:
         plot_rank_scatter(merged, "rank_permutation", "rank_abs_d",
-                          plot_dir / "scatter_permutation_vs_cohens_d.png")
+                          plot_dir / "scatter_permutation_vs_cohens_d.pdf")
         plot_rank_scatter(merged, "rank_permutation", "rank_abs_delta",
-                          plot_dir / "scatter_permutation_vs_cliffs.png")
+                          plot_dir / "scatter_permutation_vs_cliffs.pdf")
         plot_rank_scatter(merged, "rank_permutation", "rank_auc",
-                          plot_dir / "scatter_permutation_vs_auc.png")
+                          plot_dir / "scatter_permutation_vs_auc.pdf")
     if "rank_mdi" in merged.columns and "rank_permutation" in merged.columns:
         plot_rank_scatter(merged, "rank_mdi", "rank_permutation",
-                          plot_dir / "scatter_mdi_vs_permutation.png")
+                          plot_dir / "scatter_mdi_vs_permutation.pdf")
 
     print(f"\n{GREEN}{BOLD}Done.{RESET}")
     print(f"\nRecommended workflow for the report:")
