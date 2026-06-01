@@ -191,7 +191,7 @@ def _plot_confusion_matrix(
     cm      = confusion_matrix(y_true, y_pred)
     cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
  
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True)
     fig.suptitle(title, fontsize=13, fontweight="bold", color=DTUNAVY)
  
     for ax, data, fmt, subtitle in zip(
@@ -203,7 +203,8 @@ def _plot_confusion_matrix(
         sns.heatmap(data, annot=True, fmt=fmt, cmap="Blues",
                     xticklabels=class_names, 
                     yticklabels=class_names,
-                    linewidths=0.5, 
+                    linewidths=0.5,
+                    annot_kws={"size": 12}, 
                     ax=ax)
         ax.set_xlabel("Predicted label", fontsize=10)
         ax.set_ylabel("True label", fontsize=10)
@@ -550,13 +551,13 @@ def evaluate_model(
         print(f"  [SKIP] ROC curves — {model_name} has no predict_proba")
  
     # ---- Page 4: probability strip plot ----
-    if y_prob is not None:
-        figs.append(_plot_probability_strip(
-            y_true      = y_true,
-            y_prob      = y_prob,
-            class_names = class_names,
-            title       = f"{model_name}  —  Predicted probability strip",
-        ))
+    #if y_prob is not None:
+    #    figs.append(_plot_probability_strip(
+    #        y_true      = y_true,
+    #        y_prob      = y_prob,
+    #        class_names = class_names,
+    #        title       = f"{model_name}  —  Predicted probability strip",
+    #    ))
  
     # ---- Page 5 & 6: MDI + PCA (refit on full data) ----
     model_specs = get_models(seed=seed, mode=mode)
@@ -585,13 +586,13 @@ def evaluate_model(
             print(f"  [SKIP] MDI importance — not available for {model_name}")
  
         # ---- PCA decision boundary ----
-        figs.append(_plot_pca_decision_boundary(
-            pipeline    = pipeline,
-            X_imp       = X_imp,
-            y           = y,
-            class_names = class_names,
-            title       = f"{model_name}  —  PCA decision boundary (refit on all data)",
-        ))
+        #figs.append(_plot_pca_decision_boundary(
+        #    pipeline    = pipeline,
+        #    X_imp       = X_imp,
+        #    y           = y,
+        #    class_names = class_names,
+        #    title       = f"{model_name}  —  PCA decision boundary (refit on all data)",
+        #))
  
     # ---- Save PDF ----
     if save_dir is None:
