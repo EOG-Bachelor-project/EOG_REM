@@ -253,7 +253,7 @@ def _plot_roc_curves(
 
 
     # ---- 2) Compute and plot ROC curve for each class ----
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(8, 8))
     for i, (name, color) in enumerate(zip(class_names, COLORs)):
         fpr, tpr, _ = roc_curve(y_bin[:, i], y_prob[:, i])
         roc_auc     = auc(fpr, tpr)
@@ -361,9 +361,9 @@ def _plot_feature_importance_mdi(
  
     top = importance_df.head(top_n).iloc[::-1]
  
-    fig, ax = plt.subplots(figsize=(10, top_n * 0.4 + 1))
-    ax.barh(top["feature"], top["importance"], color=DTURED, alpha=0.8)
-    ax.set_xlabel("MDI importance", fontsize=10)
+    fig, ax = plt.subplots(figsize=(8, top_n * 0.4 + 1))
+    ax.barh(top["feature"], top["importance"], color=DTURED, alpha=1)
+    ax.set_xlabel("MDI importance", fontsize=12)
     ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)
     ax.tick_params(labelsize=9)
     ax.grid(axis="x", alpha=0.3, linestyle="--")
@@ -781,7 +781,7 @@ def evaluate_binary_comparison(
     # ---- Save ----
     out_dir   = Path(save_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%H%M%S_%Y%M%D")
+    timestamp = datetime.datetime.now().strftime("%H%M%S_%Y%m%d")
     pdf_path  = out_dir / f"binary_comparison_{timestamp}.pdf"
  
     with pdf_backend.PdfPages(pdf_path) as pdf:
