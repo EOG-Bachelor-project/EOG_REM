@@ -6,6 +6,9 @@
 #              parametric (Welch's t-test) and non-parametric (Mann-Whitney U)
 #              testing in the downstream univariate statistics step.
 
+# Usage:
+#   python -m statistics.qq-plot --csv features_csv/features.csv --label-col group --out-dir reports/qq_output
+
 # =====================================================================
 # Imports
 # =====================================================================
@@ -294,110 +297,118 @@ def _parse_class(val: str):
 
 def main() -> None:
     """
-    Generate QQ-plots and a Shapiro-Wilk summary table for one binary split.
+    Generate QQ-plots and a Shapiro-Wilk summary table for all binary splits.
 
     Workflow:
       1. Load the feature CSV and extract numeric features.
-      2. Build a binary 0/1 label vector from the chosen positive (and
-         optionally negative) class.
-      3. Save one QQ-plot pdf per feature to <out_dir>/plots/.
-      4. Compute a tidy Shapiro-Wilk table for all (feature, class) pairs
-         and a per-feature normality overview, both saved as CSV.
+      2. For each binary split (Control vs iRBD, Control vs PD(+RBD), Control vs all):
+           a. Build a binary 0/1 label vector.
+           b. Save one QQ-plot pdf per feature to <out_dir>/<split>/plots/.
+           c. Compute a tidy Shapiro-Wilk table and normality overview, saved as CSV.
     """
     # ---- 1) Parse CLI arguments ----
     parser = argparse.ArgumentParser(
-        description="QQ-plots per feature per class with Shapiro-Wilk summary."
+        description="QQ-plots and Shapiro-Wilk summary for all binary splits in one command."
     )
-    parser.add_argument("--csv", required=True,
-                        help="Path to the feature CSV.")
-    parser.add_argument("--label-col", required=True,
-                        help="Name of the label column (e.g., 'group').")
-    parser.add_argument("--positive-class", required=True,
-                        help="Value in the label column that defines the positive class.")
-    parser.add_argument("--negative-class", default=None,
-                        help="Value that defines the negative class (e.g., 'Control'). "
-                             "If omitted, all other rows become negative (one-vs-rest).")
-    parser.add_argument("--out-dir", default="qq_output",
-                        help="Directory for plots and summary files.")
-    parser.add_argument("--max-features", type=int, default=None,
-                        help="Limit the number of features (debug only).")
+    parser.add_argument("--csv",       required=True,  help="Path to the feature CSV.")
+    parser.add_argument("--label-col", default="group", help="Name of the label column. Default: 'group'.")
+    parser.add_argument("--out-dir",   default="reports/qq_output", help="Root output directory.")
+    parser.add_argument("--max-features", type=int, default=None, help="Limit features (debug only).")
     args = parser.parse_args()
 
-    # ---- 2) Prepare output directories ----
-    out_dir  = Path(args.out_dir)
-    plot_dir = out_dir / "plots"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    plot_dir.mkdir(exist_ok=True)
+    # ---- 2) Define all binary splits to run ----
+    splits = [
+        {"positive": "iRBD",     "negative": "Control",  "tag": "control_vs_irbd"},
+        {"positive": "PD(+RBD)", "negative": "Control",  "tag": "control_vs_pdrbd"},
+        {"positive": "iRBD",     "negative": "Control",  "tag": "control_vs_all",
+         "extra_positive": "PD(+RBD)"},  # iRBD + PD(+RBD) vs Control
+    ]
 
-    # ---- 3) Load data and build binary labels ----
+    # ---- 3) Load data once ----
     print(f"Loading {args.csv} ...")
-    X, y = load_data(args.csv, args.label_col)
+    X_full, y_full = load_data(args.csv, args.label_col)
 
-    pos_val = _parse_class(args.positive_class)
-    neg_val = _parse_class(args.negative_class) if args.negative_class is not None else None
-
-    y_bin = make_binary(y, pos_val, neg_val)
-
-    # Drop rows without a valid binary label
-    valid     = y_bin.notna()
-    n_dropped = (~valid).sum()
-    if n_dropped > 0:
-        print(f"  Dropping {n_dropped} rows without a valid label.")
-    X     = X.loc[valid].reset_index(drop=True)
-    y_bin = y_bin.loc[valid].astype(int).reset_index(drop=True)
-
-    n_pos = int((y_bin == 1).sum())
-    n_neg = int((y_bin == 0).sum())
-    label_str = f"'{pos_val}' vs " + (f"'{neg_val}'" if neg_val is not None else "rest")
-    print(f"Comparing: {label_str}")
-    print(f"  Positive: {n_pos} samples | Negative: {n_neg} samples")
-    print(f"  Features: {X.shape[1]}")
-
-    # ---- 4) Generate one QQ-plot per feature ----
-    features = list(X.columns)
+    features = list(X_full.columns)
     if args.max_features:
         features = features[:args.max_features]
 
-    print(f"\nGenerating QQ-plots for {len(features)} features ...")
-    for i, col in enumerate(features, 1):
-        vals_pos  = X.loc[y_bin == 1, col]
-        vals_neg  = X.loc[y_bin == 0, col]
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in col)
-        out_path  = plot_dir / f"{i:03d}_{safe_name}.pdf"
-        qq_plot_feature(
-            vals_pos, vals_neg, col, out_path,
-            pos_label=str(pos_val),
-            neg_label=str(neg_val) if neg_val is not None else "rest",
+    # ---- 4) Run each split ----
+    for split in splits:
+        tag      = split["tag"]
+        pos_val  = split["positive"]
+        neg_val  = split["negative"]
+
+        print(f"\n{'='*60}")
+        print(f"  {BOLD}Split: {tag}{RESET}")
+        print(f"{'='*60}")
+
+        # ---- Build binary labels ----
+        if "extra_positive" in split:
+            # Control vs iRBD + PD(+RBD)
+            y_bin = pd.Series(np.nan, index=y_full.index)
+            y_bin[y_full == neg_val]                = 0
+            y_bin[y_full == pos_val]                = 1
+            y_bin[y_full == split["extra_positive"]] = 1
+        else:
+            y_bin = make_binary(y_full, pos_val, neg_val)
+
+        # Drop rows without valid label
+        valid     = y_bin.notna()
+        n_dropped = (~valid).sum()
+        if n_dropped > 0:
+            print(f"  Dropping {n_dropped} rows without a valid label.")
+        X     = X_full.loc[valid].reset_index(drop=True)
+        y_bin = y_bin.loc[valid].astype(int).reset_index(drop=True)
+
+        n_pos = int((y_bin == 1).sum())
+        n_neg = int((y_bin == 0).sum())
+        print(f"  Positive: {n_pos} samples | Negative: {n_neg} samples")
+        print(f"  Features: {X.shape[1]}")
+
+        # ---- Prepare output dirs per split ----
+        out_dir  = Path(args.out_dir) / tag
+        plot_dir = out_dir / "plots"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        plot_dir.mkdir(exist_ok=True)
+
+        # ---- Generate QQ-plots ----
+        print(f"\nGenerating QQ-plots for {len(features)} features ...")
+        for i, col in enumerate(features, 1):
+            vals_pos  = X.loc[y_bin == 1, col]
+            vals_neg  = X.loc[y_bin == 0, col]
+            safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in col)
+            out_path  = plot_dir / f"{i:03d}_{safe_name}.pdf"
+            qq_plot_feature(
+                vals_pos, vals_neg, col, out_path,
+                pos_label = pos_val if "extra_positive" not in split else f"{pos_val} + {split['extra_positive']}",
+                neg_label = neg_val,
+            )
+            if i % 10 == 0:
+                print(f"  {i}/{len(features)} ...")
+
+        # ---- Shapiro-Wilk summary ----
+        print("\nBuilding Shapiro-Wilk summary table ...")
+        summary      = shapiro_summary(X[features], y_bin)
+        summary_path = out_dir / "shapiro_summary.csv"
+        summary.to_csv(summary_path, index=False)
+
+        pivot = summary.pivot_table(
+            index="feature", columns="class",
+            values="normal_at_0.05", aggfunc="first",
         )
-        if i % 10 == 0:
-            print(f"  {i}/{len(features)} ...")
+        pivot["both_normal"] = pivot.get("positive", False) & pivot.get("negative", False)
+        overview_path        = out_dir / "normality_overview.csv"
+        pivot.to_csv(overview_path)
 
-    # ---- 5) Build and save Shapiro-Wilk summary ----
-    print("\nBuilding Shapiro-Wilk summary table ...")
-    summary      = shapiro_summary(X[features], y_bin)
-    summary_path = out_dir / "shapiro_summary.csv"
-    summary.to_csv(summary_path, index=False)
-
-    # Per-feature overview: is BOTH classes normal at alpha=0.05?
-    pivot = summary.pivot_table(
-        index="feature", columns="class",
-        values="normal_at_0.05", aggfunc="first",
-    )
-    pivot["both_normal"] = pivot.get("positive", False) & pivot.get("negative", False)
-    overview_path        = out_dir / "normality_overview.csv"
-    pivot.to_csv(overview_path)
-
-    # ---- 6) Print final summary to console ----
-    n_both_normal = int(pivot["both_normal"].sum())
-    print(f"\n{GREEN}{BOLD}Done.{RESET}")
-    print(f"  Plots:                 {plot_dir}")
-    print(f"  Shapiro-Wilk table:    {summary_path}")
-    print(f"  Normality overview:    {overview_path}")
-    print(f"  Features where BOTH classes are normal: {n_both_normal}/{len(features)}")
-    print(f"\n{BOLD}Rule of thumb:{RESET}")
-    print(f"  - Use Welch's t-test for features where both classes are normal.")
-    print(f"  - Use Mann-Whitney U for the rest.")
-    print(f"  - For signal-derived features, Mann-Whitney U is often the safe default.")
+        n_both_normal = int(pivot["both_normal"].sum())
+        print(f"\n{GREEN}{BOLD}Done — {tag}{RESET}")
+        print(f"  Plots:              {plot_dir}")
+        print(f"  Shapiro-Wilk table: {summary_path}")
+        print(f"  Normality overview: {overview_path}")
+        print(f"  Both classes normal: {n_both_normal}/{len(features)}")
+        print(f"\n{BOLD}Rule of thumb:{RESET}")
+        print(f"  - Welch's t-test for features where both classes are normal.")
+        print(f"  - Mann-Whitney U for the rest.")
 
 
 if __name__ == "__main__":

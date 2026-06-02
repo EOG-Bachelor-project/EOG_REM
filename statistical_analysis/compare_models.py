@@ -19,8 +19,7 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #
 # Usage:
-#   python -m statistics.compare_models features_csv/features.csv --mode binary --binary-mode control_vs_irbd
-#   python -m statistics.compare_models features_csv/features.csv --mode binary --binary-mode control_vs_irbd --evaluate
+#   python -m statistics.compare_models features_csv/features.csv --mode binary --binary-mode control_vs_all control_vs_irbd control_vs_pd --evaluate
 
 # ================================================================================
 # Imports
@@ -463,7 +462,6 @@ def compare_models(
         "bootstrap_results":  bootstrap_results,
     }
 
-
 # ================================================================================
 # CLI
 # ================================================================================
@@ -472,12 +470,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description="Compare Model 1 (all features) vs Model 2 (macrostructure + spectral) "
-                    "using K-fold CV and bootstrap AUC test."
-    )
+                    "using K-fold CV and bootstrap AUC test. "
+                    "Pass multiple --binary-mode values to run all combinations."
+                    )
     parser.add_argument("feature_csv", type=str)
-    parser.add_argument("--mode", type=str, default="binary",
+    parser.add_argument("--mode", type=str, nargs="+", default=["binary"],
                         choices=["binary", "multiclass"])
-    parser.add_argument("--binary-mode", type=str, default="control_vs_all",
+    parser.add_argument("--binary-mode", type=str, nargs="+", default=["control_vs_all"],
                         choices=["control_vs_all", "control_vs_irbd", "control_vs_pd"])
     parser.add_argument("--k-folds", type=int, default=5)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
@@ -487,17 +486,26 @@ if __name__ == "__main__":
     parser.add_argument("--save-dir", type=str, default="reports/comparison")
     parser.add_argument("--evaluate", action="store_true",
                         help="Also generate per-model evaluation PDFs.")
-
     args = parser.parse_args()
 
-    compare_models(
-        feature_csv      = args.feature_csv,
-        mode             = args.mode,
-        binary_mode      = args.binary_mode,
-        k_folds          = args.k_folds,
-        seed             = args.seed,
-        imputer_strategy = args.imputer,
-        n_bootstrap      = args.n_bootstrap,
-        save_dir         = args.save_dir,
-        evaluate         = args.evaluate,
-    )
+    # Build list of (mode, binary_mode) runs
+    runs = []
+    for mode in args.mode:
+        if mode == "multiclass":
+            runs.append((mode, None))
+        else:
+            for bm in args.binary_mode:
+                runs.append((mode, bm))
+
+    for mode, binary_mode in runs:
+        compare_models(
+            feature_csv      = args.feature_csv,
+            mode             = mode,
+            binary_mode      = binary_mode or "control_vs_all",
+            k_folds          = args.k_folds,
+            seed             = args.seed,
+            imputer_strategy = args.imputer,
+            n_bootstrap      = args.n_bootstrap,
+            save_dir         = args.save_dir,
+            evaluate         = args.evaluate,
+        )

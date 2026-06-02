@@ -8,6 +8,9 @@
 #              feature across all comparisons, making it easy to see whether
 #              a feature is more discriminative for one disease group than another.
 
+# Usage:
+#   python -m statistics.compare_effect_sizes --stats-dir reports/stats --out-dir reports/stats/comparison
+
 # =====================================================================
 # Imports
 # =====================================================================
@@ -233,48 +236,58 @@ def main() -> None:
     Compare effect sizes across multiple univariate_stats.csv files.
 
     Workflow:
-      1. Load one univariate_stats.csv per group comparison.
+      1. Auto-discover univariate_stats.csv files under --stats-dir, or
+         accept manual --csvs and --labels.
       2. Merge all tables on feature name.
-      3. Save a grouped bar chart and a heatmap.
+      3. Save a grouped bar chart, heatmap, and per-group bar charts.
       4. Save a merged CSV with all effect sizes side by side.
-
-    Example
-    -------
-    python compare_effect_sizes.py \\
-        --csvs reports/stats/irbd_vs_control/univariate_stats.csv \\
-               reports/stats/pdrbd_vs_control/univariate_stats.csv \\
-               reports/stats/pdnorbd_vs_control/univariate_stats.csv \\
-        --labels "iRBD vs HC" "PD(+RBD) vs HC" "PD(-RBD) vs HC" \\
-        --metric abs_cliffs_delta \\
-        --out-dir reports/stats/comparison
     """
-    # ---- 1) Parse CLI arguments ----
     parser = argparse.ArgumentParser(
-        description="Compare effect sizes across multiple group comparisons."
+        description="Compare effect sizes across group comparisons. "
+                    "Pass --stats-dir to auto-discover, or --csvs and --labels manually."
     )
-    parser.add_argument("--csvs", required=True, nargs="+",
-                        help="Paths to univariate_stats.csv files, one per comparison.")
-    parser.add_argument("--labels", required=True, nargs="+",
+    parser.add_argument("--stats-dir", type=str, default=None,
+                        help="Root directory containing per-split subdirs with "
+                             "univariate_stats.csv files. Example: reports/stats")
+    parser.add_argument("--csvs", nargs="+", default=None,
+                        help="Manual paths to univariate_stats.csv files.")
+    parser.add_argument("--labels", nargs="+", default=None,
                         help="Short label for each comparison (same order as --csvs).")
     parser.add_argument("--metric", default="abs_cliffs_delta",
                         choices=["abs_cliffs_delta", "abs_cohens_d", "auc"],
-                        help="Effect size metric to compare. Default: abs_cliffs_delta.")
+                        help="Effect size metric. Default: abs_cliffs_delta.")
     parser.add_argument("--top-n", type=int, default=25,
-                        help="Number of top features to show in plots. Default: 25.")
+                        help="Number of top features to show. Default: 25.")
     parser.add_argument("--out-dir", default="reports/stats/comparison",
                         help="Directory for output files.")
     args = parser.parse_args()
 
-    if len(args.csvs) != len(args.labels):
-        raise ValueError("--csvs and --labels must have the same number of entries.")
+    # ---- Resolve CSV paths and labels ----
+    if args.stats_dir is not None:
+        stats_dir = Path(args.stats_dir)
+        found     = sorted(stats_dir.rglob("univariate_stats.csv"))
+        if not found:
+            raise FileNotFoundError(f"No univariate_stats.csv found under {stats_dir}")
+        csv_paths = [str(p) for p in found]
+        labels    = [p.parent.name for p in found]
+        print(f"Auto-discovered {len(csv_paths)} comparison(s):")
+        for lbl, path in zip(labels, csv_paths):
+            print(f"  {lbl}  ←  {path}")
+    elif args.csvs is not None and args.labels is not None:
+        if len(args.csvs) != len(args.labels):
+            raise ValueError("--csvs and --labels must have the same number of entries.")
+        csv_paths = args.csvs
+        labels    = args.labels
+    else:
+        raise ValueError("Provide either --stats-dir or both --csvs and --labels.")
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # ---- 2) Load and merge all stats tables ----
-    print(f"Loading {len(args.csvs)} comparison(s) ...")
+    # ---- Load and merge ----
+    print(f"\nLoading {len(csv_paths)} comparison(s) ...")
     dfs = []
-    for csv_path, label in zip(args.csvs, args.labels):
+    for csv_path, label in zip(csv_paths, labels):
         print(f"  {label}  ←  {csv_path}")
         dfs.append(load_stats(csv_path, label, args.metric))
 
@@ -282,39 +295,38 @@ def main() -> None:
     for df in dfs[1:]:
         merged = merged.merge(df, on="feature", how="outer")
 
-    # ---- 3) Save merged CSV ----
+    # ---- Save merged CSV ----
     merged_csv = out_dir / "effect_size_comparison.csv"
     merged.to_csv(merged_csv, index=False)
     print(f"\n  Merged table → {merged_csv}")
 
-    # ---- 4) Print top features ----
-    merged["max_effect"] = merged[args.labels].max(axis=1)
+    # ---- Print top features ----
+    merged["max_effect"] = merged[labels].max(axis=1)
     top = merged.sort_values("max_effect", ascending=False).head(args.top_n)
     print(f"\n{BOLD}Top {args.top_n} features by max effect size ({args.metric}):{RESET}")
-    print(top[["feature"] + args.labels].to_string(index=False))
+    print(top[["feature"] + labels].to_string(index=False))
 
-    # ---- 5) Save plots ----
+    # ---- Save plots ----
     print(f"\nGenerating plots ...")
-    plot_grouped_bars(merged, args.labels, args.metric,
+    plot_grouped_bars(merged, labels, args.metric,
                       out_dir / "grouped_bars.pdf", top_n=args.top_n)
-    plot_heatmap(merged, args.labels, args.metric,
+    plot_heatmap(merged, labels, args.metric,
                  out_dir / "heatmap.pdf", top_n=args.top_n)
-    
-    # One bar chart per group, ranked by that group's effect size
-    for label in args.labels:
-        safe = label.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("+", "plus").replace("-", "minus")
+
+    for label in labels:
+        safe = (label.lower()
+                     .replace(" ", "_")
+                     .replace("(", "").replace(")", "")
+                     .replace("+", "plus").replace("-", "minus"))
         plot_top_per_group(merged, label, args.metric,
                            out_dir / f"top20_{safe}.pdf", top_n=20)
 
     print(f"\n{GREEN}{BOLD}Done. All outputs in: {out_dir}{RESET}")
     print(f"\nInterpretation guide:")
-    print(f"  - A feature with high effect size in iRBD but low in PD")
-    print(f"    may be specific to early-stage RBD.")
-    print(f"  - A gradient (low iRBD → high PD) suggests the feature")
-    print(f"    tracks disease progression.")
-    print(f"  - Agreement across all three groups = general RBD/PD marker.")
-    print(f"  - High in PD only = may reflect neurodegeneration rather")
-    print(f"    than RBD specifically.")
+    print(f"  - High effect in iRBD but low in PD → specific to early-stage RBD.")
+    print(f"  - Gradient (low iRBD → high PD) → tracks disease progression.")
+    print(f"  - Agreement across all groups → general RBD/PD marker.")
+    print(f"  - High in PD only → may reflect neurodegeneration rather than RBD.")
 
 
 if __name__ == "__main__":

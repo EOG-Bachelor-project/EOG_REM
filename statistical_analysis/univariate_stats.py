@@ -9,6 +9,9 @@
 #              computes effect sizes and AUC values, applies FDR correction,
 #              and generates summary plots and CSV tables.
 
+# Usage:
+#   python -m statistics.univariate_stats --csv features_csv/features.csv --label-col group --out-dir reports/stats
+
 # =====================================================================
 # Imports
 # =====================================================================
@@ -694,142 +697,139 @@ def plot_volcano(
 
 def main() -> None:
     """
-    Run univariate statistics and compare with ML feature importance rankings.
+    Run univariate statistics for all binary splits in one command.
 
     Workflow:
-      1. Load feature CSV and build a binary label vector.
-      2. Run per-feature hypothesis tests with automatic test selection.
-      3. Apply Benjamini-Hochberg FDR correction.
-      4. Merge with MDI and permutation importance CSVs (optional).
-      5. Compute Spearman rank correlations between all ranking methods.
-      6. Save a summary CSV, rank correlation CSV, and all plots.
+      1. Load feature CSV once.
+      2. For each binary split (Control vs iRBD, Control vs PD(+RBD), Control vs all):
+           a. Build binary labels.
+           b. Run per-feature hypothesis tests.
+           c. Apply FDR correction.
+           d. Merge with MDI/permutation importance (optional).
+           e. Save CSV and plots to <out_dir>/<split>/.
     """
-    # ---- 1) Parse CLI arguments ----
     parser = argparse.ArgumentParser(
-        description="Univariate statistics + comparison with ML feature importance."
+        description="Univariate statistics for all binary splits in one command."
     )
-    parser.add_argument("--csv", required=True,
-                        help="Path to the feature CSV (same file used for ML training).")
-    parser.add_argument("--label-col", required=True,
-                        help="Name of the label column (e.g., 'group').")
-    parser.add_argument("--positive-class", required=True,
-                        help="Value that defines the positive class (e.g., 'iRBD', 'PD(-RBD)', 1).")
-    parser.add_argument("--negative-class", default=None,
-                        help="Value that defines the negative class (e.g., 'Control'). "
-                             "If omitted, all other rows become negative (one-vs-rest).")
-    parser.add_argument("--mdi-csv", default=None,
-                        help="Path to the ..._mdi.csv written by the pipeline.")
-    parser.add_argument("--permutation-csv", default=None,
-                        help="Path to the ..._permutation.csv written by the pipeline.")
+    parser.add_argument("--csv",       required=True,  help="Path to the feature CSV.")
+    parser.add_argument("--label-col", default="group", help="Label column name. Default: 'group'.")
+    parser.add_argument("--mdi-csv",         default=None, help="Path to MDI importance CSV.")
+    parser.add_argument("--permutation-csv", default=None, help="Path to permutation importance CSV.")
     parser.add_argument("--test", choices=["auto", "t", "u"], default="auto",
-                        help="Test selection: auto (Shapiro-Wilk decides), t (Welch), u (Mann-Whitney).")
-    parser.add_argument("--out-dir", default="stats_output",
-                        help="Directory for output CSV files and plots.")
+                        help="Test selection: auto, t (Welch), u (Mann-Whitney). Default: auto.")
+    parser.add_argument("--out-dir", default="reports/stats",
+                        help="Root output directory. Default: reports/stats.")
     args = parser.parse_args()
 
-    # ---- 2) Load data and build binary labels ----
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # ---- Define all binary splits ----
+    splits = [
+        {"positive": "iRBD",     "negative": "Control",  "tag": "control_vs_irbd"},
+        {"positive": "PD(+RBD)", "negative": "Control",  "tag": "control_vs_pdrbd"},
+        {"positive": "iRBD",     "negative": "Control",  "tag": "control_vs_all",
+         "extra_positive": "PD(+RBD)"},
+    ]
 
+    # ---- Load data once ----
     print(f"Loading {args.csv} ...")
-    X, y = load_data(args.csv, args.label_col)
+    X_full, y_full = load_data(args.csv, args.label_col)
 
-    pos_val = parse_class(args.positive_class)
-    neg_val = parse_class(args.negative_class) if args.negative_class is not None else None
+    # ---- Run each split ----
+    for split in splits:
+        tag     = split["tag"]
+        pos_val = split["positive"]
+        neg_val = split["negative"]
 
-    y_bin = build_binary_labels(y, pos_val, neg_val)
+        print(f"\n{'='*60}")
+        print(f"  {BOLD}Split: {tag}{RESET}")
+        print(f"{'='*60}")
 
-    # Drop rows without a valid binary label
-    valid     = y_bin.notna()
-    n_dropped = (~valid).sum()
-    if n_dropped > 0:
-        print(f"  Dropping {n_dropped} rows without a valid label.")
-    X     = X.loc[valid].reset_index(drop=True)
-    y_bin = y_bin.loc[valid].astype(int).reset_index(drop=True)
+        # ---- Build binary labels ----
+        if "extra_positive" in split:
+            y_bin = pd.Series(np.nan, index=y_full.index)
+            y_bin[y_full == neg_val]                 = 0
+            y_bin[y_full == pos_val]                 = 1
+            y_bin[y_full == split["extra_positive"]] = 1
+        else:
+            y_bin = build_binary_labels(y_full, pos_val, neg_val)
 
-    label_str = f"'{pos_val}' vs " + (f"'{neg_val}'" if neg_val is not None else "rest")
-    print(f"Comparing: {label_str}")
-    print(f"  Positive: {(y_bin == 1).sum()} samples")
-    print(f"  Negative: {(y_bin == 0).sum()} samples")
-    print(f"  Features: {X.shape[1]}")
+        # Drop rows without valid label
+        valid     = y_bin.notna()
+        n_dropped = (~valid).sum()
+        if n_dropped > 0:
+            print(f"  Dropping {n_dropped} rows without a valid label.")
+        X     = X_full.loc[valid].reset_index(drop=True)
+        y_bin = y_bin.loc[valid].astype(int).reset_index(drop=True)
 
-    # ---- 3) Run univariate tests ----
-    print(f"\nRunning univariate tests (mode='{args.test}') ...")
-    stats_df = run_univariate(X, y_bin, args.test)
+        print(f"  Positive: {(y_bin == 1).sum()} | Negative: {(y_bin == 0).sum()} | Features: {X.shape[1]}")
 
-    n_t = (stats_df["test"] == "welch_t").sum()
-    n_u = (stats_df["test"] == "mann_whitney_u").sum()
-    print(f"  Welch t-test: {n_t}  |  Mann-Whitney U: {n_u}")
-    print(f"  Significant after FDR correction (q < 0.05): {stats_df['significant_fdr_0.05'].sum()}")
+        # ---- Run univariate tests ----
+        print(f"\nRunning univariate tests (mode='{args.test}') ...")
+        stats_df = run_univariate(X, y_bin, args.test)
 
-    # ---- 4) Merge with ML importance ----
-    if args.mdi_csv:
-        print(f"  Loading MDI:         {args.mdi_csv}")
-    if args.permutation_csv:
-        print(f"  Loading permutation: {args.permutation_csv}")
+        n_t = (stats_df["test"] == "welch_t").sum()
+        n_u = (stats_df["test"] == "mann_whitney_u").sum()
+        print(f"  Welch t-test: {n_t}  |  Mann-Whitney U: {n_u}")
+        print(f"  Significant after FDR (q < 0.05): {stats_df['significant_fdr_0.05'].sum()}")
 
-    merged = merge_importance(stats_df, args.mdi_csv, args.permutation_csv)
+        # ---- Merge with ML importance ----
+        merged = merge_importance(stats_df, args.mdi_csv, args.permutation_csv)
 
-    # ---- 5) Save main table and rank correlations ----
-    main_csv = out_dir / "univariate_stats.csv"
-    merged.to_csv(main_csv, index=False)
-    print(f"\n  Main table:          {main_csv}")
+        # ---- Save outputs ----
+        out_dir  = Path(args.out_dir) / tag
+        plot_dir = out_dir / "plots"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        plot_dir.mkdir(exist_ok=True)
 
-    rank_corr = rank_correlations(merged)
-    if not rank_corr.empty:
-        corr_csv = out_dir / "rank_correlations.csv"
-        rank_corr.to_csv(corr_csv)
-        print(f"  Rank correlations:   {corr_csv}")
-        print("\nSpearman correlations between rankings:")
-        print(rank_corr.round(3).to_string())
+        main_csv = out_dir / "univariate_stats.csv"
+        merged.to_csv(main_csv, index=False)
+        print(f"\n  Main table: {main_csv}")
 
-    # ---- 6) Generate plots ----
-    plot_dir = out_dir / "plots"
-    plot_dir.mkdir(exist_ok=True)
-    print(f"\nGenerating plots in {plot_dir} ...")
+        rank_corr = rank_correlations(merged)
+        if not rank_corr.empty:
+            corr_csv = out_dir / "rank_correlations.csv"
+            rank_corr.to_csv(corr_csv)
+            print(f"  Rank correlations: {corr_csv}")
 
-    plot_top_features(merged, "abs_cohens_d", "Top features — |Cohen's d|",
-                      plot_dir / "top_cohens_d.pdf")
-    plot_top_features(merged, "abs_cliffs_delta", "Top features — |Cliff's delta|",
-                      plot_dir / "top_cliffs_delta.pdf")
-    plot_top_features(merged, "auc", "Top features — AUC (univariate)",
-                      plot_dir / "top_auc.pdf")
+        # ---- Generate plots ----
+        print(f"  Generating plots ...")
+        plot_top_features(merged, "abs_cohens_d",    f"Top features — |Cohen's d| ({tag})",
+                          plot_dir / "top_cohens_d.pdf")
+        plot_top_features(merged, "abs_cliffs_delta", f"Top features — |Cliff's delta| ({tag})",
+                          plot_dir / "top_cliffs_delta.pdf")
+        plot_top_features(merged, "auc",              f"Top features — AUC ({tag})",
+                          plot_dir / "top_auc.pdf")
 
-    if "mdi" in merged.columns:
-        plot_top_features(merged, "mdi", "Top features — MDI",
-                          plot_dir / "top_mdi.pdf")
-    if "permutation" in merged.columns:
-        plot_top_features(merged, "permutation", "Top features — Permutation importance",
-                          plot_dir / "top_permutation.pdf")
+        if "mdi" in merged.columns:
+            plot_top_features(merged, "mdi", f"Top features — MDI ({tag})",
+                              plot_dir / "top_mdi.pdf")
+        if "permutation" in merged.columns:
+            plot_top_features(merged, "permutation", f"Top features — Permutation ({tag})",
+                              plot_dir / "top_permutation.pdf")
 
-    plot_volcano(merged, plot_dir / "volcano.pdf")
+        plot_volcano(merged, plot_dir / "volcano.pdf")
 
-    if "rank_mdi" in merged.columns:
-        plot_rank_scatter(merged, "rank_mdi", "rank_abs_d",
-                          plot_dir / "scatter_mdi_vs_cohens_d.pdf")
-        plot_rank_scatter(merged, "rank_mdi", "rank_abs_delta",
-                          plot_dir / "scatter_mdi_vs_cliffs.pdf")
-        plot_rank_scatter(merged, "rank_mdi", "rank_auc",
-                          plot_dir / "scatter_mdi_vs_auc.pdf")
-    if "rank_permutation" in merged.columns:
-        plot_rank_scatter(merged, "rank_permutation", "rank_abs_d",
-                          plot_dir / "scatter_permutation_vs_cohens_d.pdf")
-        plot_rank_scatter(merged, "rank_permutation", "rank_abs_delta",
-                          plot_dir / "scatter_permutation_vs_cliffs.pdf")
-        plot_rank_scatter(merged, "rank_permutation", "rank_auc",
-                          plot_dir / "scatter_permutation_vs_auc.pdf")
-    if "rank_mdi" in merged.columns and "rank_permutation" in merged.columns:
-        plot_rank_scatter(merged, "rank_mdi", "rank_permutation",
-                          plot_dir / "scatter_mdi_vs_permutation.pdf")
+        if "rank_mdi" in merged.columns:
+            plot_rank_scatter(merged, "rank_mdi", "rank_abs_d",
+                              plot_dir / "scatter_mdi_vs_cohens_d.pdf")
+            plot_rank_scatter(merged, "rank_mdi", "rank_abs_delta",
+                              plot_dir / "scatter_mdi_vs_cliffs.pdf")
+            plot_rank_scatter(merged, "rank_mdi", "rank_auc",
+                              plot_dir / "scatter_mdi_vs_auc.pdf")
+        if "rank_permutation" in merged.columns:
+            plot_rank_scatter(merged, "rank_permutation", "rank_abs_d",
+                              plot_dir / "scatter_permutation_vs_cohens_d.pdf")
+            plot_rank_scatter(merged, "rank_permutation", "rank_abs_delta",
+                              plot_dir / "scatter_permutation_vs_cliffs.pdf")
+            plot_rank_scatter(merged, "rank_permutation", "rank_auc",
+                              plot_dir / "scatter_permutation_vs_auc.pdf")
+        if "rank_mdi" in merged.columns and "rank_permutation" in merged.columns:
+            plot_rank_scatter(merged, "rank_mdi", "rank_permutation",
+                              plot_dir / "scatter_mdi_vs_permutation.pdf")
 
-    print(f"\n{GREEN}{BOLD}Done.{RESET}")
-    print(f"\nRecommended workflow for the report:")
-    print("  1. Open univariate_stats.csv — sort by p_bh_fdr or abs_cohens_d.")
-    print("  2. Open rank_correlations.csv — high correlation means methods agree.")
-    print("  3. Use scatter plots to find features where methods disagree:")
-    print("     - High univariate rank, low importance rank = redundant (correlated with others).")
-    print("     - Low univariate rank, high importance rank = interaction effect — interesting finding!")
-    print("  4. The volcano plot shows effect size and significance together — good for the report.")
+        print(f"  {GREEN}{BOLD}Done — {tag}{RESET}")
+
+    print(f"\n{GREEN}{BOLD}All splits complete.{RESET}")
+    print(f"Results saved under: {Path(args.out_dir)}")
 
 
 if __name__ == "__main__":
