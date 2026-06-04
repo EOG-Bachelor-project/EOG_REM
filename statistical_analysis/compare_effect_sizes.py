@@ -9,7 +9,7 @@
 #              a feature is more discriminative for one disease group than another.
 
 # Usage:
-#   python -m statistics.compare_effect_sizes --stats-dir reports/stats --out-dir reports/stats/comparison
+#   python -m statistical_analysis.compare_effect_sizes --stats-dir reports/stats --out-dir reports/stats/comparison
 
 # =====================================================================
 # Imports
@@ -314,12 +314,8 @@ def main() -> None:
                  out_dir / "heatmap.pdf", top_n=args.top_n)
 
     for label in labels:
-        safe = (label.lower()
-                     .replace(" ", "_")
-                     .replace("(", "").replace(")", "")
-                     .replace("+", "plus").replace("-", "minus"))
-        plot_top_per_group(merged, label, args.metric,
-                           out_dir / f"top20_{safe}.pdf", top_n=20)
+        safe = label.lower().replace(" ", "_")
+        plot_top_per_group(merged, label, args.metric, out_dir / f"top20_{safe}.pdf", top_n=20)
 
     print(f"\n{GREEN}{BOLD}Done. All outputs in: {out_dir}{RESET}")
     print(f"\nInterpretation guide:")

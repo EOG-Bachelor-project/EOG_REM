@@ -1275,7 +1275,7 @@ if __name__ == "__main__":
     )"""
 
     plot_fullnight_overview(
-        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_292_a_contiguous_eog_merged.csv.gz",
+        file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_85_a_contiguous_eog_merged.csv.gz",
         out_dir=None
     )
 
@@ -1286,19 +1286,19 @@ if __name__ == "__main__":
         n_cols      = 4,
     )"""
 
-    """plot_transition_epochs(
-        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_1_a_contiguous_eog_merged.csv.gz", 
+    plot_transition_epochs(
+        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_85_a_contiguous_eog_merged.csv.gz", 
         from_stage  = "REM", 
         to_stage    = "W", 
         window_sec  = 60,
         epoch_sec   = 4.0,
-        )"""
+        )
     
-    """plot_eeg_psd(
-        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_2_a_contiguous_eog_merged.csv.gz",
+    plot_eeg_psd(
+        file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_85_a_contiguous_eog_merged.csv.gz",
         eeg_loc_col = "EEG_LOC",
         eeg_roc_col = "EEG_ROC",
         fs          = 128.0,
         nperseg_sec = 4.0,
         out_dir     = None,
-    )"""
+    )

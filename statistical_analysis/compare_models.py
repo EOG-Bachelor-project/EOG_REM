@@ -19,7 +19,8 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #
 # Usage:
-#   python -m statistics.compare_models features_csv/features.csv --mode binary --binary-mode control_vs_all control_vs_irbd control_vs_pd --evaluate
+#   python -m statistical_analysis.compare_models features_csv/features_with_group.csv --method kfold --mode binary --binary-mode control_vs_all control_vs_irbd control_vs_pd --evaluate
+#   python -m statistical_analysis.compare_models features_csv/features_with_group.csv --method nested --mode binary --binary-mode control_vs_all control_vs_irbd control_vs_pd --k1 5 --k2 5 --n_iter 20 --evaluate
 
 # ================================================================================
 # Imports
@@ -215,7 +216,7 @@ def _plot_auc_comparison_bar(
     width   = 0.35                          # Width of the bars
 
     # --- Plot ---
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(8, 5))
     ax.bar(x - width/2, df["auc_1"], width, label="Model 1 (all features)", color=DTUNAVY)              # Bar for Model 1 AUC
     ax.bar(x + width/2, df["auc_2"], width, label="Model 2 (macrostructure + spectral)", color=DTURED)  # Bar for Model 2 AUC
 
@@ -235,8 +236,12 @@ def _plot_auc_comparison_bar(
 # ================================================================================
 def compare_models(
         feature_csv:      str | Path,
+        method:           str = "kfold",
         mode:             str = "binary",
         binary_mode:      str = "control_vs_all",
+        k1:               int = 5,
+        k2:               int = 5,
+        n_iter:           int = 20,
         k_folds:          int = 5,
         seed:             int = DEFAULT_SEED,
         imputer_strategy: str = "knn",
@@ -251,6 +256,10 @@ def compare_models(
     ----------
     feature_csv : str | Path
         Path to the features CSV file.
+    method : str
+        CV method to use for training.\\
+        Options: 'kfold' or 'nested'.\\
+        **Default:** 'kfold'.
     mode : str
         Classification mode.\\
         Options: 'binary' or 'multiclass'.\\
@@ -260,6 +269,15 @@ def compare_models(
         Binary classification task, determines how labels are assigned.\\
         Options: 'control_vs_all', 'control_vs_irbd', 'control_vs_pd'.\\
         **Default:** 'control_vs_all'.
+    k1 : int
+        K outer folds for nested CV (ignored if method='kfold').\\
+        **Default:** 5.
+    k2 : int
+        K inner folds for nested CV (ignored if method='kfold').\\
+        **Default:** 5.
+    n_iter : int
+        Number of iterations for nested CV (ignored if method='kfold').\\
+        **Default:** 20.
     k_folds : int
         Number of CV folds.\\
         **Default:** 5.
@@ -292,7 +310,7 @@ def compare_models(
     tag = f"{mode}" + (f"_{binary_mode}" if mode == "binary" else "")
 
     print(f"\n{'='*60}")
-    print(f"  {BOLD}Model comparison — K-fold CV{RESET}")
+    print(f"  {BOLD}Model comparison — {method.upper()} CV{RESET}")
     print(f"  Mode    : {mode}" + (f"  ({binary_mode})" if mode == "binary" else ""))
     print(f"  Folds   : {k_folds}  |  Seed: {seed}")
     print(f"{'='*60}")
@@ -301,8 +319,12 @@ def compare_models(
     print(f"\n{BOLD}── Model 1: all features ──{RESET}")
     result_m1 = run_training(
         feature_csv      = feature_csv,
+        method           = method,
         mode             = mode,
         binary_mode      = binary_mode,
+        k_1              = k1,
+        k_2              = k2,
+        n_iter           = n_iter,
         k_folds          = k_folds,
         seed             = seed,
         imputer_strategy = imputer_strategy,
@@ -328,8 +350,12 @@ def compare_models(
     try:
         result_m2 = run_training(
             feature_csv      = m2_csv,
+            method           = method,
             mode             = mode,
             binary_mode      = binary_mode,
+            k_1              = k1,
+            k_2              = k2,
+            n_iter           = n_iter,
             k_folds          = k_folds,
             seed             = seed,
             imputer_strategy = imputer_strategy,
@@ -426,8 +452,11 @@ def compare_models(
         lm          = _label_map(mode, binary_mode)
         class_names = [lm[k] for k in sorted(lm)]
         run_cfg     = {
-            "mode": mode, "binary_mode": binary_mode or "—",
-            "k_folds": k_folds, "seed": seed,
+            "mode":             mode, 
+            "binary_mode":      binary_mode or "—",
+            "method":           method,
+            "k_folds":          k_folds if method == "kfold" else f"{k1}/{k2}", 
+            "seed":             seed,
             "imputer_strategy": imputer_strategy,
         }
         print(f"\n{BOLD}── Evaluation PDFs: Model 1 ──{RESET}")
@@ -474,10 +503,19 @@ if __name__ == "__main__":
                     "Pass multiple --binary-mode values to run all combinations."
                     )
     parser.add_argument("feature_csv", type=str)
+    parser.add_argument("--method", type=str, default="kfold", 
+                        choices=["kfold", "nested"],
+                        help="CV method to use for training. Default 'kfold'.")
     parser.add_argument("--mode", type=str, nargs="+", default=["binary"],
                         choices=["binary", "multiclass"])
     parser.add_argument("--binary-mode", type=str, nargs="+", default=["control_vs_all"],
                         choices=["control_vs_all", "control_vs_irbd", "control_vs_pd"])
+    parser.add_argument("--k1", type=int, default=5, 
+                        help="K outer folds for nested CV (ignored if --method=kfold). Default 5.")
+    parser.add_argument("--k2", type=int, default=5,
+                        help="K inner folds for nested CV (ignored if --method=kfold). Default 5.")
+    parser.add_argument("--n-iter", type=int, default=20,
+                        help="Number of iterations for nested CV (ignored if --method=kfold). Default 20.")
     parser.add_argument("--k-folds", type=int, default=5)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--imputer", type=str, default="knn",
@@ -502,6 +540,10 @@ if __name__ == "__main__":
             feature_csv      = args.feature_csv,
             mode             = mode,
             binary_mode      = binary_mode or "control_vs_all",
+            method           = args.method,
+            k1               = args.k1,
+            k2               = args.k2,
+            n_iter           = args.n_iter,
             k_folds          = args.k_folds,
             seed             = args.seed,
             imputer_strategy = args.imputer,

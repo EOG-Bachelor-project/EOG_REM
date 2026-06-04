@@ -10,7 +10,7 @@
 #              and generates summary plots and CSV tables.
 
 # Usage:
-#   python -m statistics.univariate_stats --csv features_csv/features.csv --label-col group --out-dir reports/stats
+#   python -m statistical_analysis.univariate_stats --csv features_csv/features_with_group.csv --label-col group --out-dir reports/stats
 
 # =====================================================================
 # Imports

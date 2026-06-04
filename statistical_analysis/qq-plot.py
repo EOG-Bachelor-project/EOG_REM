@@ -7,7 +7,7 @@
 #              testing in the downstream univariate statistics step.
 
 # Usage:
-#   python -m statistics.qq-plot --csv features_csv/features.csv --label-col group --out-dir reports/qq_output
+#   python -m statistical_analysis.qq-plot --csv features_csv/features_with_group.csv --label-col group --out-dir reports/qq_output
 
 # =====================================================================
 # Imports
