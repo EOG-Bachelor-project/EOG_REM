@@ -16,6 +16,11 @@ from pathlib import Path
 from scipy.signal import welch
 from art import *
 
+# Global styling — bold axis labels and tick numbers on all plots
+plt.rcParams["font.weight"]       = "bold"
+plt.rcParams["axes.labelweight"]  = "bold"
+plt.rcParams["axes.titleweight"]  = "bold"
+
 # =====================================================================
 # Constants
 # =====================================================================
@@ -935,11 +940,12 @@ def plot_transition_epochs(
             axs[3].legend(fontsize=8, loc="best")
             add_stage_shading(axs[3])
  
-        # Subplot 4/5: Hypnogram
+        # Subplot 4/5: Hypnogram  (axs[4] when EEG present, else axs[3])
+        hyp_ax = axs[4] if has_eeg else axs[3]
         for _, span in span_groups.iterrows():
             color = STAGE_COLORS.get(span["stage"], "#cccccc")
             y_val = STAGE_ORDER.get(span["stage"], -1)
-            axs[3].barh(
+            hyp_ax.barh(
                 y=y_val,
                 width=span["t_end"] - span["t_start"],
                 left=span["t_start"],
@@ -947,14 +953,14 @@ def plot_transition_epochs(
                 height=0.8,
                 align="center",
             )
-        axs[3].axvline(0, color="black", linewidth=1.0, linestyle="--", alpha=0.7)
-        draw_epoch_lines(axs[3])
-        axs[3].set_title("Hypnogram", fontsize=10)
-        axs[3].set_yticks(list(STAGE_ORDER.values()))
-        axs[3].set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)
-        axs[3].set_xlabel("Time relative to transition [s]", fontsize=10)
-        axs[3].tick_params(labelsize=8)
-        axs[3].set_xlim(-half_win, half_win)
+        hyp_ax.axvline(0, color="black", linewidth=1.0, linestyle="--", alpha=0.7)
+        draw_epoch_lines(hyp_ax)
+        hyp_ax.set_title("Hypnogram", fontsize=10)
+        hyp_ax.set_yticks(list(STAGE_ORDER.values()))
+        hyp_ax.set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)
+        hyp_ax.set_xlabel("Time relative to transition [s]", fontsize=10)
+        hyp_ax.tick_params(labelsize=8)
+        hyp_ax.set_xlim(-half_win, half_win)
  
         # Shared legend
         fig.legend(
@@ -1286,7 +1292,7 @@ if __name__ == "__main__":
     )
 
     plot_group_comparison(
-        feature_csv = "features_csv/features_with_group.csv",
+        feature_csv = "C:/Users/AKLO0022/EOG_REM/features_csv/features_with_group.csv",
         features    = None,
         out_dir     = None,
         n_cols      = 4,
