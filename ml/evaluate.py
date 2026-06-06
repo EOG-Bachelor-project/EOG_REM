@@ -191,8 +191,8 @@ def _plot_confusion_matrix(
     cm      = confusion_matrix(y_true, y_pred)
     cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
  
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True)
-    fig.suptitle(title, fontsize=13, fontweight="bold", color=DTUNAVY)
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
+    fig.suptitle(title, fontsize=12, fontweight="bold", color=DTUNAVY)
  
     for ax, data, fmt, subtitle in zip(
         axes,
@@ -204,11 +204,11 @@ def _plot_confusion_matrix(
                     xticklabels=class_names, 
                     yticklabels=class_names,
                     linewidths=0.5,
-                    annot_kws={"size": 12}, 
+                    annot_kws={"size": 14}, 
                     ax=ax)
-        ax.set_xlabel("Predicted label", fontsize=10)
-        ax.set_ylabel("True label", fontsize=10)
-        ax.set_title(subtitle, fontsize=10)
+        ax.set_xlabel("Predicted label", fontsize=14)
+        ax.set_ylabel("True label", fontsize=14)
+        ax.set_title(subtitle, fontsize=14)
         ax.tick_params(labelsize=9)
  
     plt.tight_layout()
@@ -253,19 +253,20 @@ def _plot_roc_curves(
 
 
     # ---- 2) Compute and plot ROC curve for each class ----
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=(6, 6))
     for i, (name, color) in enumerate(zip(class_names, COLORs)):
         fpr, tpr, _ = roc_curve(y_bin[:, i], y_prob[:, i])
         roc_auc     = auc(fpr, tpr)
-        ax.plot(fpr, tpr, color=color, linewidth=1.8, label=f"{name}  (AUC = {roc_auc:.3f})")
+        ax.plot(fpr, tpr, color=color, linewidth=2, label=f"{name}  (AUC = {roc_auc:.3f})")
 
-    ax.plot([0, 1], [0, 1], color="grey", linewidth=0.8, linestyle="--", label="Random")
+    ax.plot([0, 1], [0, 1], color="grey", linewidth=1, linestyle="--", label="Random")
     ax.set_xlim([0.0, 1.0])                                             # x-axis limit           
-    ax.set_ylim([0.0, 1.02])                                            # y-axis limit
-    ax.set_xlabel("FPR (False Positive Rate)", fontsize=10)             # x-axis label
-    ax.set_ylabel("TPR (True Positive Rate)",  fontsize=10)             # y-axis label
+    ax.set_ylim([0.0, 1.005])                                           # y-axis limit
+    ax.set_xlabel("FPR (False Positive Rate)", fontsize=14)             # x-axis label
+    ax.set_ylabel("TPR (True Positive Rate)",  fontsize=14)             # y-axis label
+    ax.tick_params(labelsize=12)                                        # tick label size   
     ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)  # title
-    ax.legend(loc="lower right", fontsize=9)                            # legend
+    ax.legend(loc="lower right", fontsize=10)                           # legend
     ax.grid(alpha=0.3, linestyle="--")                                  # grid 
     plt.tight_layout()
 
@@ -363,10 +364,10 @@ def _plot_feature_importance_mdi(
  
     fig, ax = plt.subplots(figsize=(8, top_n * 0.4 + 1))
     ax.barh(top["feature"], top["importance"], color=DTURED, alpha=1)
-    ax.set_xlabel("MDI importance", fontsize=12)
+    ax.set_xlabel("MDI importance", fontsize=14)
     ax.set_title(title, fontsize=12, fontweight="bold", color=DTUNAVY)
-    ax.tick_params(labelsize=9)
-    ax.grid(axis="x", alpha=0.3, linestyle="--")
+    ax.tick_params(labelsize=12)
+    ax.grid(axis="x", alpha=0.5, linestyle="--")
     plt.tight_layout()
     return fig
  
