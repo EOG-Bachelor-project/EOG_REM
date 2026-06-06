@@ -149,6 +149,11 @@ def _draw_threshold_lines(ax, thresholds: dict | None = None):
 def _plot_signal(ax, t, signal_uv, color, label=None, lw=0.8):
     """Plot a signal in µV."""
     ax.plot(t, signal_uv, color=color, linewidth=lw, label=label, zorder=2)
+
+def _bold_ticks(ax):
+    """Make axis ticks bold."""
+    for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+        lbl.set_fontweight("bold")
  
  
 def _overlay_segments(ax, t, signal_uv, mask, color, label=None):
@@ -166,8 +171,9 @@ def _overlay_segments(ax, t, signal_uv, mask, color, label=None):
  
 def _format_signal_ax(ax, title, window_sec, epoch_sec: float = 4.0):
     """Apply common formatting to a signal subplot, including epoch boundary lines."""
-    ax.set_title(title, fontsize=10)
-    ax.set_ylabel("Amplitude [µV]", fontsize=9)
+    ax.set_title(title, fontsize=10, fontweight="bold")
+    ax.set_xlabel("Time within epoch [s]", fontsize=9, fontweight="bold")
+    ax.set_ylabel("Amplitude [µV]", fontsize=9, fontweight="bold")
     ax.axhline(0, color="black", alpha=0.4, linewidth=0.5)
     ax.grid(alpha=0.3, linestyle="--")
     ax.tick_params(labelsize=8)
@@ -433,11 +439,11 @@ def plot_eog_epochs(
                 height=0.8, align="center",
             )
         ax_hyp.set_yticks(list(STAGE_ORDER.values()))
-        ax_hyp.set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8)
+        ax_hyp.set_yticklabels(list(STAGE_ORDER.keys()), fontsize=8, fontweight="bold")
         ax_hyp.set_xticks(np.arange(0, window_sec +1, 1))
-        ax_hyp.set_xlabel("Time within epoch [s]", fontsize=10)
+        ax_hyp.set_xlabel("Time within epoch [s]", fontsize=10, fontweight="bold")
         ax_hyp.set_xlim(0, window_sec)
-        ax_hyp.set_title("Hypnogram", fontsize=9)
+        ax_hyp.set_title("Hypnogram", fontsize=9, fontweight="bold")
         ax_hyp.tick_params(labelsize=8)
  
         fig.legend(
@@ -890,8 +896,8 @@ def plot_transition_epochs(
  
         # Subplot 1: LOC
         axs[0].plot(t, epoch_df[loc_col].values, color=SIG_COLORS["LOC"], linewidth=0.8)
-        axs[0].set_title("LOC", fontsize=10)
-        axs[0].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
+        axs[0].set_title("LOC", fontsize=10, fontweight="bold")
+        axs[0].set_ylabel("Amplitude [$\mu$V]", fontsize=9, fontweight="bold")
         axs[0].axhline(0, color="black", alpha=0.5, linewidth=0.5)
         axs[0].grid(alpha=0.3, linestyle="--")
         axs[0].tick_params(labelsize=8)
@@ -899,8 +905,8 @@ def plot_transition_epochs(
  
         # Subplot 2: ROC
         axs[1].plot(t, epoch_df[roc_col].values, color=SIG_COLORS["ROC"], linewidth=0.8)
-        axs[1].set_title("ROC", fontsize=10)
-        axs[1].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
+        axs[1].set_title("ROC", fontsize=10, fontweight="bold")
+        axs[1].set_ylabel("Amplitude [$\mu$V]", fontsize=9, fontweight="bold")
         axs[1].axhline(0, color="black", alpha=0.5, linewidth=0.5)
         axs[1].grid(alpha=0.3, linestyle="--")
         axs[1].tick_params(labelsize=8)
@@ -909,8 +915,8 @@ def plot_transition_epochs(
         # Subplot 3: LOC + ROC overlapping
         axs[2].plot(t, epoch_df[loc_col].values, color=SIG_COLORS["LOC"], linewidth=0.8, label="LOC")
         axs[2].plot(t, epoch_df[roc_col].values, color=SIG_COLORS["ROC"], linewidth=0.8, label="ROC")
-        axs[2].set_title("LOC + ROC", fontsize=10)
-        axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9)
+        axs[2].set_title("LOC + ROC", fontsize=10, fontweight="bold")
+        axs[2].set_ylabel("Amplitude [$\mu$V]", fontsize=9, fontweight="bold")
         axs[2].axhline(0, color="black", alpha=0.5, linewidth=0.5)
         axs[2].grid(alpha=0.3, linestyle="--")
         axs[2].tick_params(labelsize=8)
@@ -1083,8 +1089,8 @@ def plot_eeg_psd(
             ax.semilogy(f[band_mask], psd[band_mask], color=color, linewidth=1.8, label=stage, zorder=2)
  
         ax.set_title(panel_titles.get(col, col), fontsize=11, pad=10)
-        ax.set_xlabel("Frequency [Hz]", fontsize=10)
-        ax.set_ylabel("PSD [µV² / Hz]", fontsize=10)
+        ax.set_xlabel("Frequency [Hz]", fontsize=10, fontweight="bold")
+        ax.set_ylabel("PSD [µV² / Hz]", fontsize=10, fontweight="bold")
         ax.set_xlim(0.5, 35.0)
         ax.grid(alpha=0.3, linestyle="--")
         ax.tick_params(labelsize=9)
@@ -1216,7 +1222,7 @@ def plot_group_comparison(
             ax.set_xticks(x_positions)
             ax.set_xticklabels(
                 [f"{g}\n(n={len(d)})" for g, d in zip(groups, data_per_group)],
-                fontsize=6, rotation=15, ha="right",
+                fontsize=6, rotation=15, ha="right", fontweight="bold",
             )
             ax.tick_params(labelsize=7)
             ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.2g}"))
@@ -1264,27 +1270,27 @@ def plot_group_comparison(
 # Test
 # =====================================================================
 if __name__ == "__main__":
-    """plot_eog_epochs(
-        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_10_a_contiguous_eog_merged.csv.gz",
+    plot_eog_epochs(
+        file       = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_85_a_contiguous_eog_merged.csv.gz",
         stage      = "REM",
         stage_col  = "stage",
         window_sec = 30.0,
         epoch_sec  = 4.0,
         max_epochs = 10,
         out_dir    = None,
-    )"""
+    )
 
     plot_fullnight_overview(
         file="C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_85_a_contiguous_eog_merged.csv.gz",
         out_dir=None
     )
 
-    """plot_group_comparison(
-        feature_csv = "features_csv/features_with_info.csv",
+    plot_group_comparison(
+        feature_csv = "features_csv/features_with_group.csv",
         features    = None,
         out_dir     = None,
         n_cols      = 4,
-    )"""
+    )
 
     plot_transition_epochs(
         file        = "C:/Users/AKLO0022/EOG_REM/merged_csv_eog/DCSM_85_a_contiguous_eog_merged.csv.gz", 
