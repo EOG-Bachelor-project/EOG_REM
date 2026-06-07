@@ -184,26 +184,31 @@ python main.py cleanup --dry-run    # preview without compressing
 ### Machine learning (`ml.train`)
 
 ```powershell
-python -m ml.train features_csv/features.csv --mode binary multiclass --binary-mode control_vs_all control_vs_irbd control_vs_pd
+# K-fold CV (K=5):
+python -m ml.train features_csv/features.csv --method kfold --mode binary multiclass --binary-mode control_vs_all control_vs_irbd control_vs_pd --k-folds 5 --evaluate
+
+# Nested CV (K1=K2=5):
+python -m ml.train features_csv/features.csv --method nested --mode binary multiclass --binary-mode control_vs_all control_vs_irbd control_vs_pd --k1 5 --k2 5 --evaluate
 ```
 
 **Modes:**
-- `binary`: pairwise — `control_vs_irbd`, `control_vs_pd`, `control_vs_all` 
+- `binary`: pairwise — `control_vs_irbd`, `control_vs_pd`, `control_vs_all`
 - `multiclass`: four-class — Control, iRBD, PD(+RBD), PD(−RBD)
-> Note: 
-`control_vs_pd` is only PD(+RBD)
+- `--method`: `kfold` for standard K-fold CV, `nested` for nested (2-layer) CV with hyperparameter tuning
+> Note:  
+`control_vs_pd` is only PD(+RBD)  
 `control_vs_all` is iRBD + PD(+RBD)
 
 Results and figures are saved to `reports/evaluation/`.
 
 ### Statistical analysis
-To find out if our RBD-specific EOG feature extraction add value beyond what standard sleep metrics already tell you. We create a second model with only macrostructure sleep features (e.g. WASO) and EEG spectral features. We then compare the performance with bootstap AUC:
+To find out if our RBD-specific EOG feature extraction adds value beyond what standard sleep metrics already tell you. We create a second model with only macrostructure sleep features (e.g. WASO) and EEG spectral features. We then compare the performance with bootstrap AUC:
 ```powershell
-python statistical_analysis\compare_models features_csv/features.csv --mode binary -binary-mode control_vs_all --evaluate
+python statistical_analysis\compare_models.py features_csv/features.csv --mode binary --binary-mode control_vs_all --evaluate
 
-python statistical_analysis\compare_models features_csv/features.csv --mode binary -binary-mode control_vs_pd --evaluate
+python statistical_analysis\compare_models.py features_csv/features.csv --mode binary --binary-mode control_vs_pd --evaluate
 
-python statistical_analysis\compare_models features_csv/features.csv --mode binary -binary-mode control_vs_irbd --evaluate
+python statistical_analysis\compare_models.py features_csv/features.csv --mode binary --binary-mode control_vs_irbd --evaluate
 ```
 
 >#### Group columns (`add_group_col.py`)
@@ -213,45 +218,35 @@ python statistical_analysis\compare_models features_csv/features.csv --mode bina
 >```
 
 ```powershell
-# 1. QQ-plots for feature distributions and normality assessment
-python statistical_analysis\qq-plot.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "PD(+RBD)" --negative-class Control --out-dir reports\qq\pd_w_rbd_vs_control
-
-python statistical_analysis\qq-plot.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "PD(-RBD)" --negative-class Control --out-dir reports\qq\pd_wo_rbd_vs_control
-
-python statistical_analysis\qq-plot.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "iRBD" --negative-class Control --out-dir reports\qq\irbd_vs_control
-```
-
-
-
-```powershell
-# 2. Univariate group tests (Welch's t-test or Mann-Whitney U based on normality)
-python statistical_analysis\univariate_stats.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "PD(+RBD)" --negative-class Control --test auto --out-dir reports\stats\control_vs_pd_w_rbd
-
-python statistical_analysis\univariate_stats.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "PD(-RBD)" --negative-class Control --test auto --out-dir reports\stats\control_vs_pd_wo_rbd
-
-python statistical_analysis\univariate_stats.py --csv features_csv/features_with_groups.csv --label-col group --positive-class "iRBD" --negative-class Control --test auto --out-dir reports\stats\control_vs_irbd
+# 1. QQ-plots for feature distributions and normality assessment (all splits in one command)
+python statistical_analysis\qq-plot.py --csv features_csv/features_with_groups.csv --label-col group --out-dir reports\qq
 ```
 
 ```powershell
-# 3. Compare effect sizes across comparisons for the top features identified in the univariate step (e.g. by absolute Cliff's delta)
-python statistical_analysis\compare_effect_sizes.py --csvs "stats\control_vs_irbd\univariate_stats.csv" "stats\control_vs_pd\univariate_stats.csv" --labels "iRBD vs HC" "PD(+RBD) vs HC" --metric abs_cliffs_delta --out-dir reports\stats\comparisons
+# 2. Univariate group tests — Welch's t-test or Mann-Whitney U based on normality (all splits in one command)
+python statistical_analysis\univariate_stats.py --csv features_csv/features_with_groups.csv --label-col group --out-dir reports\stats
 ```
->Note: We are only interested in iRBD and PD(+RBD) since we are looking for markers of RBD pathology. PD(−RBD) is included as a negative control group to help identify features that are specific to RBD rather than general PD pathology. Statistical comparisons between PD(−RBD) and controls can be run as well, but they are not the main focus of the analysis.
+
+```powershell
+# 3. Compare effect sizes across comparisons (auto-discovers splits from --stats-dir)
+python statistical_analysis\compare_effect_sizes.py --stats-dir reports\stats --out-dir reports\stats\comparison
+```
+
+>Note: We are only interested in iRBD and PD(+RBD) since we are looking for markers of RBD pathology. PD(−RBD) is included as a negative control group to help identify features that are specific to RBD rather than general PD pathology.
 
 <br>
 <h2 align="center">📊 Features</h2>
 
-145 features are extracted per subject across five modules, saved to `features_csv/features.csv`.
+141 features are extracted per subject across six modules, saved to `features_csv/features.csv`.
 
 | Module | Features | Description |
 |--------|----------|-------------|
 | `eog` | 51 | EOG signal properties and eye movement characteristics during REM |
-| `gssc` | 12 | Sleep staging probabilities and REM stability from the GSSC model |
-| `eeg` | 31 | EEG proxy band power (delta, theta, alpha, beta) per sleep stage |
+| `gssc` | 29 | Sleep staging probabilities, REM stability, and sleep stage durations/fractions |
+| `eeg` | 31 | EEG proxy band power (delta, theta, alpha, beta, gamma) per sleep stage |
 | `bout` | 17 | Phasic/tonic bout structure during REM |
-| `extra` | 30 | Spectral band power per REM context (phasic/tonic), extended phasic/tonic bout structure, EM morphology, and sleep architecture |
-| `patient` | 4 | Demographics and clinical metadata from patient records |
-
+| `extra` | 9 | Spectral band power per REM context (phasic/tonic), extended bout structure, EM morphology, and sleep architecture |
+| `patient` | 4 | Demographics and clinical metadata |
 ### Feature groups
 
 **Sleep structure (17)** — recording and REM duration, stage fractions, REM episode count and duration statistics.
